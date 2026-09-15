@@ -1,0 +1,1380 @@
+import Student from "../models/Student.js";
+import StudentSemester from "../models/StudentSemester.js";
+import cloudinary from "../config/cloudinary.js";
+import { clerkClient } from "@clerk/express";
+import mongoose from "mongoose";
+
+
+// ==========================================================
+// BULK ADD STUDENTS FROM CSV
+// ==========================================================
+
+export const bulkAddStudents = async (req, res) => {
+  try {
+    const { role, department: hodDept } = req.user;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "CSV file is required",
+      });
+    }
+
+    if (role !== "admin" && role !== "hod") {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to add students",
+      });
+    }
+
+    const { parse } = await import("csv-parse/sync");
+
+    const students = parse(
+      req.file.buffer.toString("utf-8"),
+      {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true,
+      }
+    );
+
+    if (!students.length) {
+      return res.status(400).json({
+        success: false,
+        message: "CSV file contains no student records",
+      });
+    }
+
+    const results = [];
+
+    for (const s of students) {
+      let {
+        registerNumber,
+        name,
+        email,
+        phone,
+        department,
+        admissionYear,
+        semester,
+        batch,
+      } = s;
+
+      // ------------------------------------------------------
+      // NORMALIZE
+      // ------------------------------------------------------
+
+      registerNumber =
+        registerNumber?.trim().toUpperCase();
+
+      name =
+        name?.trim().toUpperCase();
+
+      email =
+        email?.trim().toLowerCase();
+
+      phone =
+        phone?.trim();
+
+      department =
+        department?.trim().toLowerCase();
+
+      admissionYear =
+        admissionYear?.trim();
+
+      semester =
+        semester?.trim();
+
+      batch =
+        batch?.trim();
+
+      // ------------------------------------------------------
+      // REQUIRED FIELDS
+      // ------------------------------------------------------
+
+      if (
+        !registerNumber ||
+        !name ||
+        !email ||
+        !phone ||
+        !department ||
+        !admissionYear ||
+        !semester ||
+        !batch
+      ) {
+        results.push({
+          registerNumber: registerNumber || "",
+          success: false,
+          message: "Missing required fields",
+        });
+
+        continue;
+      }
+
+      // ------------------------------------------------------
+      // VALIDATE ADMISSION YEAR
+      // ------------------------------------------------------
+
+      const parsedAdmissionYear =
+        Number(admissionYear);
+
+      if (
+        !Number.isInteger(parsedAdmissionYear) ||
+        parsedAdmissionYear < 2000 ||
+        parsedAdmissionYear > 2100
+      ) {
+        results.push({
+          registerNumber,
+          success: false,
+          message: "Invalid admission year",
+        });
+
+        continue;
+      }
+
+      // ------------------------------------------------------
+      // VALIDATE SEMESTER
+      // ------------------------------------------------------
+
+      const parsedSemester =
+        Number(semester);
+
+      if (
+        !Number.isInteger(parsedSemester) ||
+        parsedSemester < 1 ||
+        parsedSemester > 8
+      ) {
+        results.push({
+          registerNumber,
+          success: false,
+          message:
+            "Invalid semester. Semester must be between 1 and 8",
+        });
+
+        continue;
+      }
+
+      // ------------------------------------------------------
+      // VALIDATE DEPARTMENT
+      // ------------------------------------------------------
+
+      const validDepartments = [
+        "at",
+        "ch",
+        "ce",
+        "cs",
+        "ec",
+        "ee",
+        "me",
+        "ps",
+        "sc",
+      ];
+
+      if (!validDepartments.includes(department)) {
+        results.push({
+          registerNumber,
+          success: false,
+          message: `Invalid department: ${department}`,
+        });
+
+        continue;
+      }
+
+      // ------------------------------------------------------
+      // HOD RESTRICTIONS
+      // ------------------------------------------------------
+
+      if (role === "hod") {
+        if (hodDept === "sc") {
+          results.push({
+            registerNumber,
+            success: false,
+            message:
+              "Science HOD cannot add students",
+          });
+
+          continue;
+        }
+
+        if (
+          department !== hodDept.toLowerCase()
+        ) {
+          results.push({
+            registerNumber,
+            success: false,
+            message:
+              "HOD can only add students from their department",
+          });
+
+          continue;
+        }
+      }
+
+      try {
+        // ----------------------------------------------------
+        // DUPLICATE REGISTER NUMBER
+        // ----------------------------------------------------
+
+        const existingRegister =
+          await Student.findOne({
+            registerNumber,
+          });
+
+        if (existingRegister) {
+          results.push({
+            registerNumber,
+            success: false,
+            message:
+              "Register number already exists",
+          });
+
+          continue;
+        }
+
+        // ----------------------------------------------------
+        // DUPLICATE EMAIL
+        // ----------------------------------------------------
+
+        const existingEmail =
+          await Student.findOne({ email });
+
+        if (existingEmail) {
+          results.push({
+            registerNumber,
+            success: false,
+            message: "Email already exists",
+          });
+
+          continue;
+        }
+
+        // ----------------------------------------------------
+        // CHECK CLERK
+        // ----------------------------------------------------
+
+        const existingUsers =
+          await clerkClient.users.getUserList({
+            emailAddress: [email],
+            includeDeleted: true,
+          });
+
+        if (existingUsers.length > 0) {
+          results.push({
+            registerNumber,
+            success: false,
+            message:
+              "Email already exists in Clerk",
+          });
+
+          continue;
+        }
+
+        // ----------------------------------------------------
+        // CREATE CLERK USER
+        // ----------------------------------------------------
+
+        const clerkUser =
+          await clerkClient.users.createUser({
+            emailAddress: [email],
+            firstName: name,
+
+            publicMetadata: {
+              role: "student",
+              department,
+              admissionYear:
+                parsedAdmissionYear,
+              semester:
+                parsedSemester,
+              batch,
+            },
+          });
+
+        try {
+          // --------------------------------------------------
+          // CREATE STUDENT
+          // --------------------------------------------------
+
+          const student =
+            new Student({
+              clerkId: clerkUser.id,
+              registerNumber,
+              name,
+              email,
+              phone,
+              department,
+              admissionYear:
+                parsedAdmissionYear,
+              batch,
+              role: "student",
+            });
+
+          await student.save();
+
+          // --------------------------------------------------
+          // CREATE INITIAL SEMESTER RECORD
+          // --------------------------------------------------
+
+          const academicYear =
+            `${parsedAdmissionYear}-${String(
+              parsedAdmissionYear + 1
+            ).slice(-2)}`;
+
+          await StudentSemester.create({
+            studentId: student._id,
+            academicYear,
+            semester: parsedSemester,
+            status: "CURRENT",
+          });
+
+          results.push({
+            registerNumber,
+            success: true,
+            message:
+              "Student added successfully",
+            student,
+          });
+        } catch (mongoError) {
+          // Rollback Clerk
+          try {
+            await clerkClient.users.deleteUser(
+              clerkUser.id
+            );
+          } catch (deleteError) {
+            console.error(
+              "Failed to rollback Clerk user:",
+              deleteError.message
+            );
+          }
+
+          throw mongoError;
+        }
+      } catch (err) {
+        console.error(
+          `Error adding student ${registerNumber}:`,
+          err
+        );
+
+        results.push({
+          registerNumber,
+          success: false,
+          message:
+            err.message ||
+            "Failed to add student",
+        });
+      }
+    }
+
+    const added =
+      results.filter((r) => r.success).length;
+
+    const skipped =
+      results.filter((r) => !r.success).length;
+
+    const errors =
+      results
+        .filter((r) => !r.success)
+        .map((r) => ({
+          registerNumber: r.registerNumber,
+          message: r.message,
+        }));
+
+    return res.status(201).json({
+      success: skipped === 0,
+
+      message:
+        skipped === 0
+          ? "All students added successfully"
+          : "Bulk upload completed with some errors",
+
+      summary: {
+        total: results.length,
+        added,
+        skipped,
+        errors: errors.length,
+      },
+
+      results,
+      errors,
+    });
+  } catch (err) {
+    console.error(
+      "BulkAdd Error:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Failed to process bulk student upload",
+    });
+  }
+};
+
+// ==========================================================
+// CREATE STUDENT
+// ==========================================================
+
+export const createStudent = async (req, res) => {
+  try {
+    const {
+      role,
+      department: hodDept,
+    } = req.user;
+
+    const {
+      registerNumber,
+      name,
+      email,
+      phone,
+      department,
+      admissionYear,
+  semester,
+      batch,
+    } = req.body;
+
+    // ------------------------------------------------------
+    // AUTHORIZATION
+    // ------------------------------------------------------
+
+    if (
+      role !== "admin" &&
+      role !== "hod"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Not authorized to add students",
+      });
+    }
+
+    // ------------------------------------------------------
+    // HOD RESTRICTION
+    // ------------------------------------------------------
+
+    if (role === "hod") {
+      if (hodDept === "sc") {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Science HOD cannot add students",
+        });
+      }
+
+      if (department !== hodDept) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You can only add students from your department",
+        });
+      }
+    }
+
+    // ------------------------------------------------------
+    // VALIDATE ADMISSION YEAR
+    // ------------------------------------------------------
+const parsedSemester = Number(semester);
+
+if (
+  !Number.isInteger(parsedSemester) ||
+  parsedSemester < 1 ||
+  parsedSemester > 6
+) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid semester",
+  });
+}
+
+    const parsedAdmissionYear =
+      Number(admissionYear);
+
+    if (
+      !Number.isInteger(parsedAdmissionYear) ||
+      parsedAdmissionYear < 2000 ||
+      parsedAdmissionYear > 2100
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid admission year",
+      });
+    }
+
+    // ------------------------------------------------------
+    // CREATE CLERK
+    // ------------------------------------------------------
+
+    const clerkUser =
+      await clerkClient.users.createUser({
+        emailAddress: [email],
+        firstName: name,
+
+        publicMetadata: {
+          role: "student",
+          department,
+          admissionYear:
+            parsedAdmissionYear,
+          batch,
+        },
+      });
+
+    try {
+      // ----------------------------------------------------
+      // CREATE STUDENT
+      // ----------------------------------------------------
+
+      const student =
+        new Student({
+          clerkId: clerkUser.id,
+          registerNumber:
+            registerNumber.trim().toUpperCase(),
+          name:
+            name.trim().toUpperCase(),
+          email:
+            email.trim().toLowerCase(),
+          phone:
+            phone.trim(),
+          department:
+            department.trim().toLowerCase(),
+          admissionYear:
+            parsedAdmissionYear,
+          batch:
+            batch.trim(),
+          role: "student",
+        });
+
+      await student.save();
+
+      // ----------------------------------------------------
+      // INITIAL SEMESTER
+      // ----------------------------------------------------
+
+      const academicYear =
+        `${parsedAdmissionYear}-${String(
+          parsedAdmissionYear + 1
+        ).slice(-2)}`;
+
+      await StudentSemester.create({
+        studentId: student._id,
+        academicYear,
+        semester: parsedSemester,
+        status: "CURRENT",
+      });
+
+      return res.status(201).json({
+        success: true,
+        message:
+          "Student added successfully",
+        data: student,
+      });
+    } catch (mongoError) {
+      // Rollback Clerk
+      try {
+        await clerkClient.users.deleteUser(
+          clerkUser.id
+        );
+      } catch (deleteError) {
+        console.error(
+          "Failed to rollback Clerk user:",
+          deleteError.message
+        );
+      }
+
+      throw mongoError;
+    }
+  } catch (err) {
+    console.error(
+      "CreateStudent Error:",
+      err
+    );
+
+    if (err.code === 11000) {
+      const field =
+        Object.keys(
+          err.keyPattern || {}
+        )[0];
+
+      return res.status(400).json({
+        success: false,
+        message:
+          `${field || "Field"} already exists.`,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Failed to add student.",
+    });
+  }
+};
+
+
+// ==========================================================
+// GET STUDENTS
+// ==========================================================
+
+export const getStudents = async (req, res) => {
+  try {
+    const {
+      role,
+      department: userDepartment,
+    } = req.user;
+
+    const {
+      department,
+      semester,
+      academicYear,
+      batch,
+    } = req.query;
+
+    let filter = {};
+
+    // ------------------------------------------------------
+    // ADMIN
+    // ------------------------------------------------------
+
+    if (role === "admin") {
+      if (department) {
+        filter.department =
+          department.toLowerCase();
+      }
+    }
+
+    // ------------------------------------------------------
+    // HOD / STAFF
+    // ------------------------------------------------------
+
+    else if (
+      role === "hod" ||
+      role === "staff"
+    ) {
+      if (userDepartment === "sc") {
+        if (department) {
+          filter.department =
+            department.toLowerCase();
+        }
+      } else {
+        filter.department =
+          userDepartment;
+      }
+    }
+
+    // ------------------------------------------------------
+    // OTHER ROLES
+    // ------------------------------------------------------
+
+    else {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Not authorized to view students",
+      });
+    }
+
+    // ------------------------------------------------------
+    // BATCH FILTER
+    // ------------------------------------------------------
+
+    if (batch) {
+      filter.batch = batch;
+    }
+
+    // ------------------------------------------------------
+    // SEMESTER FILTER
+    //
+    // Use StudentSemester collection
+    // ------------------------------------------------------
+
+    let students;
+
+    if (semester || academicYear) {
+      const semesterFilter = {};
+
+      if (semester) {
+        semesterFilter.semester =
+          Number(semester);
+      }
+
+      if (academicYear) {
+        semesterFilter.academicYear =
+          academicYear;
+      }
+
+      semesterFilter.status =
+        "CURRENT";
+
+      const semesterRecords =
+        await StudentSemester.find(
+          semesterFilter
+        ).select("studentId");
+
+      const studentIds =
+        semesterRecords.map(
+          (record) => record.studentId
+        );
+
+      filter._id = {
+        $in: studentIds,
+      };
+    }
+
+  students = await Student.find(filter)
+  .sort({ createdAt: -1 })
+  .lean();
+
+const studentIds = students.map((student) => student._id);
+
+const semesterRecords = await StudentSemester.find({
+  studentId: { $in: studentIds },
+  status: "CURRENT",
+}).lean();
+
+const semesterMap = new Map(
+  semesterRecords.map((record) => [
+    String(record.studentId),
+    record.semester,
+  ])
+);
+
+students = students.map((student) => ({
+  ...student,
+  semester: semesterMap.get(String(student._id)) || "",
+}));
+
+    return res.json({
+      success: true,
+      data: students,
+    });
+  } catch (err) {
+    console.error(
+      "GetStudents Error:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Failed to fetch students.",
+    });
+  }
+};
+
+
+// ==========================================================
+// UPDATE STUDENT
+// ==========================================================
+
+export const updateStudent = async (req, res) => {
+  try {
+    const {
+      role,
+      department,
+    } = req.user;
+
+    const student =
+      await Student.findById(req.params.id);
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    // ------------------------------------------------------
+    // HOD ACCESS
+    // ------------------------------------------------------
+
+    if (
+      role === "hod" &&
+      department !== "sc" &&
+      student.department !== department
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Cannot edit student outside your department",
+      });
+    }
+
+    if (
+      role === "hod" &&
+      department === "sc"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Science HOD cannot modify students",
+      });
+    }
+
+    // ------------------------------------------------------
+    // GET SEMESTER FROM REQUEST
+    // ------------------------------------------------------
+
+    const semester = req.body.semester;
+
+    let parsedSemester = null;
+
+    if (
+      semester !== undefined &&
+      semester !== null &&
+      semester !== ""
+    ) {
+      parsedSemester = Number(semester);
+
+      if (
+        !Number.isInteger(parsedSemester) ||
+        parsedSemester < 1 ||
+        parsedSemester > 8
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid semester. Semester must be between 1 and 8.",
+        });
+      }
+    }
+
+    // ------------------------------------------------------
+    // OLD PHOTO
+    // ------------------------------------------------------
+
+    const oldImagePublicId =
+      student.imagePublicId;
+
+    // ------------------------------------------------------
+    // UPDATE STUDENT DETAILS
+    // ------------------------------------------------------
+
+    const updateData = {
+      ...req.body,
+    };
+
+    // Never allow these fields
+    delete updateData.clerkId;
+    delete updateData.role;
+
+    // Semester belongs to StudentSemester,
+    // NOT Student
+    delete updateData.semester;
+
+    // ------------------------------------------------------
+    // NORMALIZE
+    // ------------------------------------------------------
+
+    if (updateData.registerNumber) {
+      updateData.registerNumber =
+        updateData.registerNumber
+          .trim()
+          .toUpperCase();
+    }
+
+    if (updateData.name) {
+      updateData.name =
+        updateData.name
+          .trim()
+          .toUpperCase();
+    }
+
+    if (updateData.email) {
+      updateData.email =
+        updateData.email
+          .trim()
+          .toLowerCase();
+    }
+
+    if (updateData.phone) {
+      updateData.phone =
+        updateData.phone.trim();
+    }
+
+    if (updateData.department) {
+      updateData.department =
+        updateData.department
+          .trim()
+          .toLowerCase();
+    }
+
+    if (updateData.batch) {
+      updateData.batch =
+        updateData.batch.trim();
+    }
+
+    if (updateData.admissionYear) {
+      updateData.admissionYear =
+        Number(updateData.admissionYear);
+    }
+
+    // ------------------------------------------------------
+    // PHOTO
+    // ------------------------------------------------------
+
+    let newImagePublicId = null;
+
+    if (req.cloudinaryResult) {
+      updateData.imageUrl =
+        req.cloudinaryResult.secure_url;
+
+      updateData.imagePublicId =
+        req.cloudinaryResult.public_id;
+
+      newImagePublicId =
+        req.cloudinaryResult.public_id;
+    }
+
+    // ------------------------------------------------------
+    // UPDATE STUDENT
+    // ------------------------------------------------------
+
+    let updated;
+
+    try {
+      updated =
+        await Student.findByIdAndUpdate(
+          req.params.id,
+          updateData,
+          {
+            new: true,
+            runValidators: true,
+          }
+        );
+    } catch (dbError) {
+      if (newImagePublicId) {
+        try {
+          await cloudinary.uploader.destroy(
+            newImagePublicId
+          );
+        } catch (rollbackError) {
+          console.error(
+            "Failed to rollback image:",
+            rollbackError.message
+          );
+        }
+      }
+
+      throw dbError;
+    }
+
+    // ------------------------------------------------------
+    // UPDATE CURRENT SEMESTER
+    // ------------------------------------------------------
+
+    if (parsedSemester !== null) {
+      const currentSemester =
+        await StudentSemester.findOne({
+          studentId: student._id,
+          status: "CURRENT",
+        });
+
+      if (currentSemester) {
+        currentSemester.semester =
+          parsedSemester;
+
+        await currentSemester.save();
+      } else {
+        // Safety fallback if current semester
+        // record does not exist
+
+        const academicYear =
+          `${student.admissionYear}-${String(
+            student.admissionYear + 1
+          ).slice(-2)}`;
+
+        await StudentSemester.create({
+          studentId: student._id,
+          academicYear,
+          semester: parsedSemester,
+          status: "CURRENT",
+        });
+      }
+    }
+
+    // ------------------------------------------------------
+    // DELETE OLD PHOTO
+    // ------------------------------------------------------
+
+    if (
+      newImagePublicId &&
+      oldImagePublicId &&
+      oldImagePublicId !== newImagePublicId
+    ) {
+      try {
+        await cloudinary.uploader.destroy(
+          oldImagePublicId
+        );
+      } catch (imageError) {
+        console.warn(
+          "Old image deletion failed:",
+          imageError.message
+        );
+      }
+    }
+
+    // ------------------------------------------------------
+    // RESPONSE
+    // ------------------------------------------------------
+
+    return res.status(200).json({
+      success: true,
+      message: newImagePublicId
+        ? "Student details, semester and photo updated successfully"
+        : "Student details and semester updated successfully",
+      data: updated,
+    });
+  } catch (err) {
+    console.error(
+      "UpdateStudent Error:",
+      err
+    );
+
+    if (err.code === 11000) {
+      const duplicateField =
+        Object.keys(
+          err.keyPattern || {}
+        )[0];
+
+      return res.status(400).json({
+        success: false,
+        message:
+          `${duplicateField || "Field"} already exists.`,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Failed to update student.",
+    });
+  }
+};
+
+// ==========================================================
+// DELETE STUDENT
+// ==========================================================
+
+export const deleteStudent = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      role,
+      department,
+    } = req.user;
+
+    const student =
+      await Student.findById(
+        req.params.id
+      );
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Student not found",
+      });
+    }
+
+    if (
+      role === "hod" &&
+      student.department !== department
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "HOD cannot delete student from another department.",
+      });
+    }
+
+    if (
+      role === "hod" &&
+      department === "sc"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Science HOD cannot modify students",
+      });
+    }
+
+    // ------------------------------------------------------
+    // DELETE CLERK
+    // ------------------------------------------------------
+
+    if (student.clerkId) {
+      try {
+        await clerkClient.users.deleteUser(
+          student.clerkId
+        );
+      } catch (clerkErr) {
+        if (clerkErr?.status === 404) {
+          console.warn(
+            "Clerk user already deleted"
+          );
+        } else {
+          console.error(
+            "Clerk deletion failed:",
+            clerkErr
+          );
+        }
+      }
+    }
+
+    // ------------------------------------------------------
+    // DELETE CLOUDINARY
+    // ------------------------------------------------------
+
+    if (student.imagePublicId) {
+      try {
+        await cloudinary.uploader.destroy(
+          student.imagePublicId
+        );
+      } catch (imgErr) {
+        console.warn(
+          "Cloudinary deletion failed:",
+          imgErr.message
+        );
+      }
+    }
+
+    // ------------------------------------------------------
+    // DELETE ACADEMIC RECORDS
+    // ------------------------------------------------------
+
+    await StudentSemester.deleteMany({
+      studentId: student._id,
+    });
+
+    // ------------------------------------------------------
+    // DELETE STUDENT
+    // ------------------------------------------------------
+
+    await student.deleteOne();
+
+    return res.json({
+      success: true,
+      message:
+        "Student deleted successfully",
+    });
+  } catch (err) {
+    console.error(
+      "DeleteStudent Error:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Failed to delete student.",
+    });
+  }
+};
+
+
+// ==========================================================
+// GET STUDENT BY ID
+// ==========================================================
+
+export const getStudentById = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      role,
+      department,
+    } = req.user;
+
+    let studentId =
+      req.params.id;
+
+    // Resolve Clerk ID
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        studentId
+      )
+    ) {
+      const student =
+        await Student.findOne({
+          clerkId: studentId,
+        });
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Student not found",
+        });
+      }
+
+      studentId =
+        student._id;
+    }
+
+    const student =
+      await Student.findById(
+        studentId
+      );
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Student not found",
+      });
+    }
+
+    if (
+      role === "hod" &&
+      department !== "sc" &&
+      student.department !== department
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You can only view students from your own department",
+      });
+    }
+
+    if (
+      role !== "admin" &&
+      role !== "hod"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Not authorized to view student",
+      });
+    }
+
+ const currentSemester =
+  await StudentSemester.findOne({
+    studentId: student._id,
+    status: "CURRENT",
+  });
+
+return res.json({
+  success: true,
+  data: {
+    ...student.toObject(),
+    semester: currentSemester?.semester || "",
+  },
+});
+  } catch (err) {
+    console.error(
+      "GetStudentById Error:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        err.message ||
+        "Failed to fetch student details.",
+    });
+  }
+};
+
+
+// ==========================================================
+// SEARCH STUDENTS
+// ==========================================================
+
+export const searchStudents = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      department,
+      semester,
+      academicYear,
+      registerNumber,
+      batch,
+    } = req.query;
+
+    const filter = {};
+
+    if (department) {
+      filter.department =
+        department.toLowerCase();
+    }
+
+    if (registerNumber) {
+      filter.registerNumber =
+        registerNumber
+          .trim()
+          .toUpperCase();
+    }
+
+    if (batch) {
+      filter.batch = batch;
+    }
+
+    // ------------------------------------------------------
+    // SEMESTER FILTER
+    // ------------------------------------------------------
+
+    if (
+      semester ||
+      academicYear
+    ) {
+      const semesterFilter = {
+        status: "CURRENT",
+      };
+
+      if (semester) {
+        semesterFilter.semester =
+          Number(semester);
+      }
+
+      if (academicYear) {
+        semesterFilter.academicYear =
+          academicYear;
+      }
+
+      const records =
+        await StudentSemester.find(
+          semesterFilter
+        ).select("studentId");
+
+      filter._id = {
+        $in: records.map(
+          (record) =>
+            record.studentId
+        ),
+      };
+    }
+
+    const students =
+      await Student.find(filter)
+        .select(
+          "name registerNumber department admissionYear batch _id clerkId imageUrl"
+        )
+        .sort({
+          registerNumber: 1,
+        });
+
+    return res.json({
+      success: true,
+      data: students,
+    });
+  } catch (err) {
+    console.error(
+      "SearchStudents Error:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to search students",
+      error: err.message,
+    });
+  }
+};
