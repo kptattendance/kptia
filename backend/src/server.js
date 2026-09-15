@@ -10,22 +10,48 @@ import studentRoutes from "./routes/studentRoutes.js";
 import subjectRoutes from "./routes/subjectRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import iaRoutes from "./routes/iaRoutes.js";
+
 dotenv.config();
 
 const app = express();
-app.use(clerkMiddleware());
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://local.ia.kptmangaluru.in",
+  "https://ia.kptmangaluru.in",
+];
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000"||
-  "https://local.ia.kptmangaluru.in"||  "https://ia.kptmangaluru.in",
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "PATCH",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
+
+    credentials: true,
   })
 );
 
-app.use(express.json());
+app.use(clerkMiddleware());
 
+app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({
@@ -40,8 +66,11 @@ app.use("/api/students", studentRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/ia", iaRoutes);
+
 connectDB().then(() => {
   app.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
+    console.log(
+      `🚀 Server running at http://localhost:${PORT}`
+    );
   });
 });
