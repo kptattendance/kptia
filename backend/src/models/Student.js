@@ -13,6 +13,7 @@ const studentSchema = new mongoose.Schema(
       required: true,
       unique: true,
       trim: true,
+      uppercase: true,
     },
 
     name: {
@@ -26,6 +27,7 @@ const studentSchema = new mongoose.Schema(
       required: true,
       unique: true,
       lowercase: true,
+      trim: true,
     },
 
     phone: {
@@ -41,15 +43,26 @@ const studentSchema = new mongoose.Schema(
       lowercase: true,
     },
 
+    // Year in which the student was admitted
     admissionYear: {
       type: Number,
       required: true,
     },
 
+    // Academic batch
+    // Example: 2023-2026
     batch: {
       type: String,
       required: true,
       trim: true,
+    },
+
+    // IA grouping
+    // Batch 1 or Batch 2
+    batchNumber: {
+      type: Number,
+      required: true,
+      enum: [1, 2],
     },
 
     role: {

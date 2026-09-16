@@ -11,8 +11,8 @@ const menuItems = [
     icon: "⌂",
   },
   {
-    name: "Attendance",
-    href: "/student/attendance",
+    name: "Academic",
+    href: "/student/academic",
     icon: "✓",
   },
   {

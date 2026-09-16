@@ -33,6 +33,7 @@ export default function AddStudent({
     admissionYear: "",
   semester: "",
     batch: "",
+    batchNumber: "",
   });
 
   const [image, setImage] = useState(null);
@@ -86,7 +87,8 @@ export default function AddStudent({
       !form.phone.trim() ||
       !form.department ||
       !form.admissionYear ||
-      !form.batch.trim()
+      !form.batch.trim() ||
+      !form.batchNumber
     ) {
       setError("Please fill in all required fields.");
       return;
@@ -132,6 +134,11 @@ formData.append("semester", form.semester);
       formData.append(
         "batch",
         form.batch.trim()
+      );
+
+      formData.append(
+        "batchNumber",
+        form.batchNumber
       );
 
       if (image) {
@@ -430,11 +437,43 @@ formData.append("semester", form.semester);
                 value={form.batch}
                 onChange={handleChange}
                 placeholder="e.g. 2025-2028"
+                required
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
 
               <p className="mt-1.5 text-xs text-slate-400">
                 Example: 2025-2028
+              </p>
+            </div>
+
+            {/* BATCH NUMBER */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Batch Number
+                <span className="ml-1 text-red-500">*</span>
+              </label>
+
+              <select
+                name="batchNumber"
+                value={form.batchNumber}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select batch
+                </option>
+                <option value="1">
+                  Batch 1
+                </option>
+                <option value="2">
+                  Batch 2
+                </option>
+              </select>
+
+              <p className="mt-1.5 text-xs text-slate-400">
+                Select Batch 1 or Batch 2
               </p>
             </div>
 

@@ -1,9 +1,9 @@
 import Student from "../models/Student.js";
 import StudentSemester from "../models/StudentSemester.js";
+import User from "../models/User.js";
 import cloudinary from "../config/cloudinary.js";
 import { clerkClient } from "@clerk/express";
 import mongoose from "mongoose";
-
 
 // ==========================================================
 // BULK ADD STUDENTS FROM CSV
@@ -48,16 +48,17 @@ export const bulkAddStudents = async (req, res) => {
     const results = [];
 
     for (const s of students) {
-      let {
-        registerNumber,
-        name,
-        email,
-        phone,
-        department,
-        admissionYear,
-        semester,
-        batch,
-      } = s;
+     let {
+  registerNumber,
+  name,
+  email,
+  phone,
+  department,
+  admissionYear,
+  semester,
+  batch,
+  batchNumber,
+} = s;
 
       // ------------------------------------------------------
       // NORMALIZE
@@ -86,20 +87,22 @@ export const bulkAddStudents = async (req, res) => {
 
       batch =
         batch?.trim();
-
+batchNumber =
+  batchNumber?.trim();
       // ------------------------------------------------------
       // REQUIRED FIELDS
       // ------------------------------------------------------
 
       if (
-        !registerNumber ||
-        !name ||
-        !email ||
-        !phone ||
-        !department ||
-        !admissionYear ||
-        !semester ||
-        !batch
+      !registerNumber ||
+!name ||
+!email ||
+!phone ||
+!department ||
+!admissionYear ||
+!semester ||
+!batch ||
+!batchNumber
       ) {
         results.push({
           registerNumber: registerNumber || "",
@@ -152,7 +155,25 @@ export const bulkAddStudents = async (req, res) => {
 
         continue;
       }
+// ------------------------------------------------------
+// VALIDATE BATCH NUMBER
+// ------------------------------------------------------
 
+const parsedBatchNumber = Number(batchNumber);
+
+if (
+  !Number.isInteger(parsedBatchNumber) ||
+  ![1, 2].includes(parsedBatchNumber)
+) {
+  results.push({
+    registerNumber,
+    success: false,
+    message:
+      "Invalid batch number. Batch number must be 1 or 2",
+  });
+
+  continue;
+}
       // ------------------------------------------------------
       // VALIDATE DEPARTMENT
       // ------------------------------------------------------
@@ -277,37 +298,55 @@ export const bulkAddStudents = async (req, res) => {
             emailAddress: [email],
             firstName: name,
 
-            publicMetadata: {
-              role: "student",
-              department,
-              admissionYear:
-                parsedAdmissionYear,
-              semester:
-                parsedSemester,
-              batch,
-            },
+     publicMetadata: {
+  role: "student",
+  department,
+  admissionYear:
+    parsedAdmissionYear,
+  semester:
+    parsedSemester,
+  batch,
+  batchNumber:
+    parsedBatchNumber,
+},
           });
 
         try {
-          // --------------------------------------------------
-          // CREATE STUDENT
-          // --------------------------------------------------
+   // --------------------------------------------------
+// CREATE USER DOCUMENT
+// --------------------------------------------------
 
-          const student =
-            new Student({
-              clerkId: clerkUser.id,
-              registerNumber,
-              name,
-              email,
-              phone,
-              department,
-              admissionYear:
-                parsedAdmissionYear,
-              batch,
-              role: "student",
-            });
+const user = new User({
+  clerkId: clerkUser.id,
+  name,
+  email,
+  phone,
+  role: "student",
+  department,
+});
 
-          await student.save();
+await user.save();
+
+// --------------------------------------------------
+// CREATE STUDENT DOCUMENT
+// --------------------------------------------------
+
+const student = new Student({
+  clerkId: clerkUser.id,
+  registerNumber,
+  name,
+  email,
+  phone,
+  department,
+  admissionYear:
+    parsedAdmissionYear,
+  batch,
+  batchNumber:
+    parsedBatchNumber,
+  role: "student",
+});
+
+await student.save();
 
           // --------------------------------------------------
           // CREATE INITIAL SEMESTER RECORD
@@ -333,20 +372,39 @@ export const bulkAddStudents = async (req, res) => {
             student,
           });
         } catch (mongoError) {
-          // Rollback Clerk
-          try {
-            await clerkClient.users.deleteUser(
-              clerkUser.id
-            );
-          } catch (deleteError) {
-            console.error(
-              "Failed to rollback Clerk user:",
-              deleteError.message
-            );
-          }
 
-          throw mongoError;
-        }
+  // --------------------------------------------------
+  // ROLLBACK USER DOCUMENT
+  // --------------------------------------------------
+
+  try {
+    await User.deleteOne({
+      clerkId: clerkUser.id,
+    });
+  } catch (userDeleteError) {
+    console.error(
+      "Failed to rollback User document:",
+      userDeleteError.message
+    );
+  }
+
+  // --------------------------------------------------
+  // ROLLBACK CLERK USER
+  // --------------------------------------------------
+
+  try {
+    await clerkClient.users.deleteUser(
+      clerkUser.id
+    );
+  } catch (deleteError) {
+    console.error(
+      "Failed to rollback Clerk user:",
+      deleteError.message
+    );
+  }
+
+  throw mongoError;
+}
       } catch (err) {
         console.error(
           `Error adding student ${registerNumber}:`,
@@ -428,8 +486,9 @@ export const createStudent = async (req, res) => {
       phone,
       department,
       admissionYear,
-  semester,
+      semester,
       batch,
+      batchNumber,
     } = req.body;
 
     // ------------------------------------------------------
@@ -460,7 +519,10 @@ export const createStudent = async (req, res) => {
         });
       }
 
-      if (department !== hodDept) {
+      if (
+        department?.toLowerCase() !==
+        hodDept?.toLowerCase()
+      ) {
         return res.status(403).json({
           success: false,
           message:
@@ -470,20 +532,51 @@ export const createStudent = async (req, res) => {
     }
 
     // ------------------------------------------------------
+    // REQUIRED FIELDS
+    // ------------------------------------------------------
+
+    if (
+      !registerNumber ||
+      !name ||
+      !email ||
+      !phone ||
+      !department ||
+      !admissionYear ||
+      !semester ||
+      !batch ||
+      batchNumber === undefined ||
+      batchNumber === null ||
+      batchNumber === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "All required fields must be provided",
+      });
+    }
+
+    // ------------------------------------------------------
+    // VALIDATE SEMESTER
+    // ------------------------------------------------------
+
+    const parsedSemester =
+      Number(semester);
+
+    if (
+      !Number.isInteger(parsedSemester) ||
+      parsedSemester < 1 ||
+      parsedSemester > 8
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid semester. Semester must be between 1 and 8",
+      });
+    }
+
+    // ------------------------------------------------------
     // VALIDATE ADMISSION YEAR
     // ------------------------------------------------------
-const parsedSemester = Number(semester);
-
-if (
-  !Number.isInteger(parsedSemester) ||
-  parsedSemester < 1 ||
-  parsedSemester > 6
-) {
-  return res.status(400).json({
-    success: false,
-    message: "Invalid semester",
-  });
-}
 
     const parsedAdmissionYear =
       Number(admissionYear);
@@ -495,54 +588,182 @@ if (
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid admission year",
+        message:
+          "Invalid admission year",
       });
     }
 
     // ------------------------------------------------------
-    // CREATE CLERK
+    // VALIDATE BATCH NUMBER
+    // ------------------------------------------------------
+
+    const parsedBatchNumber =
+      Number(batchNumber);
+
+    if (
+      !Number.isInteger(parsedBatchNumber) ||
+      ![1, 2].includes(parsedBatchNumber)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid batch number. Batch number must be 1 or 2",
+      });
+    }
+
+    // ------------------------------------------------------
+    // NORMALIZE VALUES
+    // ------------------------------------------------------
+
+    const normalizedRegisterNumber =
+      registerNumber
+        .trim()
+        .toUpperCase();
+
+    const normalizedName =
+      name
+        .trim()
+        .toUpperCase();
+
+    const normalizedEmail =
+      email
+        .trim()
+        .toLowerCase();
+
+    const normalizedPhone =
+      phone.trim();
+
+    const normalizedDepartment =
+      department
+        .trim()
+        .toLowerCase();
+
+    const normalizedBatch =
+      batch.trim();
+
+    // ------------------------------------------------------
+    // CHECK DUPLICATE REGISTER NUMBER
+    // ------------------------------------------------------
+
+    const existingRegister =
+      await Student.findOne({
+        registerNumber:
+          normalizedRegisterNumber,
+      });
+
+    if (existingRegister) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Register number already exists",
+      });
+    }
+
+    // ------------------------------------------------------
+    // CHECK DUPLICATE EMAIL
+    // ------------------------------------------------------
+
+    const existingEmail =
+      await Student.findOne({
+        email:
+          normalizedEmail,
+      });
+
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email already exists",
+      });
+    }
+
+    // ------------------------------------------------------
+    // CHECK CLERK
+    // ------------------------------------------------------
+
+    const existingUsers =
+      await clerkClient.users.getUserList({
+        emailAddress: [
+          normalizedEmail,
+        ],
+        includeDeleted: true,
+      });
+
+    if (existingUsers.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Email already exists in Clerk",
+      });
+    }
+
+    // ------------------------------------------------------
+    // CREATE CLERK USER
     // ------------------------------------------------------
 
     const clerkUser =
       await clerkClient.users.createUser({
-        emailAddress: [email],
-        firstName: name,
+        emailAddress: [
+          normalizedEmail,
+        ],
+
+        firstName:
+          normalizedName,
 
         publicMetadata: {
           role: "student",
-          department,
+
+          department:
+            normalizedDepartment,
+
           admissionYear:
             parsedAdmissionYear,
-          batch,
+
+          semester:
+            parsedSemester,
+
+          batch:
+            normalizedBatch,
+
+          batchNumber:
+            parsedBatchNumber,
         },
       });
 
     try {
       // ----------------------------------------------------
-      // CREATE STUDENT
-      // ----------------------------------------------------
+// CREATE USER DOCUMENT
+// ----------------------------------------------------
 
-      const student =
-        new Student({
-          clerkId: clerkUser.id,
-          registerNumber:
-            registerNumber.trim().toUpperCase(),
-          name:
-            name.trim().toUpperCase(),
-          email:
-            email.trim().toLowerCase(),
-          phone:
-            phone.trim(),
-          department:
-            department.trim().toLowerCase(),
-          admissionYear:
-            parsedAdmissionYear,
-          batch:
-            batch.trim(),
-          role: "student",
-        });
+const user = new User({
+  clerkId: clerkUser.id,
+  name: normalizedName,
+  email: normalizedEmail,
+  phone: normalizedPhone,
+  role: "student",
+  department: normalizedDepartment,
+});
 
-      await student.save();
+await user.save();
+
+// ----------------------------------------------------
+// CREATE STUDENT DOCUMENT
+// ----------------------------------------------------
+
+const student = new Student({
+  clerkId: clerkUser.id,
+  registerNumber: normalizedRegisterNumber,
+  name: normalizedName,
+  email: normalizedEmail,
+  phone: normalizedPhone,
+  department: normalizedDepartment,
+  admissionYear: parsedAdmissionYear,
+  batch: normalizedBatch,
+  batchNumber: parsedBatchNumber,
+  role: "student",
+});
+
+await student.save();
 
       // ----------------------------------------------------
       // INITIAL SEMESTER
@@ -554,34 +775,65 @@ if (
         ).slice(-2)}`;
 
       await StudentSemester.create({
-        studentId: student._id,
+        studentId:
+          student._id,
+
         academicYear,
-        semester: parsedSemester,
-        status: "CURRENT",
+
+        semester:
+          parsedSemester,
+
+        status:
+          "CURRENT",
       });
 
       return res.status(201).json({
         success: true,
+
         message:
           "Student added successfully",
-        data: student,
-      });
-    } catch (mongoError) {
-      // Rollback Clerk
-      try {
-        await clerkClient.users.deleteUser(
-          clerkUser.id
-        );
-      } catch (deleteError) {
-        console.error(
-          "Failed to rollback Clerk user:",
-          deleteError.message
-        );
-      }
 
-      throw mongoError;
-    }
+        data:
+          student,
+      });
+
+    }  catch (mongoError) {
+
+  // ----------------------------------------------------
+  // ROLLBACK USER DOCUMENT
+  // ----------------------------------------------------
+
+  try {
+    await User.deleteOne({
+      clerkId: clerkUser.id,
+    });
+  } catch (userDeleteError) {
+    console.error(
+      "Failed to rollback User document:",
+      userDeleteError.message
+    );
+  }
+
+  // ----------------------------------------------------
+  // ROLLBACK CLERK USER
+  // ----------------------------------------------------
+
+  try {
+    await clerkClient.users.deleteUser(
+      clerkUser.id
+    );
+  } catch (deleteError) {
+    console.error(
+      "Failed to rollback Clerk user:",
+      deleteError.message
+    );
+  }
+
+  throw mongoError;
+}
+
   } catch (err) {
+
     console.error(
       "CreateStudent Error:",
       err
@@ -609,7 +861,6 @@ if (
   }
 };
 
-
 // ==========================================================
 // GET STUDENTS
 // ==========================================================
@@ -626,6 +877,7 @@ export const getStudents = async (req, res) => {
       semester,
       academicYear,
       batch,
+      batchNumber,
     } = req.query;
 
     let filter = {};
@@ -677,18 +929,52 @@ export const getStudents = async (req, res) => {
     // ------------------------------------------------------
 
     if (batch) {
-      filter.batch = batch;
+      filter.batch =
+        batch.trim();
+    }
+
+    // ------------------------------------------------------
+    // BATCH NUMBER FILTER
+    // ------------------------------------------------------
+
+    if (
+      batchNumber !== undefined &&
+      batchNumber !== null &&
+      batchNumber !== ""
+    ) {
+      const parsedBatchNumber =
+        Number(batchNumber);
+
+      if (
+        !Number.isInteger(parsedBatchNumber) ||
+        ![1, 2].includes(
+          parsedBatchNumber
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid batch number. Batch number must be 1 or 2",
+        });
+      }
+
+      filter.batchNumber =
+        parsedBatchNumber;
     }
 
     // ------------------------------------------------------
     // SEMESTER FILTER
     //
-    // Use StudentSemester collection
+    // Semester information is stored in
+    // StudentSemester collection.
     // ------------------------------------------------------
 
     let students;
 
-    if (semester || academicYear) {
+    if (
+      semester ||
+      academicYear
+    ) {
       const semesterFilter = {};
 
       if (semester) {
@@ -711,7 +997,8 @@ export const getStudents = async (req, res) => {
 
       const studentIds =
         semesterRecords.map(
-          (record) => record.studentId
+          (record) =>
+            record.studentId
         );
 
       filter._id = {
@@ -719,34 +1006,71 @@ export const getStudents = async (req, res) => {
       };
     }
 
-  students = await Student.find(filter)
-  .sort({ createdAt: -1 })
-  .lean();
+    // ------------------------------------------------------
+    // FETCH STUDENTS
+    // ------------------------------------------------------
 
-const studentIds = students.map((student) => student._id);
+    students =
+      await Student.find(filter)
+        .sort({
+          registerNumber: 1,
+        })
+        .lean();
 
-const semesterRecords = await StudentSemester.find({
-  studentId: { $in: studentIds },
-  status: "CURRENT",
-}).lean();
+    // ------------------------------------------------------
+    // GET CURRENT SEMESTER
+    // ------------------------------------------------------
 
-const semesterMap = new Map(
-  semesterRecords.map((record) => [
-    String(record.studentId),
-    record.semester,
-  ])
-);
+    const studentIds =
+      students.map(
+        (student) =>
+          student._id
+      );
 
-students = students.map((student) => ({
-  ...student,
-  semester: semesterMap.get(String(student._id)) || "",
-}));
+    const semesterRecords =
+      await StudentSemester.find({
+        studentId: {
+          $in: studentIds,
+        },
+
+        status: "CURRENT",
+      }).lean();
+
+    const semesterMap =
+      new Map(
+        semesterRecords.map(
+          (record) => [
+            String(
+              record.studentId
+            ),
+            record.semester,
+          ]
+        )
+      );
+
+    // ------------------------------------------------------
+    // ADD SEMESTER TO RESPONSE
+    // ------------------------------------------------------
+
+    students =
+      students.map(
+        (student) => ({
+          ...student,
+
+          semester:
+            semesterMap.get(
+              String(student._id)
+            ) || "",
+        })
+      );
 
     return res.json({
       success: true,
       data: students,
     });
+
   } catch (err) {
+
     console.error(
       "GetStudents Error:",
       err
@@ -774,12 +1098,15 @@ export const updateStudent = async (req, res) => {
     } = req.user;
 
     const student =
-      await Student.findById(req.params.id);
+      await Student.findById(
+        req.params.id
+      );
 
     if (!student) {
       return res.status(404).json({
         success: false,
-        message: "Student not found",
+        message:
+          "Student not found",
       });
     }
 
@@ -814,7 +1141,8 @@ export const updateStudent = async (req, res) => {
     // GET SEMESTER FROM REQUEST
     // ------------------------------------------------------
 
-    const semester = req.body.semester;
+    const semester =
+      req.body.semester;
 
     let parsedSemester = null;
 
@@ -823,10 +1151,13 @@ export const updateStudent = async (req, res) => {
       semester !== null &&
       semester !== ""
     ) {
-      parsedSemester = Number(semester);
+      parsedSemester =
+        Number(semester);
 
       if (
-        !Number.isInteger(parsedSemester) ||
+        !Number.isInteger(
+          parsedSemester
+        ) ||
         parsedSemester < 1 ||
         parsedSemester > 8
       ) {
@@ -857,15 +1188,16 @@ export const updateStudent = async (req, res) => {
     delete updateData.clerkId;
     delete updateData.role;
 
-    // Semester belongs to StudentSemester,
-    // NOT Student
+    // Semester belongs to StudentSemester
     delete updateData.semester;
 
     // ------------------------------------------------------
     // NORMALIZE
     // ------------------------------------------------------
 
-    if (updateData.registerNumber) {
+    if (
+      updateData.registerNumber
+    ) {
       updateData.registerNumber =
         updateData.registerNumber
           .trim()
@@ -903,9 +1235,64 @@ export const updateStudent = async (req, res) => {
         updateData.batch.trim();
     }
 
-    if (updateData.admissionYear) {
+    // ------------------------------------------------------
+    // BATCH NUMBER
+    // ------------------------------------------------------
+
+    if (
+      updateData.batchNumber !==
+        undefined &&
+      updateData.batchNumber !==
+        null &&
+      updateData.batchNumber !== ""
+    ) {
+      const parsedBatchNumber =
+        Number(
+          updateData.batchNumber
+        );
+
+      if (
+        !Number.isInteger(
+          parsedBatchNumber
+        ) ||
+        ![1, 2].includes(
+          parsedBatchNumber
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid batch number. Batch number must be 1 or 2",
+        });
+      }
+
+      updateData.batchNumber =
+        parsedBatchNumber;
+    }
+
+    if (
+      updateData.admissionYear
+    ) {
       updateData.admissionYear =
-        Number(updateData.admissionYear);
+        Number(
+          updateData.admissionYear
+        );
+
+      if (
+        !Number.isInteger(
+          updateData.admissionYear
+        ) ||
+        updateData.admissionYear <
+          2000 ||
+        updateData.admissionYear >
+          2100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid admission year",
+        });
+      }
     }
 
     // ------------------------------------------------------
@@ -941,7 +1328,9 @@ export const updateStudent = async (req, res) => {
             runValidators: true,
           }
         );
+
     } catch (dbError) {
+
       if (newImagePublicId) {
         try {
           await cloudinary.uploader.destroy(
@@ -965,18 +1354,20 @@ export const updateStudent = async (req, res) => {
     if (parsedSemester !== null) {
       const currentSemester =
         await StudentSemester.findOne({
-          studentId: student._id,
-          status: "CURRENT",
+          studentId:
+            student._id,
+          status:
+            "CURRENT",
         });
 
       if (currentSemester) {
+
         currentSemester.semester =
           parsedSemester;
 
         await currentSemester.save();
+
       } else {
-        // Safety fallback if current semester
-        // record does not exist
 
         const academicYear =
           `${student.admissionYear}-${String(
@@ -984,10 +1375,16 @@ export const updateStudent = async (req, res) => {
           ).slice(-2)}`;
 
         await StudentSemester.create({
-          studentId: student._id,
+          studentId:
+            student._id,
+
           academicYear,
-          semester: parsedSemester,
-          status: "CURRENT",
+
+          semester:
+            parsedSemester,
+
+          status:
+            "CURRENT",
         });
       }
     }
@@ -999,7 +1396,8 @@ export const updateStudent = async (req, res) => {
     if (
       newImagePublicId &&
       oldImagePublicId &&
-      oldImagePublicId !== newImagePublicId
+      oldImagePublicId !==
+        newImagePublicId
     ) {
       try {
         await cloudinary.uploader.destroy(
@@ -1019,12 +1417,18 @@ export const updateStudent = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: newImagePublicId
-        ? "Student details, semester and photo updated successfully"
-        : "Student details and semester updated successfully",
-      data: updated,
+
+      message:
+        newImagePublicId
+          ? "Student details, semester and photo updated successfully"
+          : "Student details and semester updated successfully",
+
+      data:
+        updated,
     });
+
   } catch (err) {
+
     console.error(
       "UpdateStudent Error:",
       err
@@ -1051,7 +1455,6 @@ export const updateStudent = async (req, res) => {
     });
   }
 };
-
 // ==========================================================
 // DELETE STUDENT
 // ==========================================================
@@ -1296,14 +1699,23 @@ export const searchStudents = async (
       academicYear,
       registerNumber,
       batch,
+      batchNumber,
     } = req.query;
 
     const filter = {};
+
+    // ------------------------------------------------------
+    // DEPARTMENT
+    // ------------------------------------------------------
 
     if (department) {
       filter.department =
         department.toLowerCase();
     }
+
+    // ------------------------------------------------------
+    // REGISTER NUMBER
+    // ------------------------------------------------------
 
     if (registerNumber) {
       filter.registerNumber =
@@ -1312,8 +1724,44 @@ export const searchStudents = async (
           .toUpperCase();
     }
 
+    // ------------------------------------------------------
+    // ACADEMIC BATCH
+    // ------------------------------------------------------
+
     if (batch) {
-      filter.batch = batch;
+      filter.batch =
+        batch.trim();
+    }
+
+    // ------------------------------------------------------
+    // BATCH NUMBER
+    // ------------------------------------------------------
+
+    if (
+      batchNumber !== undefined &&
+      batchNumber !== null &&
+      batchNumber !== ""
+    ) {
+      const parsedBatchNumber =
+        Number(batchNumber);
+
+      if (
+        !Number.isInteger(
+          parsedBatchNumber
+        ) ||
+        ![1, 2].includes(
+          parsedBatchNumber
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid batch number. Batch number must be 1 or 2",
+        });
+      }
+
+      filter.batchNumber =
+        parsedBatchNumber;
     }
 
     // ------------------------------------------------------
@@ -1351,10 +1799,14 @@ export const searchStudents = async (
       };
     }
 
+    // ------------------------------------------------------
+    // FETCH STUDENTS
+    // ------------------------------------------------------
+
     const students =
       await Student.find(filter)
         .select(
-          "name registerNumber department admissionYear batch _id clerkId imageUrl"
+          "name registerNumber department admissionYear batch batchNumber _id clerkId imageUrl"
         )
         .sort({
           registerNumber: 1,
@@ -1364,7 +1816,9 @@ export const searchStudents = async (
       success: true,
       data: students,
     });
+
   } catch (err) {
+
     console.error(
       "SearchStudents Error:",
       err
@@ -1374,7 +1828,8 @@ export const searchStudents = async (
       success: false,
       message:
         "Failed to search students",
-      error: err.message,
+      error:
+        err.message,
     });
   }
 };

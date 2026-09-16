@@ -265,6 +265,7 @@ export default function StudentTable({
           data.admissionYear || "",
         semester: data.semester || "",
         batch: data.batch || "",
+        batchNumber: data.batchNumber || "",
       });
 
       setActionMessage("");
@@ -347,6 +348,11 @@ export default function StudentTable({
       formData.append(
         "batch",
         editForm.batch.trim()
+      );
+
+      formData.append(
+        "batchNumber",
+        editForm.batchNumber
       );
 
       await axios.put(
@@ -1537,6 +1543,35 @@ export default function StudentTable({
                     required
                     className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm outline-none transition focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
                   />
+                </div>
+
+                {/* BATCH NUMBER */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600">
+                    Batch Number
+                  </label>
+
+                  <select
+                    name="batchNumber"
+                    value={
+                      editForm.batchNumber
+                    }
+                    onChange={
+                      handleEditChange
+                    }
+                    required
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm outline-none transition focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
+                  >
+                    <option value="">
+                      Select Batch
+                    </option>
+                    <option value="1">
+                      Batch 1
+                    </option>
+                    <option value="2">
+                      Batch 2
+                    </option>
+                  </select>
                 </div>
 
               </div>

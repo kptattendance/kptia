@@ -4,12 +4,13 @@ import dotenv from "dotenv";
 import { clerkMiddleware } from "@clerk/express";
 
 import connectDB from "./config/db.js";
-
+import hodIARoutes from "./routes/hodIARoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
 import subjectRoutes from "./routes/subjectRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import iaRoutes from "./routes/iaRoutes.js";
+import studentAcademicRoutes from "./routes/studentAcademicRoutes.js";
 
 dotenv.config();
 
@@ -66,7 +67,14 @@ app.use("/api/students", studentRoutes);
 app.use("/api/subjects", subjectRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/ia", iaRoutes);
-
+app.use(
+  "/api/hod/ia",
+  hodIARoutes
+);
+app.use(
+  "/api/students",
+  studentAcademicRoutes
+);
 connectDB().then(() => {
   if (process.env.NODE_ENV !== "production") {
     app.listen(PORT, () => {

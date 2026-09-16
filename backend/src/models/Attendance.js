@@ -51,6 +51,35 @@ const attendanceSchema = new mongoose.Schema(
       required: true,
     },
 
+    // -----------------------------------------
+    // BATCHES INCLUDED IN THIS ATTENDANCE RECORD
+    //
+    // Batch 1        -> [1]
+    // Batch 2        -> [2]
+    // Both Batches   -> [1, 2]
+    // -----------------------------------------
+
+    batchNumbers: {
+      type: [
+        {
+          type: Number,
+          enum: [1, 2],
+        },
+      ],
+      required: true,
+      validate: {
+        validator: function (value) {
+          return (
+            Array.isArray(value) &&
+            value.length >= 1 &&
+            value.length <= 2
+          );
+        },
+        message:
+          "At least one batch must be selected.",
+      },
+    },
+
     classesConducted: {
       type: Number,
       required: true,
@@ -67,19 +96,17 @@ const attendanceSchema = new mongoose.Schema(
       required: true,
     },
 
+    isLocked: {
+      type: Boolean,
+      default: true,
+    },
+
     lockedAt: {
       type: Date,
-      default: null,
     },
 
     lockedBy: {
       type: String,
-      default: null,
-    },
-
-    isLocked: {
-      type: Boolean,
-      default: false,
     },
   },
   {
@@ -87,17 +114,26 @@ const attendanceSchema = new mongoose.Schema(
   }
 );
 
-attendanceSchema.index(
-  {
-    department: 1,
-    semester: 1,
-    subjectId: 1,
-    month: 1,
-    year: 1,
-  },
-  {
-    unique: true,
-  }
-);
+// -----------------------------------------
+// NON-UNIQUE INDEX
+// -----------------------------------------
+//
+// Multiple records are allowed for:
+// Batch 1
+// Batch 2
+//
+// Overlap checking is handled in controller.
+// -----------------------------------------
 
-export default mongoose.model("Attendance", attendanceSchema);
+attendanceSchema.index({
+  department: 1,
+  semester: 1,
+  subjectId: 1,
+  month: 1,
+  year: 1,
+});
+
+export default mongoose.model(
+  "Attendance",
+  attendanceSchema
+);

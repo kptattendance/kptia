@@ -55,7 +55,14 @@ export default function FacultyIAMarksPage() {
   const [semester, setSemester] = useState("");
   const [subjectId, setSubjectId] = useState("");
 
+  // IA selection
+  const [iaNumber, setIaNumber] = useState("");
+
+  // Student batch
+  const [batchNumber, setBatchNumber] = useState("");
+
   const [subjects, setSubjects] = useState([]);
+  const [allStudents, setAllStudents] = useState([]);
   const [students, setStudents] = useState([]);
 
   const [loadingSubjects, setLoadingSubjects] = useState(false);
@@ -195,11 +202,8 @@ export default function FacultyIAMarksPage() {
 
   useEffect(() => {
     const loadStudents = async () => {
-      if (
-        !department ||
-        !semester ||
-        !subjectId
-      ) {
+      if (!department || !semester || !subjectId) {
+        setAllStudents([]);
         setStudents([]);
         setStudentMarks({});
         return;
@@ -208,6 +212,11 @@ export default function FacultyIAMarksPage() {
       try {
         setLoadingStudents(true);
         setMessage("");
+
+        // Reset IA/range when subject changes
+        setExistingIA(null);
+        setTests([]);
+        setStudentMarks({});
 
         const token = await getToken();
 
@@ -232,30 +241,18 @@ export default function FacultyIAMarksPage() {
             ? result.students
             : result?.students?.data || [];
 
-        setStudents(data);
-
-        const initialMarks = {};
-
-        data.forEach((student) => {
-          initialMarks[student._id] = {};
-        });
-
-        setStudentMarks(initialMarks);
-
-        // Check whether IA already exists
-        await checkExistingIA(
-          department,
-          semester,
-          subjectId,
-          academicYear
-        );
+        // Keep the complete class list.
+        setAllStudents(data);
+        setStudents([]);
       } catch (error) {
         console.error(
           "Failed to load students:",
           error
         );
 
+        setAllStudents([]);
         setStudents([]);
+
         setMessage(
           "Unable to load students."
         );
@@ -270,9 +267,67 @@ export default function FacultyIAMarksPage() {
     department,
     semester,
     subjectId,
-    academicYear,
     getToken,
   ]);
+
+  // ==================================================
+  // LOAD SELECTED BATCH
+  // ==================================================
+
+  const loadBatch = async () => {
+    setMessage("");
+    setMessageType("");
+
+    if (!department || !semester || !subjectId) {
+      setMessage("Please select department, semester and subject.");
+      setMessageType("error");
+      return;
+    }
+
+    if (!iaNumber) {
+      setMessage("Please select IA number.");
+      setMessageType("error");
+      return;
+    }
+
+    if (!batchNumber) {
+      setMessage("Please select student batch.");
+      setMessageType("error");
+      return;
+    }
+
+    const selectedStudents = allStudents.filter(
+      (student) => Number(student.batchNumber) === Number(batchNumber)
+    );
+
+    if (selectedStudents.length === 0) {
+      setStudents([]);
+      setStudentMarks({});
+      setExistingIA(null);
+      setTests([]);
+      setMessage(`No students found in Batch ${batchNumber}.`);
+      setMessageType("error");
+      return;
+    }
+
+    const initialMarks = {};
+    selectedStudents.forEach((student) => {
+      initialMarks[student._id] = {};
+    });
+
+    setStudents(selectedStudents);
+    setStudentMarks(initialMarks);
+
+    await checkExistingIA(
+      department,
+      semester,
+      subjectId,
+      academicYear,
+      Number(iaNumber),
+      Number(batchNumber),
+      selectedStudents
+    );
+  };
 
   // ==================================================
   // CHECK EXISTING IA
@@ -282,7 +337,10 @@ export default function FacultyIAMarksPage() {
     dept,
     sem,
     subject,
-    year
+    year,
+    selectedIaNumber,
+    selectedBatchNumber,
+    selectedStudents = []
   ) => {
     try {
       setCheckingExisting(true);
@@ -300,11 +358,18 @@ export default function FacultyIAMarksPage() {
             semester: Number(sem),
             subjectId: subject,
             academicYear: year,
+            iaNumber: Number(selectedIaNumber),
+            batchNumber: Number(selectedBatchNumber),
           },
         }
       );
 
-      const data = response.data?.data;
+      const responseData = response.data?.data;
+
+      // Backend returns the exact IA + batch record.
+      const data = Array.isArray(responseData)
+        ? responseData[0]
+        : responseData;
 
       if (data) {
         setExistingIA(data);
@@ -321,17 +386,15 @@ export default function FacultyIAMarksPage() {
 
         (data.students || []).forEach(
           (studentRecord) => {
-            loadedMarks[
+            const studentId =
               studentRecord.studentId?._id ||
-              studentRecord.studentId
-            ] = {};
+              studentRecord.studentId;
+
+            loadedMarks[studentId] = {};
 
             (studentRecord.tests || []).forEach(
               (test, index) => {
-                loadedMarks[
-                  studentRecord.studentId?._id ||
-                  studentRecord.studentId
-                ][index] = {
+                loadedMarks[studentId][index] = {
                   status:
                     test.status || "PRESENT",
 
@@ -357,14 +420,25 @@ export default function FacultyIAMarksPage() {
 
         setStudentMarks(loadedMarks);
       } else {
+        // New IA/batch
         setExistingIA(null);
         setTests([]);
+
+        const initialMarks = {};
+
+        selectedStudents.forEach((student) => {
+          initialMarks[student._id] = {};
+        });
+
+        setStudentMarks(initialMarks);
       }
     } catch (error) {
       console.error(
         "Check existing IA error:",
         error
       );
+
+      setExistingIA(null);
     } finally {
       setCheckingExisting(false);
     }
@@ -802,10 +876,12 @@ export default function FacultyIAMarksPage() {
     if (
       !department ||
       !semester ||
-      !subjectId
+      !subjectId ||
+      !iaNumber ||
+      !batchNumber
     ) {
       setMessage(
-        "Please select department, semester and subject."
+        "Please select IA number and student batch."
       );
       setMessageType("error");
       return;
@@ -878,6 +954,10 @@ export default function FacultyIAMarksPage() {
         subjectId,
 
         academicYear,
+
+        iaNumber: Number(iaNumber),
+
+        batchNumber: Number(batchNumber),
 
         // ------------------------------------------
         // TEST CONFIGURATION
@@ -1018,7 +1098,10 @@ export default function FacultyIAMarksPage() {
         department,
         semester,
         subjectId,
-        academicYear
+        academicYear,
+        Number(iaNumber),
+        Number(batchNumber),
+        students
       );
     } catch (error) {
       console.error(
@@ -1040,15 +1123,17 @@ export default function FacultyIAMarksPage() {
     }
   };
 
-  // ==================================================
-  // SELECTED SUBJECT
-  // ==================================================
 
-  const selectedSubject =
-    subjects.find(
-      (subject) =>
-        subject._id === subjectId
-    );
+ // ==================================================
+// IA NUMBERS
+// ==================================================
+
+// IA number is independent of the Subject.
+// Faculty can conduct as many IAs as required.
+const iaNumbers = Array.from(
+  { length: 10 },
+  (_, index) => index + 1
+);
 
   // ==================================================
   // RENDER
@@ -1100,24 +1185,21 @@ export default function FacultyIAMarksPage() {
 
               <select
                 value={academicYear}
-                disabled={!!existingIA}
-                onChange={(e) =>
-                  setAcademicYear(
-                    e.target.value
-                  )
-                }
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+                onChange={(e) => {
+                  setAcademicYear(e.target.value);
+                  setIaNumber("");
+                                    setExistingIA(null);
+                  setTests([]);
+                  setStudents([]);
+                  setStudentMarks({});
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400"
               >
-                {academicYears.map(
-                  (year) => (
-                    <option
-                      key={year}
-                      value={year}
-                    >
-                      {year}
-                    </option>
-                  )
-                )}
+                {academicYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1130,34 +1212,31 @@ export default function FacultyIAMarksPage() {
 
               <select
                 value={department}
-                disabled={!!existingIA}
                 onChange={(e) => {
-                  setDepartment(
-                    e.target.value
-                  );
+                  setDepartment(e.target.value);
                   setSemester("");
                   setSubjectId("");
-                  setTests([]);
+                  setIaNumber("");
+                                    setTests([]);
+                  setAllStudents([]);
                   setStudents([]);
                   setStudentMarks({});
                   setExistingIA(null);
                 }}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400"
               >
                 <option value="">
                   Select department
                 </option>
 
-                {departments.map(
-                  (item) => (
-                    <option
-                      key={item.value}
-                      value={item.value}
-                    >
-                      {item.label}
-                    </option>
-                  )
-                )}
+                {departments.map((item) => (
+                  <option
+                    key={item.value}
+                    value={item.value}
+                  >
+                    {item.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1170,16 +1249,13 @@ export default function FacultyIAMarksPage() {
 
               <select
                 value={semester}
-                disabled={
-                  !department ||
-                  !!existingIA
-                }
+                disabled={!department}
                 onChange={(e) => {
-                  setSemester(
-                    e.target.value
-                  );
+                  setSemester(e.target.value);
                   setSubjectId("");
-                  setTests([]);
+                  setIaNumber("");
+                                    setTests([]);
+                  setAllStudents([]);
                   setStudents([]);
                   setStudentMarks({});
                   setExistingIA(null);
@@ -1192,10 +1268,7 @@ export default function FacultyIAMarksPage() {
 
                 {[1, 2, 3, 4, 5, 6, 7, 8].map(
                   (sem) => (
-                    <option
-                      key={sem}
-                      value={sem}
-                    >
+                    <option key={sem} value={sem}>
                       Semester {sem}
                     </option>
                   )
@@ -1214,14 +1287,12 @@ export default function FacultyIAMarksPage() {
                 value={subjectId}
                 disabled={
                   !semester ||
-                  loadingSubjects ||
-                  !!existingIA
+                  loadingSubjects
                 }
                 onChange={(e) => {
-                  setSubjectId(
-                    e.target.value
-                  );
-                  setTests([]);
+                  setSubjectId(e.target.value);
+                  setIaNumber("");
+                                    setTests([]);
                   setStudents([]);
                   setStudentMarks({});
                   setExistingIA(null);
@@ -1234,20 +1305,115 @@ export default function FacultyIAMarksPage() {
                     : "Select subject"}
                 </option>
 
-                {subjects.map(
-                  (subject) => (
-                    <option
-                      key={subject._id}
-                      value={subject._id}
-                    >
-                      {subject.code} -{" "}
-                      {subject.name}
-                    </option>
-                  )
-                )}
+                {subjects.map((subject) => (
+                  <option
+                    key={subject._id}
+                    value={subject._id}
+                  >
+                    {subject.code} - {subject.name}
+                  </option>
+                ))}
               </select>
             </div>
+
+            {/* IA NUMBER */}
+
+            <div>
+              <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                IA
+              </label>
+<select
+  value={iaNumber}
+  disabled={!subjectId}
+  onChange={(e) => {
+    setIaNumber(e.target.value);
+    setBatchNumber("");
+    setExistingIA(null);
+    setTests([]);
+    setStudents([]);
+    setStudentMarks({});
+  }}
+  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+>
+  <option value="">
+    Select IA
+  </option>
+
+  {iaNumbers.map((number) => (
+    <option key={number} value={number}>
+      IA {number}
+    </option>
+  ))}
+</select>
+            </div>
+
+            {/* STUDENT BATCH */}
+
+            <div>
+              <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                Student Batch
+              </label>
+
+              <select
+                value={batchNumber}
+                disabled={!iaNumber}
+                onChange={(e) => {
+                  setBatchNumber(e.target.value);
+                  setExistingIA(null);
+                  setTests([]);
+                  setStudents([]);
+                  setStudentMarks({});
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              >
+                <option value="">
+                  Select Batch
+                </option>
+                <option value="1">Batch 1</option>
+                <option value="2">Batch 2</option>
+              </select>
+            </div>
+
+            {/* LOAD BATCH */}
+
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={loadBatch}
+                disabled={
+                  !subjectId ||
+                  !iaNumber ||
+                  !batchNumber ||
+                  loadingStudents ||
+                  checkingExisting
+                }
+                className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {checkingExisting
+                  ? "Checking..."
+                  : loadingStudents
+                    ? "Loading..."
+                    : "Load Students"}
+              </button>
+            </div>
+
           </div>
+
+          {/* Batch helper */}
+
+          {allStudents.length > 0 && (
+            <div className="mt-3 flex flex-col gap-1 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-xs text-blue-700 sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                {allStudents.length} students available in the selected semester.
+              </span>
+
+              {students.length > 0 && (
+                <span className="font-bold">
+                  Showing {students.length} students
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ================================================= */}
@@ -1275,16 +1441,21 @@ export default function FacultyIAMarksPage() {
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-bold text-amber-800">
-                IA marks already entered
+                IA {existingIA.iaNumber} is already frozen
               </p>
 
               <p className="text-xs text-amber-700">
-                This IA record is frozen and cannot be edited by faculty.
+                Batch:{" "}
+                <span className="font-semibold">
+                  {existingIA.batchNumber === 1 ? "Batch 1" : "Batch 2"}
+                </span>
+                {" · "}
+                This record cannot be edited by faculty.
               </p>
             </div>
 
             <div className="text-xs font-semibold text-amber-700">
-              Total:{" "}
+              Total Maximum:{" "}
               {existingIA.totalMaxMarks}
             </div>
           </div>
@@ -1294,7 +1465,7 @@ export default function FacultyIAMarksPage() {
         {/* TESTS */}
         {/* ================================================= */}
 
-        {subjectId && (
+        {subjectId && students.length > 0 && (
           <div className="mt-5">
 
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

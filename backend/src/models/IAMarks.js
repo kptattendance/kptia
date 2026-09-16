@@ -1,10 +1,8 @@
-// models/IAMarks.js
-
 import mongoose from "mongoose";
 
-// --------------------------------------------------
+// ==========================================================
 // CO MARKS
-// --------------------------------------------------
+// ==========================================================
 
 const coMarksSchema = new mongoose.Schema(
   {
@@ -44,13 +42,14 @@ const coMarksSchema = new mongoose.Schema(
       min: 0,
     },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
-// --------------------------------------------------
-// TEST CONFIGURATION
-// This is common for the entire class.
-// --------------------------------------------------
+// ==========================================================
+// IA TEST
+// ==========================================================
 
 const testSchema = new mongoose.Schema(
   {
@@ -60,45 +59,32 @@ const testSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Example: 50
     maxMarks: {
       type: Number,
       required: true,
       min: 0,
     },
 
-    // Example:
-    // CO1: 20
-    // CO2: 30
-    // CO3: 0
-    // ...
-    // Total = 50
+    // Maximum marks allocated to each CO
     coMarks: {
       type: coMarksSchema,
       required: true,
     },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
-// --------------------------------------------------
+// ==========================================================
 // STUDENT TEST MARKS
-// --------------------------------------------------
+// ==========================================================
 
 const studentTestSchema = new mongoose.Schema(
   {
-    // Actual marks obtained by student in this test.
-    //
-    // Example:
-    // CO1 = 16
-    // CO2 = 24
-    // Total = 40
-    //
-    // If ABSENT, marks will be null.
     marks: {
       type: Number,
       default: null,
-      min: 0,
     },
 
     status: {
@@ -107,18 +93,20 @@ const studentTestSchema = new mongoose.Schema(
       default: "PRESENT",
     },
 
-    // Actual CO-wise marks obtained
+    // Actual CO marks obtained by the student
     coMarks: {
       type: coMarksSchema,
       required: true,
     },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
-// --------------------------------------------------
-// STUDENT IA
-// --------------------------------------------------
+// ==========================================================
+// STUDENT IA RECORD
+// ==========================================================
 
 const studentIASchema = new mongoose.Schema(
   {
@@ -128,33 +116,43 @@ const studentIASchema = new mongoose.Schema(
       required: true,
     },
 
-    // Must have same number of entries
-    // as the main tests array.
     tests: {
       type: [studentTestSchema],
       required: true,
     },
 
-    // Calculated total obtained by student.
     totalMarks: {
       type: Number,
-      default: 0,
+      required: true,
       min: 0,
     },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
-// --------------------------------------------------
+// ==========================================================
 // IA MARKS
-// --------------------------------------------------
+// ==========================================================
 
 const iaMarksSchema = new mongoose.Schema(
   {
+    // ------------------------------------------------------
+    // ACADEMIC INFORMATION
+    // ------------------------------------------------------
+
+    academicYear: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     department: {
       type: String,
       required: true,
       trim: true,
+      lowercase: true,
     },
 
     semester: {
@@ -170,45 +168,86 @@ const iaMarksSchema = new mongoose.Schema(
       required: true,
     },
 
-    academicYear: {
-      type: String,
+    // ------------------------------------------------------
+    // IA NUMBER
+    //
+    // 1 = IA1
+    // 2 = IA2
+    // 3 = IA3
+    // 4 = IA4
+    // 5 = IA5
+    // etc.
+    //
+    // No fixed maximum.
+    // Subject.iaCount decides how many IAs
+    // are actually available for that subject.
+    // ------------------------------------------------------
+
+    iaNumber: {
+      type: Number,
       required: true,
-      trim: true,
+      min: 1,
     },
 
-    // All tests for this IA
+    // ------------------------------------------------------
+    // STUDENT GROUP
+    //
+    // 1 = Batch 1
+    // 2 = Batch 2
+    // ------------------------------------------------------
+
+    batchNumber: {
+      type: Number,
+      required: true,
+      enum: [1, 2],
+    },
+
+    // ------------------------------------------------------
+    // IA TESTS
+    // ------------------------------------------------------
+
     tests: {
       type: [testSchema],
       required: true,
+      validate: {
+        validator: (value) =>
+          Array.isArray(value) &&
+          value.length > 0,
+        message:
+          "At least one IA test is required.",
+      },
     },
 
-    // Automatically calculated:
-    //
-    // Test 1 = 50
-    // Test 2 = 25
-    // Test 3 = 25
-    //
-    // Total = 100
     totalMaxMarks: {
       type: Number,
       required: true,
       min: 0,
     },
 
+    // ------------------------------------------------------
+    // STUDENT MARKS
+    // ------------------------------------------------------
+
     students: {
       type: [studentIASchema],
       required: true,
+      validate: {
+        validator: (value) =>
+          Array.isArray(value) &&
+          value.length > 0,
+        message:
+          "At least one student is required.",
+      },
     },
 
-    // Clerk ID of person who entered it
+    // ------------------------------------------------------
+    // ENTERED / LOCKED
+    // ------------------------------------------------------
+
     enteredBy: {
       type: String,
       required: true,
     },
-
-    // ------------------------------------------------
-    // FREEZE
-    // ------------------------------------------------
 
     isLocked: {
       type: Boolean,
@@ -217,12 +256,10 @@ const iaMarksSchema = new mongoose.Schema(
 
     lockedAt: {
       type: Date,
-      default: null,
     },
 
     lockedBy: {
       type: String,
-      default: null,
     },
   },
   {
@@ -230,21 +267,41 @@ const iaMarksSchema = new mongoose.Schema(
   }
 );
 
-// --------------------------------------------------
-// ONE IA RECORD PER
-// DEPARTMENT + SEMESTER + SUBJECT + ACADEMIC YEAR
-// --------------------------------------------------
+// ==========================================================
+// UNIQUE IA RECORD
+//
+// One record for:
+// Academic Year + Department + Semester +
+// Subject + IA Number + Batch Number
+//
+// Example:
+//
+// 2026-27 + CS + Sem 5 + Java + IA1 + Batch1
+//
+// is different from:
+//
+// 2026-27 + CS + Sem 5 + Java + IA2 + Batch1
+//
+// and:
+//
+// 2026-27 + CS + Sem 5 + Java + IA1 + Batch2
+// ==========================================================
 
 iaMarksSchema.index(
   {
+    academicYear: 1,
     department: 1,
     semester: 1,
     subjectId: 1,
-    academicYear: 1,
+    iaNumber: 1,
+    batchNumber: 1,
   },
   {
     unique: true,
   }
 );
 
-export default mongoose.model("IAMarks", iaMarksSchema);
+export default mongoose.model(
+  "IAMarks",
+  iaMarksSchema
+);

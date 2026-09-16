@@ -86,10 +86,10 @@ export default function BulkStudentUpload({
 
 const downloadTemplate = () => {
   const csv =
-    "registerNumber,name,email,phone,department,admissionYear,semester,batch\n" +
-    "1KT23CS001,Student One,student1@gmail.com,9876543210,cs,2023,5,2023-2026\n" +
-    "1KT23CS002,Student Two,student2@gmail.com,9876543211,cs,2023,3,2023-2026\n" +
-    "1KT23EC001,Student Three,student3@gmail.com,9876543212,ec,2023,3,2023-2026\n";
+    "registerNumber,name,email,phone,department,admissionYear,semester,batch,batchNumber\n" +
+    "1KT23CS001,Student One,student1@gmail.com,9876543210,cs,2023,5,2023-2026,1\n" +
+    "1KT23CS002,Student Two,student2@gmail.com,9876543211,cs,2023,3,2023-2026,2\n" +
+    "1KT23EC001,Student Three,student3@gmail.com,9876543212,ec,2023,3,2023-2026,1\n";
 
   const blob = new Blob([csv], {
     type: "text/csv;charset=utf-8;",
