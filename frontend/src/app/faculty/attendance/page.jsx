@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
+import Swal from "sweetalert2";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -56,8 +57,8 @@ export default function FacultyAttendancePage() {
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
+const [attendanceLocked, setAttendanceLocked] = useState(false);
+const [checkingAttendance, setCheckingAttendance] = useState(false);
 
   const years = useMemo(() => {
     const list = [];
@@ -127,64 +128,187 @@ export default function FacultyAttendancePage() {
   // --------------------------------------------------
   // Load students
   // --------------------------------------------------
+// --------------------------------------------------
+// Load students + check existing attendance
+// --------------------------------------------------
 
-  useEffect(() => {
-    const loadStudents = async () => {
-      if (!department || !semester || !subjectId) {
-        setStudents([]);
-        setAttendance({});
-        return;
-      }
+useEffect(() => {
+  const loadStudentsAndAttendance = async () => {
+    if (!department || !semester || !subjectId) {
+      setStudents([]);
+      setAttendance({});
+      setClassesConducted("");
+      setAttendanceLocked(false);
+      return;
+    }
 
-      try {
-        setLoadingStudents(true);
+    try {
+      setLoadingStudents(true);
+      setCheckingAttendance(true);
 
-        const token = await getToken();
+      const token = await getToken();
 
-        const response = await axios.get(
-          `${API_URL}/api/students/getstudents`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            params: {
-              department,
-              semester,
-            },
-          }
+      // ==============================================
+      // LOAD STUDENTS
+      // ==============================================
+
+      const studentResponse = await axios.get(
+        `${API_URL}/api/students/getstudents`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            department,
+            semester,
+          },
+        }
+      );
+
+      const studentResult = studentResponse.data;
+
+      const studentData = Array.isArray(
+        studentResult?.data
+      )
+        ? studentResult.data
+        : Array.isArray(studentResult?.students)
+        ? studentResult.students
+        : studentResult?.students?.data || [];
+
+      setStudents(studentData);
+
+      // ==============================================
+      // CHECK EXISTING ATTENDANCE
+      // ==============================================
+
+      const attendanceResponse = await axios.get(
+        `${API_URL}/api/attendance`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            department,
+            semester: Number(semester),
+            subjectId,
+            month: Number(month),
+            year: Number(year),
+          },
+        }
+      );
+
+      const attendanceResult =
+        attendanceResponse.data;
+
+      const existingAttendance =
+        attendanceResult?.data;
+
+      // ==============================================
+      // ATTENDANCE ALREADY EXISTS
+      // ==============================================
+
+      if (existingAttendance) {
+        setAttendanceLocked(true);
+
+        setClassesConducted(
+          existingAttendance.classesConducted
         );
 
-        const result = response.data;
+        const savedAttendance = {};
 
-        const data = Array.isArray(result?.data)
-          ? result.data
-          : Array.isArray(result?.students)
-            ? result.students
-            : result?.students?.data || [];
+        studentData.forEach((student) => {
+          const savedStudent =
+            existingAttendance.students?.find(
+              (item) =>
+                String(
+                  item.studentId?._id ||
+                    item.studentId
+                ) === String(student._id)
+            );
 
-        setStudents(data);
+          savedAttendance[student._id] =
+            savedStudent?.classesAttended ?? "";
+        });
+
+        setAttendance(savedAttendance);
+
+        const monthName =
+          months.find(
+            (item) =>
+              item.value === Number(month)
+          )?.label || month;
+
+        await Swal.fire({
+          icon: "info",
+          title: "Attendance Already Entered",
+          html: `
+            <div style="font-size:14px;line-height:1.7;color:#64748b">
+              Attendance for
+              <strong style="color:#0f172a">
+                ${monthName} ${year}
+              </strong>
+              has already been entered for this subject.
+              <br><br>
+              <strong style="color:#d97706">
+                This attendance is locked and cannot be modified.
+              </strong>
+            </div>
+          `,
+          confirmButtonText: "View Attendance",
+          confirmButtonColor: "#0f172a",
+        });
+      }
+
+      // ==============================================
+      // NO ATTENDANCE EXISTS
+      // ==============================================
+
+      else {
+        setAttendanceLocked(false);
+        setClassesConducted("");
 
         const initialAttendance = {};
 
-        data.forEach((student) => {
+        studentData.forEach((student) => {
           initialAttendance[student._id] = "";
         });
 
         setAttendance(initialAttendance);
-      } catch (error) {
-        console.error("Failed to load students:", error);
-
-        setStudents([]);
-
-        setMessage("Unable to load students.");
-        setMessageType("error");
-      } finally {
-        setLoadingStudents(false);
       }
-    };
+    } catch (error) {
+      console.error(
+        "Failed to load students/attendance:",
+        error
+      );
 
-    loadStudents();
-  }, [department, semester, subjectId, getToken]);
+      setStudents([]);
+      setAttendance({});
+      setClassesConducted("");
+      setAttendanceLocked(false);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Load Attendance",
+        text:
+          error.response?.data?.message ||
+          "Unable to load students or attendance.",
+        confirmButtonColor: "#0f172a",
+      });
+    } finally {
+      setLoadingStudents(false);
+      setCheckingAttendance(false);
+    }
+  };
+
+  loadStudentsAndAttendance();
+}, [
+  department,
+  semester,
+  subjectId,
+  month,
+  year,
+  getToken,
+]);
 
   // --------------------------------------------------
   // Attendance percentage
@@ -205,94 +329,243 @@ export default function FacultyAttendancePage() {
   // Save attendance
   // --------------------------------------------------
 
-  const handleSave = async () => {
-    if (!department || !semester || !subjectId) {
-      setMessage("Please select department, semester and subject.");
-      setMessageType("error");
+const handleSave = async () => {
+  // ==============================================
+  // SAFETY CHECK
+  // ==============================================
+
+  if (attendanceLocked) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Attendance Locked",
+      text:
+        "Attendance for this month and subject has already been entered and cannot be modified.",
+      confirmButtonColor: "#0f172a",
+    });
+
+    return;
+  }
+
+  // ==============================================
+  // VALIDATE SELECTION
+  // ==============================================
+
+  if (!department || !semester || !subjectId) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Incomplete Selection",
+      text:
+        "Please select department, semester and subject.",
+      confirmButtonColor: "#0f172a",
+    });
+
+    return;
+  }
+
+  // ==============================================
+  // VALIDATE CLASSES CONDUCTED
+  // ==============================================
+
+  if (
+    classesConducted === "" ||
+    Number(classesConducted) < 0
+  ) {
+    await Swal.fire({
+      icon: "warning",
+      title: "Invalid Classes Conducted",
+      text:
+        "Please enter a valid number of classes conducted.",
+      confirmButtonColor: "#0f172a",
+    });
+
+    return;
+  }
+
+  // ==============================================
+  // VALIDATE STUDENTS
+  // ==============================================
+
+  for (const student of students) {
+    const value = attendance[student._id];
+    const attended = Number(value);
+
+    if (
+      value === "" ||
+      Number.isNaN(attended)
+    ) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Attendance Missing",
+        text:
+          `Please enter attendance for ${student.name}.`,
+        confirmButtonColor: "#0f172a",
+      });
+
       return;
     }
 
-    if (!classesConducted || Number(classesConducted) < 0) {
-      setMessage("Please enter valid classes conducted.");
-      setMessageType("error");
+    if (
+      attended > Number(classesConducted)
+    ) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Invalid Attendance",
+        text:
+          `Attendance for ${student.name} cannot exceed classes conducted.`,
+        confirmButtonColor: "#0f172a",
+      });
+
       return;
     }
 
-    for (const student of students) {
-      const attended = Number(attendance[student._id]);
+    if (attended < 0) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Invalid Attendance",
+        text:
+          `Attendance for ${student.name} cannot be negative.`,
+        confirmButtonColor: "#0f172a",
+      });
 
-      if (
-        attendance[student._id] === "" ||
-        Number.isNaN(attended)
-      ) {
-        setMessage(
-          `Please enter attendance for ${student.name}.`
-        );
-        setMessageType("error");
-        return;
-      }
-
-      if (attended > Number(classesConducted)) {
-        setMessage(
-          `Attendance for ${student.name} cannot exceed classes conducted.`
-        );
-        setMessageType("error");
-        return;
-      }
-
-      if (attended < 0) {
-        setMessage(
-          `Attendance for ${student.name} cannot be negative.`
-        );
-        setMessageType("error");
-        return;
-      }
+      return;
     }
+  }
 
-    try {
-      setSaving(true);
-      setMessage("");
+  // ==============================================
+  // CONFIRM
+  // ==============================================
 
-      const token = await getToken();
+  const monthName =
+    months.find(
+      (item) =>
+        item.value === Number(month)
+    )?.label || month;
 
-      const payload = {
-        department,
-        semester: Number(semester),
-        subjectId,
-        month: Number(month),
-        year: Number(year),
-        classesConducted: Number(classesConducted),
-        students: students.map((student) => ({
+  const confirmation = await Swal.fire({
+    icon: "question",
+    title: "Save Attendance?",
+    html: `
+      <div style="font-size:14px;line-height:1.8;color:#64748b">
+        You are entering attendance for
+        <strong style="color:#0f172a">
+          ${monthName} ${year}
+        </strong>
+        <br>
+        <strong style="color:#0f172a">
+          ${selectedSubject?.code || ""}
+          — ${selectedSubject?.name || ""}
+        </strong>
+        <br><br>
+        Once saved, the attendance will be
+        <strong style="color:#dc2626">
+          permanently locked
+        </strong>
+        and cannot be edited.
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Save & Lock",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#0f172a",
+    cancelButtonColor: "#94a3b8",
+    reverseButtons: true,
+  });
+
+  if (!confirmation.isConfirmed) {
+    return;
+  }
+
+  // ==============================================
+  // SAVE
+  // ==============================================
+
+  try {
+    setSaving(true);
+
+    const token = await getToken();
+
+    const payload = {
+      department,
+      semester: Number(semester),
+      subjectId,
+      month: Number(month),
+      year: Number(year),
+      classesConducted:
+        Number(classesConducted),
+
+      students: students.map(
+        (student) => ({
           studentId: student._id,
-          classesAttended: Number(attendance[student._id]),
-        })),
-      };
+          classesAttended:
+            Number(
+              attendance[student._id]
+            ),
+        })
+      ),
+    };
 
-      await axios.post(
-        `${API_URL}/api/attendance/save`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    await axios.post(
+      `${API_URL}/api/attendance/save`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
 
-      setMessage("Attendance saved successfully.");
-      setMessageType("success");
-    } catch (error) {
-      console.error("Save attendance error:", error);
+    // Lock immediately
+    setAttendanceLocked(true);
 
-      setMessage(
-        error.response?.data?.message ||
-          "Failed to save attendance."
-      );
+    await Swal.fire({
+      icon: "success",
+      title: "Attendance Saved",
+      text:
+        "Attendance has been saved successfully and is now locked.",
+      confirmButtonColor: "#0f172a",
+    });
+  } catch (error) {
+    console.error(
+      "Save attendance error:",
+      error
+    );
 
-      setMessageType("error");
-    } finally {
-      setSaving(false);
+    // ============================================
+    // DUPLICATE RECORD
+    // ============================================
+
+    if (
+      error.response?.status === 409
+    ) {
+      setAttendanceLocked(true);
+
+      await Swal.fire({
+        icon: "warning",
+        title: "Attendance Already Entered",
+        text:
+          "Attendance for this month and subject has already been entered and is locked.",
+        confirmButtonText:
+          "OK",
+        confirmButtonColor:
+          "#0f172a",
+      });
+
+      return;
     }
-  };
+
+    await Swal.fire({
+      icon: "error",
+      title: "Unable to Save Attendance",
+      text:
+        error.response?.data?.message ||
+        "Failed to save attendance.",
+      confirmButtonColor:
+        "#0f172a",
+    });
+  } finally {
+    setSaving(false);
+  }
+};
 
   const selectedSubject = subjects.find(
     (subject) => subject._id === subjectId
@@ -461,18 +734,6 @@ export default function FacultyAttendancePage() {
         </div>
       </div>
 
-      {/* Message */}
-      {message && (
-        <div
-          className={`mt-5 rounded-xl border px-4 py-3 text-sm ${
-            messageType === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-red-200 bg-red-50 text-red-700"
-          }`}
-        >
-          {message}
-        </div>
-      )}
 
       {/* Attendance Section */}
       {subjectId && (
@@ -516,14 +777,25 @@ export default function FacultyAttendancePage() {
                 Classes Conducted
               </label>
 
-              <input
-                type="number"
-                min="0"
-                value={classesConducted}
-                onChange={(e) => setClassesConducted(e.target.value)}
+          <input
+  type="number"
+  min="0"
+  value={classesConducted}
+  disabled={
+    attendanceLocked ||
+    checkingAttendance
+  }
+  onChange={(e) =>
+    setClassesConducted(e.target.value)
+  }
                 placeholder="e.g. 24"
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-900 outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-100"
               />
+              {attendanceLocked && (
+  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 ring-1 ring-inset ring-amber-200">
+    🔒 LOCKED
+  </span>
+)}
             </div>
           </div>
 
@@ -606,12 +878,16 @@ export default function FacultyAttendancePage() {
                         </td>
 
                         <td className="px-4 py-4 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max={classesConducted || undefined}
-                            value={attendance[student._id] ?? ""}
-                            onChange={(e) =>
+                         <input
+  type="number"
+  min="0"
+  max={classesConducted || undefined}
+  value={attendance[student._id] ?? ""}
+  disabled={
+    attendanceLocked ||
+    checkingAttendance
+  }
+  onChange={(e) =>
                               setAttendance((prev) => ({
                                 ...prev,
                                 [student._id]: e.target.value,
@@ -660,10 +936,19 @@ export default function FacultyAttendancePage() {
 
               <button
                 onClick={handleSave}
-                disabled={saving || loadingStudents}
+           disabled={
+  saving ||
+  loadingStudents ||
+  checkingAttendance ||
+  attendanceLocked
+}
                 className="rounded-xl bg-slate-950 px-7 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {saving ? "Saving..." : "Save Attendance"}
+                {saving
+  ? "Saving..."
+  : attendanceLocked
+  ? "Attendance Locked"
+  : "Save Attendance"}
               </button>
             </div>
           )}

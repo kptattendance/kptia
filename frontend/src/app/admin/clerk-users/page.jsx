@@ -403,6 +403,9 @@ export default function ClerkUsersPage() {
                       className="h-4 w-4 cursor-pointer"
                     />
                   </th>
+                      <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Sl. No.
+                  </th>
 
                   <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wide text-slate-500">
                     User
@@ -430,7 +433,7 @@ export default function ClerkUsersPage() {
               {/* TABLE BODY */}
               <tbody>
 
-                {filteredUsers.map((user) => (
+                {filteredUsers.map((user,index) => (
                   <tr
                     key={user.clerkId}
                     className={`border-b border-slate-100 last:border-0 transition hover:bg-slate-50 ${
@@ -457,7 +460,9 @@ export default function ClerkUsersPage() {
                         className="h-4 w-4 cursor-pointer"
                       />
                     </td>
-
+ <td className="px-6 py-4 text-sm text-slate-600">
+                      {index+1 || "-"}
+                    </td>
                     {/* USER */}
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">

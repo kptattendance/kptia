@@ -1,19 +1,36 @@
-import { createServer } from "https";
-import { readFileSync } from "fs";
+import https from "https";
+import fs from "fs";
 import next from "next";
 
-const app = next({ dev: true });
+const dev = true;
+const hostname = "local.ia.kptmangaluru.in";
+const port = 443;
+
+const app = next({
+  dev,
+  hostname,
+  port,
+});
+
 const handle = app.getRequestHandler();
 
 const httpsOptions = {
-  key: readFileSync("./local.ia.kptmangaluru.in-key.pem"),
-  cert: readFileSync("./local.ia.kptmangaluru.in.pem"),
+  key: fs.readFileSync(
+    "./local.ia.kptmangaluru.in-key.pem"
+  ),
+  cert: fs.readFileSync(
+    "./local.ia.kptmangaluru.in.pem"
+  ),
 };
 
 await app.prepare();
 
-createServer(httpsOptions, (req, res) => {
-  handle(req, res);
-}).listen(443, "0.0.0.0", () => {
-  console.log("Running at https://local.ia.kptmangaluru.in");
-});
+https
+  .createServer(httpsOptions, (req, res) => {
+    handle(req, res);
+  })
+  .listen(port, hostname, () => {
+    console.log(
+      `🚀 KPT IA running at https://${hostname}`
+    );
+  });

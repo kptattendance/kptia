@@ -35,6 +35,9 @@ export default function FacultyPage() {
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
 
+  const [selectedFaculty, setSelectedFaculty] = useState([]);
+  const [deletingSelected, setDeletingSelected] = useState(false);
+
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -46,9 +49,9 @@ export default function FacultyPage() {
 
   const [imagePreview, setImagePreview] = useState(null);
 
-  // ---------------------------------------
+  // --------------------------------------------------
   // LOAD FACULTY
-  // ---------------------------------------
+  // --------------------------------------------------
 
   const loadFaculty = async () => {
     try {
@@ -67,14 +70,20 @@ export default function FacultyPage() {
 
       const users = response.data || [];
 
-      // Backend currently stores faculty as "staff"
       const facultyUsers = users.filter(
         (user) => user.role?.toLowerCase() === "staff"
       );
 
       setFaculty(facultyUsers);
+      setSelectedFaculty([]);
     } catch (error) {
       console.error("Failed to load faculty:", error);
+
+      alert(
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Failed to load faculty."
+      );
     } finally {
       setLoading(false);
     }
@@ -84,9 +93,9 @@ export default function FacultyPage() {
     loadFaculty();
   }, []);
 
-  // ---------------------------------------
-  // FILTER FACULTY
-  // ---------------------------------------
+  // --------------------------------------------------
+  // FILTER
+  // --------------------------------------------------
 
   const filteredFaculty = useMemo(() => {
     const searchValue = search.trim().toLowerCase();
@@ -106,9 +115,53 @@ export default function FacultyPage() {
     });
   }, [faculty, search, departmentFilter]);
 
-  // ---------------------------------------
-  // FORM HANDLING
-  // ---------------------------------------
+  // --------------------------------------------------
+  // SELECTION
+  // --------------------------------------------------
+
+  const isAllSelected =
+    filteredFaculty.length > 0 &&
+    filteredFaculty.every((user) =>
+      selectedFaculty.includes(user._id)
+    );
+
+  const toggleSelectFaculty = (id) => {
+    setSelectedFaculty((previous) =>
+      previous.includes(id)
+        ? previous.filter((item) => item !== id)
+        : [...previous, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedFaculty((previous) =>
+        previous.filter(
+          (id) =>
+            !filteredFaculty.some(
+              (user) => user._id === id
+            )
+        )
+      );
+    } else {
+      setSelectedFaculty((previous) => {
+        const ids = filteredFaculty.map(
+          (user) => user._id
+        );
+
+        return [
+          ...previous,
+          ...ids.filter(
+            (id) => !previous.includes(id)
+          ),
+        ];
+      });
+    }
+  };
+
+  // --------------------------------------------------
+  // FORM
+  // --------------------------------------------------
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -134,9 +187,9 @@ export default function FacultyPage() {
     }
   };
 
-  // ---------------------------------------
-  // OPEN ADD
-  // ---------------------------------------
+  // --------------------------------------------------
+  // ADD
+  // --------------------------------------------------
 
   const openAddModal = () => {
     setEditingFaculty(null);
@@ -154,9 +207,9 @@ export default function FacultyPage() {
     setShowModal(true);
   };
 
-  // ---------------------------------------
-  // OPEN EDIT
-  // ---------------------------------------
+  // --------------------------------------------------
+  // EDIT
+  // --------------------------------------------------
 
   const openEditModal = (user) => {
     setEditingFaculty(user);
@@ -174,9 +227,9 @@ export default function FacultyPage() {
     setShowModal(true);
   };
 
-  // ---------------------------------------
-  // CLOSE MODAL
-  // ---------------------------------------
+  // --------------------------------------------------
+  // CLOSE
+  // --------------------------------------------------
 
   const closeModal = () => {
     if (saving) return;
@@ -186,12 +239,17 @@ export default function FacultyPage() {
     setImagePreview(null);
   };
 
-  // ---------------------------------------
-  // SAVE FACULTY
-  // ---------------------------------------
+  // --------------------------------------------------
+  // SAVE
+  // --------------------------------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!form.department) {
+      alert("Please select a department.");
+      return;
+    }
 
     try {
       setSaving(true);
@@ -247,18 +305,16 @@ export default function FacultyPage() {
     }
   };
 
-  // ---------------------------------------
-  // DELETE FACULTY
-  // ---------------------------------------
+  // --------------------------------------------------
+  // DELETE SINGLE
+  // --------------------------------------------------
 
   const handleDelete = async (user) => {
     const confirmed = window.confirm(
       `Are you sure you want to delete ${user.name}?`
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
       const token = await getToken();
@@ -284,356 +340,417 @@ export default function FacultyPage() {
     }
   };
 
-  // ---------------------------------------
-  // RENDER
-  // ---------------------------------------
+  // --------------------------------------------------
+  // DELETE SELECTED
+  // --------------------------------------------------
+
+  const handleDeleteSelected = async () => {
+    if (selectedFaculty.length === 0) return;
+
+    const selectedUsers = faculty.filter((user) =>
+      selectedFaculty.includes(user._id)
+    );
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedUsers.length} selected faculty member${
+        selectedUsers.length !== 1 ? "s" : ""
+      }?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingSelected(true);
+
+      const token = await getToken();
+
+      await Promise.all(
+        selectedUsers.map((user) =>
+          axios.delete(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/users/deleteuser/${user._id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          )
+        )
+      );
+
+      await loadFaculty();
+    } catch (error) {
+      console.error("Bulk faculty delete error:", error);
+
+      alert(
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Failed to delete selected faculty."
+      );
+    } finally {
+      setDeletingSelected(false);
+    }
+  };
+
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-50 px-4 py-5 sm:px-6 lg:px-7">
 
-      {/* =====================================
-          PAGE HEADER
-      ====================================== */}
-
-      <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-
+      {/* HEADER */}
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
-            Administration
-          </p>
-
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950">
             Faculty
           </h1>
 
-          <p className="mt-2 text-sm text-slate-500">
-            Manage faculty accounts and academic information.
+          <p className="mt-1 text-sm text-slate-500">
+            {faculty.length} faculty member
+            {faculty.length !== 1 ? "s" : ""}
           </p>
         </div>
 
         <button
           onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
         >
           <span className="text-lg leading-none">+</span>
           Add Faculty
         </button>
-
       </div>
 
-      {/* =====================================
-          STAT + SEARCH
-      ====================================== */}
+      {/* TOOLBAR */}
+      <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row">
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-[240px_1fr]">
-
-        {/* Faculty Count */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-
-          <div className="flex items-center justify-between">
-
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-                Total Faculty
-              </p>
-
-              <p className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-                {faculty.length}
-              </p>
-            </div>
-
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                className="h-5 w-5"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-
-            </div>
-
-          </div>
-
-          <p className="mt-3 text-xs text-slate-400">
-            Registered faculty accounts
-          </p>
-
-        </div>
-
-        {/* Search */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-
-          <div className="flex flex-col gap-3 md:flex-row">
-
-            <div className="relative flex-1">
-
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-4-4" />
-              </svg>
-
-              <input
-                type="text"
-                placeholder="Search faculty by name, email or phone..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
-              />
-
-            </div>
-
-            <select
-              value={departmentFilter}
-              onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="h-12 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
+          {/* SEARCH */}
+          <div className="relative min-w-0 flex-1">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400"
             >
-              {departments.map((department) => (
-                <option
-                  key={department.value}
-                  value={department.value}
-                >
-                  {department.value
-                    ? department.label
-                    : "All Departments"}
-                </option>
-              ))}
-            </select>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-4-4" />
+            </svg>
 
+            <input
+              type="text"
+              placeholder="Search name, email or phone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
+            />
           </div>
 
-        </div>
+          {/* DEPARTMENT */}
+          <select
+            value={departmentFilter}
+            onChange={(e) =>
+              setDepartmentFilter(e.target.value)
+            }
+            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 sm:w-64"
+          >
+            {departments.map((department) => (
+              <option
+                key={department.value}
+                value={department.value}
+              >
+                {department.value
+                  ? department.label
+                  : "All Departments"}
+              </option>
+            ))}
+          </select>
 
+          {/* DELETE SELECTED */}
+          {selectedFaculty.length > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              disabled={deletingSelected}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-4 w-4"
+              >
+                <path d="M3 6h18" />
+                <path d="M8 6V4h8v2" />
+                <path d="M19 6l-1 14H6L5 6" />
+                <path d="M10 11v5" />
+                <path d="M14 11v5" />
+              </svg>
+
+              {deletingSelected
+                ? "Deleting..."
+                : `Delete ${selectedFaculty.length}`}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* =====================================
-          FACULTY TABLE
-      ====================================== */}
-
+      {/* TABLE */}
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-        {/* Table Header */}
-        <div className="flex flex-col gap-1 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">
-              Faculty Members
-            </h2>
-
-            <p className="mt-1 text-xs text-slate-400">
-              {filteredFaculty.length} faculty member
-              {filteredFaculty.length !== 1 ? "s" : ""} displayed
-            </p>
-          </div>
-
-        </div>
-
         {loading ? (
-
-          /* Loading */
-          <div className="flex min-h-64 items-center justify-center">
-
-            <div className="text-center">
-
-              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
-
-              <p className="mt-4 text-sm text-slate-500">
-                Loading faculty...
-              </p>
-
-            </div>
-
+          <div className="flex min-h-60 items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
           </div>
-
         ) : filteredFaculty.length === 0 ? (
-
-          /* Empty */
-          <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-
+          <div className="flex min-h-60 flex-col items-center justify-center px-6 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.6"
-                className="h-7 w-7"
+                strokeWidth="1.7"
+                className="h-6 w-6"
               >
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
                 <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
-
             </div>
 
-            <h3 className="mt-4 text-sm font-semibold text-slate-900">
+            <h3 className="mt-3 text-sm font-semibold text-slate-900">
               No faculty found
             </h3>
 
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-xs text-slate-400">
               {search || departmentFilter
                 ? "Try changing your search or filter."
                 : "Add your first faculty member to get started."}
             </p>
-
           </div>
-
         ) : (
-
-          /* Table */
           <div className="overflow-x-auto">
-
-            <table className="w-full min-w-[850px]">
+            <table className="w-full min-w-[760px]">
 
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/70">
+                <tr className="border-b border-slate-200 bg-slate-50">
 
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {/* SELECT */}
+                  <th className="w-12 px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-slate-900"
+                    />
+                  </th>
+
+                  {/* SL NO */}
+                  <th className="w-12 px-2 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    #
+                  </th>
+
+                  {/* FACULTY */}
+                  <th className="px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
                     Faculty
                   </th>
 
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {/* CONTACT */}
+                  <th className="px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
                     Contact
                   </th>
 
-                  <th className="px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {/* DEPARTMENT */}
+                  <th className="px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
                     Department
                   </th>
 
-                  <th className="px-6 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                    Actions
+                  {/* ACTION */}
+                  <th className="w-28 px-3 py-3 text-right text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                    Action
                   </th>
-
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
 
-                {filteredFaculty.map((user) => (
+                {filteredFaculty.map((user, index) => {
+                  const selected = selectedFaculty.includes(
+                    user._id
+                  );
 
-                  <tr
-                    key={user._id}
-                    className="group transition hover:bg-slate-50/70"
-                  >
+                  return (
+                    <tr
+                      key={user._id}
+                      className={`transition ${
+                        selected
+                          ? "bg-slate-50"
+                          : "hover:bg-slate-50/70"
+                      }`}
+                    >
 
-                    {/* Faculty */}
-                    <td className="px-6 py-4">
+                      {/* CHECKBOX */}
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() =>
+                            toggleSelectFaculty(user._id)
+                          }
+                          className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-slate-900"
+                        />
+                      </td>
 
-                      <div className="flex items-center gap-3">
+                      {/* SL NO */}
+                      <td className="px-2 py-3 text-sm font-medium text-slate-400">
+                        {index + 1}
+                      </td>
 
-                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-slate-100">
+                      {/* FACULTY */}
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-3">
 
-                          <img
-                            src={
-                              user.imageUrl ||
-                              "/default-avatar.png"
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
+                            <img
+                              src={
+                                user.imageUrl ||
+                                "/default-avatar.png"
+                              }
+                              alt={user.name || "Faculty"}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display =
+                                  "none";
+                              }}
+                            />
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {user.name}
+                            </p>
+
+                            <p className="mt-0.5 truncate text-xs text-slate-400">
+                              Faculty · Staff
+                            </p>
+                          </div>
+
+                        </div>
+                      </td>
+
+                      {/* CONTACT */}
+                      <td className="px-3 py-3">
+                        <div className="max-w-[230px]">
+                          <p className="truncate text-sm text-slate-600">
+                            {user.email}
+                          </p>
+
+                          {user.phone ? (
+                            <p className="mt-0.5 text-xs text-slate-400">
+                              {user.phone}
+                            </p>
+                          ) : (
+                            <p className="mt-0.5 text-xs text-slate-300">
+                              No phone
+                            </p>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* DEPARTMENT */}
+                      <td className="px-3 py-3">
+                        <span className="inline-flex max-w-[190px] truncate rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600">
+                          {getDepartmentName(
+                            user.department
+                          )}
+                        </span>
+                      </td>
+
+                      {/* ACTIONS */}
+                      <td className="px-3 py-3">
+                        <div className="flex justify-end gap-1.5">
+
+                          {/* EDIT */}
+                          <button
+                            onClick={() =>
+                              openEditModal(user)
                             }
-                            alt={user.name || "Faculty"}
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                            }}
-                          />
+                            title="Edit"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              className="h-4 w-4"
+                            >
+                              <path d="M12 20h9" />
+                              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" />
+                            </svg>
+                          </button>
+
+                          {/* DELETE */}
+                          <button
+                            onClick={() =>
+                              handleDelete(user)
+                            }
+                            title="Delete"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-100 text-red-400 transition hover:bg-red-50 hover:text-red-600"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              className="h-4 w-4"
+                            >
+                              <path d="M3 6h18" />
+                              <path d="M8 6V4h8v2" />
+                              <path d="M19 6l-1 14H6L5 6" />
+                              <path d="M10 11v5" />
+                              <path d="M14 11v5" />
+                            </svg>
+                          </button>
 
                         </div>
+                      </td>
 
-                        <div className="min-w-0">
-
-                          <p className="truncate text-sm font-semibold text-slate-900">
-                            {user.name}
-                          </p>
-
-                          <p className="mt-0.5 text-xs text-slate-400">
-                            Faculty · Staff
-                          </p>
-
-                        </div>
-
-                      </div>
-
-                    </td>
-
-                    {/* Contact */}
-                    <td className="px-6 py-4">
-
-                      <p className="max-w-[260px] truncate text-sm text-slate-600">
-                        {user.email}
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-400">
-                        {user.phone || "No phone number"}
-                      </p>
-
-                    </td>
-
-                    {/* Department */}
-                    <td className="px-6 py-4">
-
-                      <span className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
-                        {getDepartmentName(user.department)}
-                      </span>
-
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-6 py-4">
-
-                      <div className="flex justify-end gap-2">
-
-                        <button
-                          onClick={() => openEditModal(user)}
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          onClick={() => handleDelete(user)}
-                          className="rounded-lg border border-red-100 px-3 py-2 text-xs font-semibold text-red-500 transition hover:bg-red-50 hover:text-red-600"
-                        >
-                          Delete
-                        </button>
-
-                      </div>
-
-                    </td>
-
-                  </tr>
-
-                ))}
+                    </tr>
+                  );
+                })}
 
               </tbody>
-
             </table>
-
           </div>
-
         )}
-
       </div>
 
-      {/* =====================================
-          MODAL
-      ====================================== */}
+      {/* SELECTION FOOTER */}
+      {selectedFaculty.length > 0 && (
+        <div className="mt-3 flex items-center justify-between px-1">
+          <p className="text-xs font-medium text-slate-500">
+            {selectedFaculty.length} faculty member
+            {selectedFaculty.length !== 1 ? "s" : ""} selected
+          </p>
 
+          <button
+            onClick={() => setSelectedFaculty([])}
+            className="text-xs font-semibold text-slate-500 transition hover:text-slate-900"
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
+      {/* MODAL */}
       {showModal && (
-
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
 
           <div
@@ -641,35 +758,29 @@ export default function FacultyPage() {
             onClick={closeModal}
           />
 
-          <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-200 bg-white shadow-2xl">
+          <div className="relative max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
 
-            {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5 sm:px-8">
+            {/* MODAL HEADER */}
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
 
               <div>
-
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-                  Faculty Management
-                </p>
-
-                <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-950">
+                <h2 className="text-lg font-bold text-slate-950">
                   {editingFaculty
                     ? "Edit Faculty"
                     : "Add Faculty"}
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-0.5 text-xs text-slate-400">
                   {editingFaculty
-                    ? "Update faculty account information."
+                    ? "Update account information."
                     : "Create a new faculty account."}
                 </p>
-
               </div>
 
               <button
                 type="button"
                 onClick={closeModal}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-900"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -686,16 +797,15 @@ export default function FacultyPage() {
 
             </div>
 
-            {/* Form */}
+            {/* FORM */}
             <form
               onSubmit={handleSubmit}
-              className="space-y-6 p-6 sm:p-8"
+              className="space-y-4 p-5"
             >
 
-              {/* Name */}
+              {/* NAME */}
               <div>
-
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                <label className="mb-1.5 block text-xs font-semibold text-slate-600">
                   Full Name
                 </label>
 
@@ -706,15 +816,13 @@ export default function FacultyPage() {
                   value={form.name}
                   onChange={handleChange}
                   required
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
                 />
-
               </div>
 
-              {/* Email */}
+              {/* EMAIL */}
               <div>
-
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                <label className="mb-1.5 block text-xs font-semibold text-slate-600">
                   Email Address
                 </label>
 
@@ -726,40 +834,36 @@ export default function FacultyPage() {
                   onChange={handleChange}
                   required
                   disabled={!!editingFaculty}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 />
 
                 {editingFaculty && (
-                  <p className="mt-2 text-xs text-slate-400">
-                    Email cannot be changed for an existing account.
+                  <p className="mt-1.5 text-[11px] text-slate-400">
+                    Email cannot be changed.
                   </p>
                 )}
-
               </div>
 
-              {/* Phone + Department */}
-              <div className="grid gap-5 sm:grid-cols-2">
+              {/* PHONE + DEPARTMENT */}
+              <div className="grid gap-4 sm:grid-cols-2">
 
                 <div>
-
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600">
                     Phone
                   </label>
 
                   <input
                     type="text"
                     name="phone"
-                    placeholder="Enter phone number"
+                    placeholder="Phone number"
                     value={form.phone}
                     onChange={handleChange}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
                   />
-
                 </div>
 
                 <div>
-
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600">
                     Department
                   </label>
 
@@ -767,7 +871,8 @@ export default function FacultyPage() {
                     name="department"
                     value={form.department}
                     onChange={handleChange}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
+                    required
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
                   >
                     {departments.map((department) => (
                       <option
@@ -778,22 +883,19 @@ export default function FacultyPage() {
                       </option>
                     ))}
                   </select>
-
                 </div>
 
               </div>
 
-              {/* Image */}
+              {/* IMAGE */}
               <div>
-
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                <label className="mb-1.5 block text-xs font-semibold text-slate-600">
                   Profile Photo
                 </label>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
 
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-slate-100">
-
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
                     {imagePreview ? (
                       <img
                         src={imagePreview}
@@ -808,22 +910,24 @@ export default function FacultyPage() {
                           fill="none"
                           stroke="currentColor"
                           strokeWidth="1.7"
-                          className="h-7 w-7"
+                          className="h-6 w-6"
                         >
-                          <circle cx="12" cy="8" r="3" />
+                          <circle
+                            cx="12"
+                            cy="8"
+                            r="3"
+                          />
                           <path d="M5 21a7 7 0 0 1 14 0" />
                         </svg>
                       </div>
                     )}
-
                   </div>
 
-                  <label className="flex h-12 flex-1 cursor-pointer items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-sm text-slate-500 transition hover:border-slate-400 hover:bg-slate-100">
-
+                  <label className="flex h-11 min-w-0 flex-1 cursor-pointer items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3.5 text-sm text-slate-500 transition hover:border-slate-400 hover:bg-slate-100">
                     <span className="truncate">
                       {form.image
                         ? form.image.name
-                        : "Choose a profile image"}
+                        : "Choose profile image"}
                     </span>
 
                     <input
@@ -832,25 +936,19 @@ export default function FacultyPage() {
                       onChange={handleImageChange}
                       className="hidden"
                     />
-
                   </label>
 
                 </div>
-
-                <p className="mt-2 text-xs text-slate-400">
-                  JPG, PNG or other image formats.
-                </p>
-
               </div>
 
-              {/* Buttons */}
-              <div className="flex justify-end gap-3 border-t border-slate-100 pt-6">
+              {/* BUTTONS */}
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
 
                 <button
                   type="button"
                   onClick={closeModal}
                   disabled={saving}
-                  className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -858,7 +956,7 @@ export default function FacultyPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="min-w-32 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving
                     ? "Saving..."
@@ -870,13 +968,9 @@ export default function FacultyPage() {
               </div>
 
             </form>
-
           </div>
-
         </div>
-
       )}
-
     </div>
   );
 }

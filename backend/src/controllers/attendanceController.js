@@ -165,6 +165,7 @@ export const saveAttendance = async (req, res) => {
 
 
 // GET MONTHLY ATTENDANCE
+// GET MONTHLY ATTENDANCE
 export const getAttendance = async (req, res) => {
   try {
     const {
@@ -175,12 +176,25 @@ export const getAttendance = async (req, res) => {
       year,
     } = req.query;
 
+    if (
+      !department ||
+      !semester ||
+      !subjectId ||
+      !month ||
+      !year
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Attendance selection data is missing.",
+      });
+    }
+
     const attendance = await Attendance.findOne({
-      department,
-      semester,
+      department: department.toLowerCase(),
+      semester: Number(semester),
       subjectId,
-      month,
-      year,
+      month: Number(month),
+      year: Number(year),
     }).populate(
       "students.studentId",
       "registerNumber name email"
@@ -188,6 +202,8 @@ export const getAttendance = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      exists: !!attendance,
+      locked: !!attendance,
       data: attendance,
     });
   } catch (error) {
