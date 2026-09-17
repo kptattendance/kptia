@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
+import Swal from "sweetalert2";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -40,7 +41,15 @@ const emptyStudentCO = () => ({
 
 export default function FacultyIAMarksPage() {
   const { getToken } = useAuth();
-
+  const showAlert = (icon, title, text) => {
+    Swal.fire({
+      icon,
+      title,
+      text,
+      confirmButtonText: "OK",
+      confirmButtonColor: "#4f46e5",
+    });
+  };
   const currentYear = new Date().getFullYear();
 
   // --------------------------------------------------
@@ -105,12 +114,7 @@ export default function FacultyIAMarksPage() {
   const [existingIA, setExistingIA] = useState(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
 
-  // --------------------------------------------------
-  // MESSAGE
-  // --------------------------------------------------
-
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
+ 
 
   // ==================================================
   // ACADEMIC YEARS
@@ -184,10 +188,11 @@ export default function FacultyIAMarksPage() {
 
         setSubjects([]);
 
-        setMessage(
+        showAlert(
+          "error",
+          "Unable to Load Subjects",
           "Unable to load subjects."
         );
-        setMessageType("error");
       } finally {
         setLoadingSubjects(false);
       }
@@ -211,7 +216,6 @@ export default function FacultyIAMarksPage() {
 
       try {
         setLoadingStudents(true);
-        setMessage("");
 
         // Reset IA/range when subject changes
         setExistingIA(null);
@@ -253,10 +257,11 @@ export default function FacultyIAMarksPage() {
         setAllStudents([]);
         setStudents([]);
 
-        setMessage(
+        showAlert(
+          "error",
+          "Unable to Load Students",
           "Unable to load students."
         );
-        setMessageType("error");
       } finally {
         setLoadingStudents(false);
       }
@@ -275,38 +280,52 @@ export default function FacultyIAMarksPage() {
   // ==================================================
 
   const loadBatch = async () => {
-    setMessage("");
-    setMessageType("");
-
     if (!department || !semester || !subjectId) {
-      setMessage("Please select department, semester and subject.");
-      setMessageType("error");
+      showAlert(
+        "warning",
+        "Selection Required",
+        "Please select department, semester and subject."
+      );
       return;
     }
 
     if (!iaNumber) {
-      setMessage("Please select IA number.");
-      setMessageType("error");
+      showAlert("warning", "IA Number Required", "Please select IA number.");
       return;
+
     }
 
     if (!batchNumber) {
-      setMessage("Please select student batch.");
-      setMessageType("error");
+      showAlert(
+        "warning",
+        "Batch Required",
+        "Please select student batch."
+      );
       return;
     }
 
-    const selectedStudents = allStudents.filter(
-      (student) => Number(student.batchNumber) === Number(batchNumber)
-    );
+    const selectedStudents =
+      batchNumber === "both"
+        ? allStudents.filter((student) =>
+            [1, 2].includes(Number(student.batchNumber))
+          )
+        : allStudents.filter(
+            (student) =>
+              Number(student.batchNumber) === Number(batchNumber)
+          );
 
     if (selectedStudents.length === 0) {
       setStudents([]);
       setStudentMarks({});
       setExistingIA(null);
       setTests([]);
-      setMessage(`No students found in Batch ${batchNumber}.`);
-      setMessageType("error");
+      showAlert(
+        "warning",
+        "No Students Found",
+        batchNumber === "both"
+          ? "No students found in Batch 1 or Batch 2."
+          : `No students found in Batch ${batchNumber}.`
+      );
       return;
     }
 
@@ -324,7 +343,7 @@ export default function FacultyIAMarksPage() {
       subjectId,
       academicYear,
       Number(iaNumber),
-      Number(batchNumber),
+      batchNumber,
       selectedStudents
     );
   };
@@ -347,44 +366,108 @@ export default function FacultyIAMarksPage() {
 
       const token = await getToken();
 
-      const response = await axios.get(
-        `${API_URL}/api/ia`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params: {
-            department: dept,
-            semester: Number(sem),
-            subjectId: subject,
-            academicYear: year,
-            iaNumber: Number(selectedIaNumber),
-            batchNumber: Number(selectedBatchNumber),
-          },
-        }
+      // --------------------------------------------------
+      // IMPORTANT:
+      // The existing IA backend uses the original
+      // batchNumber field (1 or 2).
+      //
+      // Therefore, when "Both Batches" is selected,
+      // check Batch 1 and Batch 2 separately.
+      // No backend change is required.
+      // --------------------------------------------------
+
+      const batchValues =
+        selectedBatchNumber === "both"
+          ? [1, 2]
+          : [Number(selectedBatchNumber)];
+
+      const responses = await Promise.all(
+        batchValues.map((batch) =>
+          axios.get(`${API_URL}/api/ia`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            params: {
+              department: dept,
+              semester: Number(sem),
+              subjectId: subject,
+              academicYear: year,
+              iaNumber: Number(selectedIaNumber),
+              batchNumber: batch,
+            },
+          })
+        )
       );
 
-      const responseData = response.data?.data;
+      const records = responses
+        .map((response) => {
+          const responseData = response.data?.data;
 
-      // Backend returns the exact IA + batch record.
-      const data = Array.isArray(responseData)
-        ? responseData[0]
-        : responseData;
+          return Array.isArray(responseData)
+            ? responseData[0]
+            : responseData;
+        })
+        .filter(Boolean);
 
-      if (data) {
-        setExistingIA(data);
+      // If an IA already exists for either selected batch,
+      // keep the existing IA locked.
+      //
+      // For "Both Batches", both records are combined only
+      // for display. The backend records themselves remain
+      // separate Batch 1 / Batch 2 records.
+      if (records.length > 0) {
+        const primaryRecord = records[0];
+
+        const mergedStudentRecords =
+          records.length === 1
+            ? primaryRecord.students || []
+            : records.flatMap(
+                (record) => record.students || []
+              );
+
+        const uniqueStudents = [];
+        const seenStudentIds = new Set();
+
+        mergedStudentRecords.forEach((studentRecord) => {
+          const studentId =
+            studentRecord.studentId?._id ||
+            studentRecord.studentId;
+
+          const key = String(studentId);
+
+          if (!seenStudentIds.has(key)) {
+            seenStudentIds.add(key);
+            uniqueStudents.push(studentRecord);
+          }
+        });
+
+        const displayRecord = {
+          ...primaryRecord,
+          batchNumber:
+            selectedBatchNumber === "both"
+              ? undefined
+              : primaryRecord.batchNumber,
+          batchNumbers:
+            selectedBatchNumber === "both"
+              ? [1, 2]
+              : [Number(selectedBatchNumber)],
+          batchScope: selectedBatchNumber,
+          students: uniqueStudents,
+        };
+
+        setExistingIA(displayRecord);
 
         // Load existing tests
         setTests(
-          Array.isArray(data.tests)
-            ? data.tests
+          Array.isArray(primaryRecord.tests)
+            ? primaryRecord.tests
             : []
         );
 
         // Load existing student marks
         const loadedMarks = {};
 
-        (data.students || []).forEach(
+        uniqueStudents.forEach(
           (studentRecord) => {
             const studentId =
               studentRecord.studentId?._id ||
@@ -521,14 +604,14 @@ export default function FacultyIAMarksPage() {
       prev.map((test, testIndex) =>
         testIndex === index
           ? {
-              ...test,
-              [field]:
-                field === "maxMarks"
-                  ? value === ""
-                    ? ""
-                    : Number(value)
-                  : value,
-            }
+            ...test,
+            [field]:
+              field === "maxMarks"
+                ? value === ""
+                  ? ""
+                  : Number(value)
+                : value,
+          }
           : test
       )
     );
@@ -549,15 +632,15 @@ export default function FacultyIAMarksPage() {
       prev.map((test, index) =>
         index === testIndex
           ? {
-              ...test,
-              coMarks: {
-                ...test.coMarks,
-                [co]:
-                  value === ""
-                    ? ""
-                    : Number(value),
-              },
-            }
+            ...test,
+            coMarks: {
+              ...test.coMarks,
+              [co]:
+                value === ""
+                  ? ""
+                  : Number(value),
+            },
+          }
           : test
       )
     );
@@ -622,7 +705,7 @@ export default function FacultyIAMarksPage() {
   ) => {
     return (
       studentMarks[studentId]?.[
-        testIndex
+      testIndex
       ] || {
         status: "PRESENT",
         coMarks: emptyStudentCO(),
@@ -822,18 +905,22 @@ export default function FacultyIAMarksPage() {
             !Number.isFinite(value) ||
             value < 0
           ) {
-            setMessage(
+
+
+            showAlert(
+              "error",
+              "Invalid Marks",
               `${student.name}: Invalid ${co} marks in ${test.testName}.`
             );
-            setMessageType("error");
             return false;
           }
 
           if (value > maxCO) {
-            setMessage(
+            showAlert(
+              "error",
+              "Invalid Marks",
               `${student.name}: ${co} cannot exceed ${maxCO} in ${test.testName}.`
             );
-            setMessageType("error");
             return false;
           }
         }
@@ -845,10 +932,13 @@ export default function FacultyIAMarksPage() {
           studentTotal >
           Number(test.maxMarks)
         ) {
-          setMessage(
+
+
+          showAlert(
+            "error",
+            "Invalid Marks",
             `${student.name}: ${test.testName} marks cannot exceed ${test.maxMarks}.`
           );
-          setMessageType("error");
           return false;
         }
       }
@@ -862,14 +952,12 @@ export default function FacultyIAMarksPage() {
   // ==================================================
 
   const handleSave = async () => {
-    setMessage("");
-    setMessageType("");
-
     if (existingIA) {
-      setMessage(
+      showAlert(
+        "warning",
+        "IA Already Frozen",
         "This IA has already been saved and frozen."
       );
-      setMessageType("error");
       return;
     }
 
@@ -880,26 +968,29 @@ export default function FacultyIAMarksPage() {
       !iaNumber ||
       !batchNumber
     ) {
-      setMessage(
+      showAlert(
+        "warning",
+        "Selection Required",
         "Please select IA number and student batch."
       );
-      setMessageType("error");
       return;
     }
 
     if (tests.length === 0) {
-      setMessage(
+      showAlert(
+        "warning",
+        "No IA Test",
         "Please add at least one IA test."
       );
-      setMessageType("error");
       return;
     }
 
     if (students.length === 0) {
-      setMessage(
+      showAlert(
+        "warning",
+        "No Students",
         "No students found."
       );
-      setMessageType("error");
       return;
     }
 
@@ -909,20 +1000,22 @@ export default function FacultyIAMarksPage() {
 
     for (const test of tests) {
       if (!test.testName?.trim()) {
-        setMessage(
+        showAlert(
+          "warning",
+          "Test Name Required",
           "Every test must have a name."
         );
-        setMessageType("error");
         return;
       }
 
       if (
         !isTestValid(test)
       ) {
-        setMessage(
+        showAlert(
+          "error",
+          "Invalid CO Distribution",
           `${test.testName}: CO1–CO6 total must equal ${test.maxMarks}.`
         );
-        setMessageType("error");
         return;
       }
     }
@@ -957,7 +1050,13 @@ export default function FacultyIAMarksPage() {
 
         iaNumber: Number(iaNumber),
 
-        batchNumber: Number(batchNumber),
+        // The existing IA backend accepts one batchNumber
+        // per IA record. For Both Batches, the same IA
+        // is saved once for Batch 1 and once for Batch 2.
+        batchNumber:
+          batchNumber === "both"
+            ? 1
+            : Number(batchNumber),
 
         // ------------------------------------------
         // TEST CONFIGURATION
@@ -1074,23 +1173,36 @@ export default function FacultyIAMarksPage() {
         ),
       };
 
-      await axios.post(
-        `${API_URL}/api/ia/save`,
-        payload,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
+      const batchesToSave =
+        batchNumber === "both"
+          ? [1, 2]
+          : [Number(batchNumber)];
+
+      // Use the existing IA backend logic.
+      // For Both Batches, create one normal IA record
+      // for Batch 1 and one normal IA record for Batch 2.
+      for (const batch of batchesToSave) {
+        await axios.post(
+          `${API_URL}/api/ia/save`,
+          {
+            ...payload,
+            batchNumber: batch,
           },
-        }
-      );
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
+            },
+          }
+        );
+      }
 
-      setMessage(
-        "IA marks saved and frozen successfully."
-      );
-
-      setMessageType(
-        "success"
+      showAlert(
+        "success",
+        "IA Saved Successfully",
+        batchNumber === "both"
+          ? "IA marks have been saved and frozen for Batch 1 and Batch 2."
+          : "IA marks have been saved and frozen successfully."
       );
 
       // Mark page as locked
@@ -1100,7 +1212,7 @@ export default function FacultyIAMarksPage() {
         subjectId,
         academicYear,
         Number(iaNumber),
-        Number(batchNumber),
+        batchNumber,
         students
       );
     } catch (error) {
@@ -1109,31 +1221,28 @@ export default function FacultyIAMarksPage() {
         error
       );
 
-      setMessage(
-        error.response?.data
-          ?.message ||
-          "Failed to save IA marks."
-      );
-
-      setMessageType(
-        "error"
-      );
+   showAlert(
+  "error",
+  "Save Failed",
+  error.response?.data?.message ||
+    "Failed to save IA marks."
+);
     } finally {
       setSaving(false);
     }
   };
 
 
- // ==================================================
-// IA NUMBERS
-// ==================================================
+  // ==================================================
+  // IA NUMBERS
+  // ==================================================
 
-// IA number is independent of the Subject.
-// Faculty can conduct as many IAs as required.
-const iaNumbers = Array.from(
-  { length: 10 },
-  (_, index) => index + 1
-);
+  // IA number is independent of the Subject.
+  // Faculty can conduct as many IAs as required.
+  const iaNumbers = Array.from(
+    { length: 10 },
+    (_, index) => index + 1
+  );
 
   // ==================================================
   // RENDER
@@ -1188,7 +1297,7 @@ const iaNumbers = Array.from(
                 onChange={(e) => {
                   setAcademicYear(e.target.value);
                   setIaNumber("");
-                                    setExistingIA(null);
+                  setExistingIA(null);
                   setTests([]);
                   setStudents([]);
                   setStudentMarks({});
@@ -1217,7 +1326,7 @@ const iaNumbers = Array.from(
                   setSemester("");
                   setSubjectId("");
                   setIaNumber("");
-                                    setTests([]);
+                  setTests([]);
                   setAllStudents([]);
                   setStudents([]);
                   setStudentMarks({});
@@ -1254,7 +1363,7 @@ const iaNumbers = Array.from(
                   setSemester(e.target.value);
                   setSubjectId("");
                   setIaNumber("");
-                                    setTests([]);
+                  setTests([]);
                   setAllStudents([]);
                   setStudents([]);
                   setStudentMarks({});
@@ -1292,7 +1401,7 @@ const iaNumbers = Array.from(
                 onChange={(e) => {
                   setSubjectId(e.target.value);
                   setIaNumber("");
-                                    setTests([]);
+                  setTests([]);
                   setStudents([]);
                   setStudentMarks({});
                   setExistingIA(null);
@@ -1322,29 +1431,29 @@ const iaNumbers = Array.from(
               <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
                 IA
               </label>
-<select
-  value={iaNumber}
-  disabled={!subjectId}
-  onChange={(e) => {
-    setIaNumber(e.target.value);
-    setBatchNumber("");
-    setExistingIA(null);
-    setTests([]);
-    setStudents([]);
-    setStudentMarks({});
-  }}
-  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
->
-  <option value="">
-    Select IA
-  </option>
+              <select
+                value={iaNumber}
+                disabled={!subjectId}
+                onChange={(e) => {
+                  setIaNumber(e.target.value);
+                  setBatchNumber("");
+                  setExistingIA(null);
+                  setTests([]);
+                  setStudents([]);
+                  setStudentMarks({});
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-400 disabled:bg-slate-50"
+              >
+                <option value="">
+                  Select IA
+                </option>
 
-  {iaNumbers.map((number) => (
-    <option key={number} value={number}>
-      IA {number}
-    </option>
-  ))}
-</select>
+                {iaNumbers.map((number) => (
+                  <option key={number} value={number}>
+                    IA {number}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* STUDENT BATCH */}
@@ -1371,6 +1480,7 @@ const iaNumbers = Array.from(
                 </option>
                 <option value="1">Batch 1</option>
                 <option value="2">Batch 2</option>
+                <option value="both">Both Batches</option>
               </select>
             </div>
 
@@ -1416,22 +1526,6 @@ const iaNumbers = Array.from(
           )}
         </div>
 
-        {/* ================================================= */}
-        {/* MESSAGE */}
-        {/* ================================================= */}
-
-        {message && (
-          <div
-            className={`mt-4 rounded-xl border px-4 py-3 text-sm font-medium ${
-              messageType ===
-              "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-red-200 bg-red-50 text-red-700"
-            }`}
-          >
-            {message}
-          </div>
-        )}
 
         {/* ================================================= */}
         {/* EXISTING IA NOTICE */}
@@ -1447,7 +1541,14 @@ const iaNumbers = Array.from(
               <p className="text-xs text-amber-700">
                 Batch:{" "}
                 <span className="font-semibold">
-                  {existingIA.batchNumber === 1 ? "Batch 1" : "Batch 2"}
+                  {existingIA.batchScope === "both" ||
+                  (Array.isArray(existingIA.batchNumbers) &&
+                    existingIA.batchNumbers.length === 2)
+                    ? "Both Batches"
+                    : existingIA.batchNumber === 1 ||
+                      existingIA.batchNumbers?.includes(1)
+                    ? "Batch 1"
+                    : "Batch 2"}
                 </span>
                 {" · "}
                 This record cannot be edited by faculty.
@@ -1611,11 +1712,10 @@ const iaNumbers = Array.from(
                             </span>
 
                             <span
-                              className={`text-xs font-bold ${
-                                valid
+                              className={`text-xs font-bold ${valid
                                   ? "text-emerald-600"
                                   : "text-red-600"
-                              }`}
+                                }`}
                             >
                               {coTotal} /{" "}
                               {test.maxMarks ||
@@ -1643,7 +1743,7 @@ const iaNumbers = Array.from(
                                     value={
                                       test
                                         .coMarks?.[
-                                        co
+                                      co
                                       ] ?? 0
                                     }
                                     disabled={
@@ -1658,11 +1758,10 @@ const iaNumbers = Array.from(
                                       )
                                     }
                                     onWheel={(e) => e.currentTarget.blur()}
-                                    className={`w-full rounded-lg border px-3 py-2 text-center text-sm font-semibold outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
-                                      valid
+                                    className={`w-full rounded-lg border px-3 py-2 text-center text-sm font-semibold outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${valid
                                         ? "border-slate-200"
                                         : "border-red-200 bg-red-50"
-                                    } disabled:bg-slate-50`}
+                                      } disabled:bg-slate-50`}
                                   />
                                 </div>
                               )
@@ -1819,14 +1918,31 @@ const iaNumbers = Array.from(
                           </td>
 
                           <td className="sticky left-44 z-10 border-r border-slate-100 bg-white px-3 py-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
-                                {student.name?.charAt(0)?.toUpperCase()}
+                            <div className="flex items-center gap-3">
+                              {student.imageUrl ? (
+                                <img
+                                  src={student.imageUrl}
+                                  alt={student.name || "Student"}
+                                  className="h-9 w-9 shrink-0 rounded-full object-cover border border-slate-200"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                    e.currentTarget.nextElementSibling.style.display = "flex";
+                                  }}
+                                />
+                              ) : null}
+
+                              <div
+                                className={`h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 ${student.imageUrl ? "hidden" : "flex"
+                                  }`}
+                              >
+                                {student.name?.charAt(0)?.toUpperCase() || "S"}
                               </div>
+
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-slate-800">
+                                <p className="truncate text-sm font-semibold text-slate-900">
                                   {student.name}
                                 </p>
+
                                 <p className="max-w-[180px] truncate text-[10px] text-slate-400">
                                   {student.email}
                                 </p>

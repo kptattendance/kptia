@@ -2,14 +2,11 @@ import IAMarks from "../models/IAMarks.js";
 import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
 
-// =====================================================
-// HOD - SEMESTER WISE IA DETAILS
-// =====================================================
-
 export const getHODSemesterIAMarks = async (req, res) => {
   try {
     const role = req.user?.role;
-    const hodDepartment = req.user?.department?.toLowerCase();
+    const hodDepartment =
+      req.user?.department?.toLowerCase();
 
     if (!["hod", "principal", "admin"].includes(role)) {
       return res.status(403).json({
@@ -44,10 +41,11 @@ export const getHODSemesterIAMarks = async (req, res) => {
         "subjectId",
         "code name semester department"
       )
-      .populate(
-        "students.studentId",
-        "registerNumber name batch batchNumber department"
-      )
+      .populate({
+        path: "students.studentId",
+        select:
+          "_id registerNumber name batch batchNumber department imageUrl email",
+      })
       .sort({
         "subjectId.code": 1,
         iaNumber: 1,
@@ -95,29 +93,35 @@ export const getHODSemesterIAMarks = async (req, res) => {
       for (const studentRecord of
         record.students || []) {
 
-        if (!studentRecord.studentId)
+        if (!studentRecord.studentId) {
           continue;
+        }
+
+        const populatedStudent =
+          studentRecord.studentId;
 
         const studentId =
-          studentRecord.studentId._id.toString();
+          populatedStudent._id.toString();
 
         if (!subject.students.has(studentId)) {
           subject.students.set(studentId, {
             studentId,
 
             registerNumber:
-              studentRecord.studentId
-                .registerNumber,
+              populatedStudent.registerNumber,
 
             name:
-              studentRecord.studentId.name,
+              populatedStudent.name,
 
             batch:
-              studentRecord.studentId.batch,
+              populatedStudent.batch,
 
             batchNumber:
-              studentRecord.studentId
-                .batchNumber,
+              populatedStudent.batchNumber,
+
+            // IMPORTANT
+            imageUrl:
+              populatedStudent.imageUrl || "",
 
             iaMarks: {},
             totalMarks: 0,
@@ -126,6 +130,16 @@ export const getHODSemesterIAMarks = async (req, res) => {
 
         const student =
           subject.students.get(studentId);
+
+        // In case the first record did not contain
+        // the image but another record does.
+        if (
+          !student.imageUrl &&
+          populatedStudent.imageUrl
+        ) {
+          student.imageUrl =
+            populatedStudent.imageUrl;
+        }
 
         const iaTotal =
           Number(
@@ -164,6 +178,7 @@ export const getHODSemesterIAMarks = async (req, res) => {
     const data = Array.from(
       subjectMap.values()
     ).map((subject) => {
+
       const iaNumbers =
         Array.from(
           subject.iaNumbers
@@ -173,8 +188,12 @@ export const getHODSemesterIAMarks = async (req, res) => {
         Array.from(
           subject.students.values()
         ).sort((a, b) =>
-          String(a.registerNumber).localeCompare(
-            String(b.registerNumber)
+          String(
+            a.registerNumber
+          ).localeCompare(
+            String(
+              b.registerNumber
+            )
           )
         );
 
@@ -192,10 +211,15 @@ export const getHODSemesterIAMarks = async (req, res) => {
         subjectId:
           subject.subjectId,
 
-        code: subject.code,
-        name: subject.name,
+        code:
+          subject.code,
+
+        name:
+          subject.name,
+
         semester:
           subject.semester,
+
         department:
           subject.department,
 
@@ -210,23 +234,30 @@ export const getHODSemesterIAMarks = async (req, res) => {
       };
     });
 
-    res.json({
+    return res.json({
       success: true,
+
       academicYear,
-      semester: Number(semester),
+
+      semester:
+        Number(semester),
+
       department:
         role === "hod"
           ? hodDepartment
           : null,
+
       data,
     });
+
   } catch (error) {
+
     console.error(
       "HOD IA Details Error:",
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -287,7 +318,9 @@ export const getHODSubjectIADetails = async (req, res) => {
       )
       .populate(
         "students.studentId",
-        "registerNumber name batch batchNumber department"
+        "registerNumber name batch batchNumber department email imageUrl"
+     
+        
       )
       .sort({
         iaNumber: 1,
@@ -320,29 +353,40 @@ export const getHODSubjectIADetails = async (req, res) => {
 
         const studentId =
           item.studentId._id.toString();
+if (!studentMap.has(studentId)) {
+  studentMap.set(studentId, {
+    studentId,
 
-        if (!studentMap.has(studentId)) {
-          studentMap.set(studentId, {
-            studentId,
+    registerNumber:
+      item.studentId.registerNumber,
 
-            registerNumber:
-              item.studentId.registerNumber,
+    name:
+      item.studentId.name,
 
-            name: item.studentId.name,
+    batch:
+      item.studentId.batch,
 
-            batch:
-              item.studentId.batch,
+    batchNumber:
+      item.studentId.batchNumber,
 
-            batchNumber:
-              item.studentId.batchNumber,
+    // STUDENT PHOTO
+    imageUrl:
+      item.studentId.imageUrl || "",
 
-            iaMarks: {},
-          });
-        }
+    iaMarks: {},
+  });
+}
 
         const student =
           studentMap.get(studentId);
-
+// Keep image URL if available
+if (
+  !student.imageUrl &&
+  item.studentId.imageUrl
+) {
+  student.imageUrl =
+    item.studentId.imageUrl;
+}
         const iaKey =
           `IA${record.iaNumber}`;
 

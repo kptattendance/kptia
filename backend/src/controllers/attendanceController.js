@@ -377,7 +377,7 @@ export const getAttendance = async (
       })
         .populate(
           "students.studentId",
-          "registerNumber name email batchNumber"
+          "registerNumber name email department batchNumber imageUrl"
         )
         .lean();
 

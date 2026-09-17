@@ -393,6 +393,12 @@ export default function HODAttendancePage() {
                     student.email ||
                     "",
 
+                  imageUrl:
+                    student.imageUrl ||
+                    student.photoUrl ||
+                    student.profileImage ||
+                    "",
+
                   batchNumber:
                     student.batchNumber,
 
@@ -1261,224 +1267,204 @@ export default function HODAttendancePage() {
                       TABLE
                   ----------------------------------------- */}
 
-                  <div className="overflow-x-auto">
-
-                    <table className="w-full min-w-[1100px] border-collapse">
+                  <div className="relative overflow-x-auto overscroll-x-contain">
+                    <table
+                      className="table-fixed border-collapse"
+                      style={{
+                        minWidth: `${456 + subjects.length * 170}px`,
+                        width: "max-content",
+                      }}
+                    >
+                      <colgroup>
+                        <col style={{ width: "56px" }} />
+                        <col style={{ width: "144px" }} />
+                        <col style={{ width: "256px" }} />
+                        {subjects.map((subject) => (
+                          <col key={subject._id} style={{ width: "170px" }} />
+                        ))}
+                      </colgroup>
 
                       <thead>
-
                         <tr className="border-b border-slate-200 bg-slate-50">
-
-                          <th className="sticky left-0 z-20 w-14 border-r border-slate-200 bg-slate-50 px-4 py-4 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          <th
+                            className="sticky left-0 z-40 border-r border-slate-200 bg-slate-50 px-3 py-4 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400"
+                            style={{ width: "56px", minWidth: "56px" }}
+                          >
                             #
                           </th>
 
-                          <th className="sticky left-14 z-20 w-36 border-r border-slate-200 bg-slate-50 px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                            Register No.
+                          <th
+                            className="sticky left-[56px] z-40 border-r border-slate-200 bg-slate-50 px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400"
+                            style={{ width: "144px", minWidth: "144px" }}
+                          >
+                            Register
+                            <br />
+                            No.
                           </th>
 
-                          <th className="sticky left-[194px] z-20 w-64 border-r border-slate-200 bg-slate-50 px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          <th
+                            className="sticky left-[200px] z-40 border-r border-slate-200 bg-slate-50 px-4 py-4 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400 shadow-[6px_0_10px_-8px_rgba(15,23,42,0.45)]"
+                            style={{ width: "256px", minWidth: "256px" }}
+                          >
                             Student
                           </th>
 
-                          {subjects.map(
-                            (
-                              subject
-                            ) => (
+                          {subjects.map((subject) => {
+                            const subjectAttendance =
+                              attendanceData[String(subject._id)];
+
+                            const maxClasses = Number(
+                              subjectAttendance?.classesConducted || 0
+                            );
+
+                            return (
                               <th
-                                key={
-                                  subject._id
-                                }
-                                className="min-w-[150px] border-r border-slate-200 px-4 py-4 text-center"
+                                key={subject._id}
+                                className="border-r border-slate-200 bg-slate-50 px-4 py-3 text-center"
+                                style={{ width: "170px", minWidth: "170px" }}
                               >
-
-                                <div className="mx-auto max-w-[150px]">
-
+                                <div className="mx-auto w-full">
                                   <p className="truncate text-xs font-bold text-slate-800">
-                                    {
-                                      subject.code
-                                    }
+                                    {subject.code}
                                   </p>
 
-                                  <p className="mt-1 line-clamp-2 text-[10px] font-medium leading-4 text-slate-400">
-                                    {
-                                      subject.name
-                                    }
+                                  <p className="mt-1 line-clamp-2 min-h-[32px] text-[10px] font-medium leading-4 text-slate-400">
+                                    {subject.name}
                                   </p>
 
+                                  <div className="mt-2 inline-flex rounded-md bg-slate-200/70 px-2 py-1 text-[10px] font-bold text-slate-600">
+                                    Max: {maxClasses}
+                                  </div>
                                 </div>
-
                               </th>
-                            )
-                          )}
-
+                            );
+                          })}
                         </tr>
-
                       </thead>
 
                       <tbody className="divide-y divide-slate-100">
-
-                        {filteredStudents.map(
-                          (
-                            student,
-                            index
-                          ) => (
-                            <tr
-                              key={
-                                student._id
-                              }
-                              className="group transition hover:bg-slate-50/70"
+                        {filteredStudents.map((student, index) => (
+                          <tr
+                            key={student._id}
+                            className="group transition hover:bg-slate-50/70"
+                          >
+                            <td
+                              className="sticky left-0 z-30 border-r border-slate-100 bg-white px-3 py-4 text-center text-sm font-medium text-slate-400 group-hover:bg-slate-50"
+                              style={{ width: "56px", minWidth: "56px" }}
                             >
+                              {index + 1}
+                            </td>
 
-                              {/* Number */}
+                            <td
+                              className="sticky left-[56px] z-30 border-r border-slate-100 bg-white px-4 py-4 group-hover:bg-slate-50"
+                              style={{ width: "144px", minWidth: "144px" }}
+                            >
+                              <span className="font-mono text-xs font-bold text-slate-700">
+                                {student.registerNumber}
+                              </span>
+                            </td>
 
-                              <td className="sticky left-0 z-10 border-r border-slate-100 bg-white px-4 py-4 text-center text-sm font-medium text-slate-400 group-hover:bg-slate-50">
-                                {index +
-                                  1}
-                              </td>
+                            <td
+                              className="sticky left-[200px] z-30 border-r border-slate-200 bg-white px-4 py-3 shadow-[6px_0_10px_-8px_rgba(15,23,42,0.45)] group-hover:bg-slate-50"
+                              style={{ width: "256px", minWidth: "256px" }}
+                            >
+                              <div className="flex items-center gap-3">
+                                {student.imageUrl ? (
+                                  <img
+                                    src={student.imageUrl}
+                                    alt=""
+                                    className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white shadow-sm"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                      e.currentTarget.nextElementSibling?.classList.remove("hidden");
+                                    }}
+                                  />
+                                ) : null}
 
-                              {/* Register Number */}
-
-                              <td className="sticky left-14 z-10 border-r border-slate-100 bg-white px-4 py-4 group-hover:bg-slate-50">
-
-                                <span className="font-mono text-xs font-bold text-slate-700">
-                                  {
-                                    student.registerNumber
-                                  }
-                                </span>
-
-                              </td>
-
-                              {/* Student */}
-
-                              <td className="sticky left-[194px] z-10 border-r border-slate-200 bg-white px-4 py-4 group-hover:bg-slate-50">
-
-                                <div className="flex items-center gap-3">
-
-                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
-
-                                    {student.name
-                                      ?.charAt(
-                                        0
-                                      )
-                                      ?.toUpperCase()}
-
-                                  </div>
-
-                                  <div className="min-w-0">
-
-                                    <p className="truncate text-sm font-semibold text-slate-900">
-                                      {
-                                        student.name
-                                      }
-                                    </p>
-
-                                    <p className="mt-0.5 text-[10px] text-slate-400">
-                                      Batch{" "}
-                                      {
-                                        student.batchNumber
-                                      }
-                                    </p>
-
-                                  </div>
-
+                                <div
+                                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 ${
+                                    student.imageUrl ? "hidden" : ""
+                                  }`}
+                                >
+                                  {student.name?.charAt(0)?.toUpperCase()}
                                 </div>
 
-                              </td>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-slate-900">
+                                    {student.name}
+                                  </p>
 
-                              {/* Subject Attendance */}
+                                  <p className="mt-0.5 text-[10px] text-slate-400">
+                                    Batch {student.batchNumber}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
 
-                              {subjects.map(
-                                (
-                                  subject
-                                ) => {
-                                  const attendance =
-                                    getAttendance(
-                                      student,
-                                      subject._id
-                                    );
+                            {subjects.map((subject) => {
+                              const record =
+                                student.subjects[String(subject._id)];
 
-                                  const isLow =
-                                    attendance !==
-                                      null &&
-                                    attendance <
-                                      75;
+                              const attended = Number(record?.attended || 0);
+                              const conducted = Number(record?.conducted || 0);
 
-                                  const record =
-                                    student
-                                      .subjects[
-                                      String(
-                                        subject._id
-                                      )
-                                    ];
+                              const percentage =
+                                conducted > 0
+                                  ? (attended / conducted) * 100
+                                  : null;
 
-                                  const notEntered =
-                                    !record;
+                              const isLow =
+                                percentage !== null && percentage < 75;
 
-                                  return (
-                                    <td
-                                      key={
-                                        subject._id
-                                      }
-                                      className={`border-r border-slate-100 px-4 py-4 text-center ${
+                              const notEntered =
+                                !record || conducted <= 0;
+
+                              return (
+                                <td
+                                  key={subject._id}
+                                  className={`border-r border-slate-100 px-4 py-4 text-center ${
+                                    isLow
+                                      ? "bg-red-50"
+                                      : percentage !== null
+                                      ? "bg-emerald-50/50"
+                                      : "bg-slate-50/50"
+                                  }`}
+                                  style={{ width: "170px", minWidth: "170px" }}
+                                >
+                                  {notEntered ? (
+                                    <span className="inline-flex min-w-[72px] items-center justify-center rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-400">
+                                      —
+                                    </span>
+                                  ) : (
+                                    <div
+                                      className={`mx-auto flex w-fit min-w-[82px] flex-col items-center rounded-lg px-3 py-2 ring-1 ring-inset ${
                                         isLow
-                                          ? "bg-red-50"
-                                          : attendance !==
-                                              null
-                                          ? "bg-emerald-50/50"
-                                          : "bg-slate-50/50"
+                                          ? "bg-red-100 text-red-700 ring-red-200"
+                                          : "bg-emerald-100 text-emerald-700 ring-emerald-200"
                                       }`}
                                     >
+                                      <span className="text-sm font-bold leading-5">
+                                        {attended} / {conducted}
+                                      </span>
 
-                                      {notEntered ? (
-                                        <span className="inline-flex min-w-[70px] items-center justify-center rounded-lg bg-slate-100 px-2.5 py-2 text-xs font-semibold text-slate-400">
-                                          —
-                                        </span>
-                                      ) : isLow ? (
-                                        <div className="inline-flex min-w-[82px] flex-col items-center rounded-lg bg-red-100 px-2.5 py-2 ring-1 ring-inset ring-red-200">
-
-                                          <div className="flex items-center gap-1 text-sm font-bold text-red-700">
-
-                                            <AlertTriangle
-                                              size={
-                                                13
-                                              }
-                                            />
-
-                                            {attendance.toFixed(
-                                              1
-                                            )}
-                                            %
-
-                                          </div>
-
-                                          <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-red-500">
-                                            Below 75%
-                                          </span>
-
-                                        </div>
-                                      ) : (
-                                        <span className="inline-flex min-w-[82px] items-center justify-center rounded-lg bg-emerald-100 px-3 py-2 text-sm font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
-                                          {attendance.toFixed(
-                                            1
-                                          )}
-                                          %
-                                        </span>
-                                      )}
-
-                                    </td>
-                                  );
-                                }
-                              )}
-
-                            </tr>
-                          )
-                        )}
-
+                                      <span
+                                        className={`mt-0.5 text-[11px] font-semibold ${
+                                          isLow
+                                            ? "text-red-600"
+                                            : "text-emerald-600"
+                                        }`}
+                                      >
+                                        {percentage.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
                       </tbody>
-
                     </table>
-
                   </div>
 
                   {/* -----------------------------------------

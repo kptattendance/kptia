@@ -949,7 +949,7 @@ export const getIAMarks = async (
         )
         .populate(
           "students.studentId",
-          "registerNumber name email department batch batchNumber"
+          "registerNumber name email department batch batchNumber imageUrl"
         )
         .lean();
 

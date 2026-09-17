@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import Swal from "sweetalert2";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import {
@@ -9,6 +10,7 @@ import {
   RefreshCw,
   ChevronDown,
   User,
+  Download,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 
@@ -53,65 +55,77 @@ export default function HODSubjectIAMarksPage() {
   // LOAD DATA
   // =====================================================
 
-  const loadData = async (
-    ia = selectedIA
-  ) => {
-    try {
-      setLoading(true);
-      setError("");
+const loadData = async (ia = "") => {
+  try {
+    setLoading(true);
+    setError("");
 
-      const token =
-        await getToken();
+    const token = await getToken();
 
-      const response =
-        await axios.get(
-          `${API_URL}/api/hod/ia/subject/${subjectId}`,
-          {
-            params: {
-              academicYear,
-              semester,
-              ...(ia
-                ? { iaNumber: ia }
-                : {}),
-            },
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
-          }
+    // IMPORTANT:
+    // Always load ALL IA records.
+    // Do not send iaNumber here, otherwise the dropdown
+    // loses the other IA numbers after selection.
+    const response = await axios.get(
+      `${API_URL}/api/hod/ia/subject/${subjectId}`,
+      {
+        params: {
+          academicYear,
+          semester,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const result =
+      response.data?.data;
+
+    setData(result || null);
+
+    // Keep currently selected IA when refreshing.
+    if (ia) {
+      const requestedIAExists =
+        result?.iaNumbers?.some(
+          (number) =>
+            String(number) === String(ia)
         );
 
-      const result =
-        response.data?.data;
-
-      setData(result || null);
-
-      // Select first available IA
-      if (
-        result?.iaNumbers?.length &&
-        !ia
+      if (requestedIAExists) {
+        setSelectedIA(String(ia));
+      } else if (
+        result?.iaNumbers?.length
       ) {
         setSelectedIA(
-          String(
-            result.iaNumbers[0]
-          )
+          String(result.iaNumbers[0])
         );
       }
-    } catch (err) {
-      console.error(
-        "Load subject IA error:",
-        err
-      );
-
-      setError(
-        err.response?.data?.message ||
-          "Failed to load IA details."
-      );
-    } finally {
-      setLoading(false);
+    } else {
+      // First page load
+      if (result?.iaNumbers?.length) {
+        setSelectedIA(
+          String(result.iaNumbers[0])
+        );
+      } else {
+        setSelectedIA("");
+      }
     }
-  };
 
+  } catch (err) {
+    console.error(
+      "Load subject IA error:",
+      err
+    );
+
+    setError(
+      err.response?.data?.message ||
+        "Failed to load IA details."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
   useEffect(() => {
     if (
       subjectId &&
@@ -125,19 +139,11 @@ export default function HODSubjectIAMarksPage() {
     academicYear,
   ]);
 
-  // =====================================================
-  // CHANGE IA
-  // =====================================================
-
-  const handleIAChange = async (
-    value
-  ) => {
-    setSelectedIA(value);
-
-    if (value) {
-      await loadData(value);
-    }
-  };
+const handleIAChange = (value) => {
+  // Do NOT reload from backend.
+  // All IA data is already loaded.
+  setSelectedIA(value);
+};
 
   // =====================================================
   // SELECTED IA RECORDS
@@ -173,6 +179,152 @@ export default function HODSubjectIAMarksPage() {
         ] || null
       );
     };
+
+  // =====================================================
+  // EXCEL REPORT
+  // =====================================================
+
+  const downloadExcelReport = async () => {
+    if (!selectedIA || !data?.students?.length) {
+      return;
+    }
+
+    try {
+      const XLSX = await import("xlsx");
+
+      const rows = [];
+
+      data.students.forEach((student) => {
+        const ia = getStudentIA(student);
+        const tests = ia?.tests || [];
+
+        if (!ia || tests.length === 0) {
+          rows.push({
+            "S.No": rows.length + 1,
+            "Register No.": student.registerNumber || "",
+            Student: student.name || "",
+            Batch: student.batchNumber
+              ? `Batch ${student.batchNumber}`
+              : "",
+            Test: "No marks",
+            CO1: "",
+            CO2: "",
+            CO3: "",
+            CO4: "",
+            CO5: "",
+            CO6: "",
+            Total: "",
+          });
+          return;
+        }
+
+        tests.forEach((test) => {
+          const co = test.coMarks || {};
+
+          rows.push({
+            "S.No": rows.length + 1,
+            "Register No.": student.registerNumber || "",
+            Student: student.name || "",
+            Batch: student.batchNumber
+              ? `Batch ${student.batchNumber}`
+              : "",
+            Test: test.testName || "",
+            CO1: co.CO1 ?? 0,
+            CO2: co.CO2 ?? 0,
+            CO3: co.CO3 ?? 0,
+            CO4: co.CO4 ?? 0,
+            CO5: co.CO5 ?? 0,
+            CO6: co.CO6 ?? 0,
+            Total:
+              test.status === "ABSENT"
+                ? "AB"
+                : testIndexSafeTotal(test),
+          });
+        });
+      });
+
+      const worksheet =
+        XLSX.utils.json_to_sheet(rows);
+
+      worksheet["!cols"] = [
+        { wch: 8 },
+        { wch: 18 },
+        { wch: 28 },
+        { wch: 12 },
+        { wch: 24 },
+        { wch: 8 },
+        { wch: 8 },
+        { wch: 8 },
+        { wch: 8 },
+        { wch: 8 },
+        { wch: 8 },
+        { wch: 12 },
+      ];
+
+      const workbook =
+        XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        `IA ${selectedIA}`
+      );
+
+      const safeSubject =
+        String(data.subject?.name || "Subject")
+          .replace(/[\\/:*?"<>|]/g, "")
+          .trim();
+
+      const fileName =
+        `IA_${selectedIA}_${safeSubject}_${academicYear}.xlsx`;
+
+      XLSX.writeFile(
+        workbook,
+        fileName
+      );
+    } catch (err) {
+      console.error(
+        "Excel report error:",
+        err
+      );
+
+      Swal.fire({
+        icon: "error",
+        title: "Download Failed",
+        text: "Unable to generate the Excel report.",
+      });
+    }
+  };
+
+  const testIndexSafeTotal = (test) => {
+    if (
+      test?.status === "ABSENT"
+    ) {
+      return "AB";
+    }
+
+    if (
+      test?.marks !== undefined &&
+      test?.marks !== null
+    ) {
+      return test.marks;
+    }
+
+    const co = test?.coMarks || {};
+
+    return [
+      co.CO1,
+      co.CO2,
+      co.CO3,
+      co.CO4,
+      co.CO5,
+      co.CO6,
+    ].reduce(
+      (sum, value) =>
+        sum + (Number(value) || 0),
+      0
+    );
+  };
 
   // =====================================================
   // LOADING
@@ -290,18 +442,32 @@ export default function HODSubjectIAMarksPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                loadData(
-                  selectedIA
-                )
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <RefreshCw size={16} />
-              Refresh
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  loadData(
+                    selectedIA
+                  )
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <RefreshCw size={16} />
+                Refresh
+              </button>
+
+              {selectedIA &&
+                data?.students?.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={downloadExcelReport}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                  >
+                    <Download size={16} />
+                    Download Excel
+                  </button>
+                )}
+            </div>
 
           </div>
 
@@ -393,11 +559,15 @@ export default function HODSubjectIAMarksPage() {
 
               <div className="overflow-x-auto">
 
-                <table className="w-full min-w-[1100px] border-collapse text-sm">
+                <table className="w-full min-w-[1200px] border-collapse text-sm">
 
                   <thead>
 
                     <tr className="border-b border-slate-200 bg-slate-50">
+
+                      <th className="whitespace-nowrap border-r border-slate-200 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        S.No.
+                      </th>
 
                       <th className="whitespace-nowrap border-r border-slate-200 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                         Register No.
@@ -468,16 +638,65 @@ export default function HODSubjectIAMarksPage() {
                               }
                               className="border-b border-slate-100"
                             >
+                              <td className="px-4 py-4 text-center font-medium text-slate-500">
+                                {data.students.indexOf(student) + 1}
+                              </td>
+
                               <td className="px-4 py-4 font-medium text-slate-700">
                                 {
                                   student.registerNumber
                                 }
                               </td>
 
-                              <td className="px-4 py-4 font-semibold text-slate-900">
-                                {
-                                  student.name
-                                }
+                              <td className="px-4 py-4">
+                                <div className="flex items-center gap-3">
+                                 {student.imageUrl ? (
+  <img
+    src={student.imageUrl}
+    alt={student.name || "Student"}
+    className="
+      h-10
+      w-10
+      shrink-0
+      rounded-full
+      border
+      border-slate-200
+      bg-slate-100
+      object-cover
+    "
+    loading="lazy"
+    referrerPolicy="no-referrer"
+    onError={(e) => {
+      e.currentTarget.style.display = "none";
+
+      const fallback =
+        e.currentTarget.parentElement?.querySelector(
+          "[data-photo-fallback]"
+        );
+
+      if (fallback) {
+        fallback.classList.remove("hidden");
+      }
+    }}
+  />
+) : null}
+
+<div
+  data-photo-fallback
+  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 ${
+    student.imageUrl ? "hidden" : ""
+  }`}
+>
+  {String(student.name || "S")
+    .trim()
+    .charAt(0)
+    .toUpperCase()}
+</div>
+
+                                  <span className="font-semibold text-slate-900">
+                                    {student.name}
+                                  </span>
+                                </div>
                               </td>
 
                               <td className="px-4 py-4 text-center">
@@ -520,6 +739,12 @@ export default function HODSubjectIAMarksPage() {
 
                                 {/* STUDENT INFO ONLY ON FIRST TEST */}
 
+                                <td className="px-4 py-3 text-center font-medium text-slate-500">
+                                  {testIndex === 0
+                                    ? data.students.indexOf(student) + 1
+                                    : ""}
+                                </td>
+
                                 <td
                                   className={`px-4 py-3 font-medium text-slate-700 ${
                                     testIndex ===
@@ -533,10 +758,32 @@ export default function HODSubjectIAMarksPage() {
                                     student.registerNumber}
                                 </td>
 
-                                <td className="px-4 py-3 font-semibold text-slate-900">
-                                  {testIndex ===
-                                    0 &&
-                                    student.name}
+                                <td className="px-4 py-3">
+                                  {testIndex === 0 && (
+                                    <div className="flex items-center gap-3">
+                                      {student.imageUrl ? (
+                                        <img
+                                          src={student.imageUrl}
+                                          alt={student.name || "Student"}
+                                          className="h-10 w-10 shrink-0 rounded-full border border-slate-200 object-cover"
+                                          onError={(e) => {
+                                            e.currentTarget.style.display = "none";
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
+                                          {String(student.name || "S")
+                                            .trim()
+                                            .charAt(0)
+                                            .toUpperCase()}
+                                        </div>
+                                      )}
+
+                                      <span className="font-semibold text-slate-900">
+                                        {student.name}
+                                      </span>
+                                    </div>
+                                  )}
                                 </td>
 
                                 <td className="px-4 py-3 text-center">

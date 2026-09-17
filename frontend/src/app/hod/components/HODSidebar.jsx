@@ -35,11 +35,7 @@ const menuItems = [
     href: "/hod/subjects",
     icon: "📚",
   },
-  {
-    name: "Profile",
-    href: "/hod/profile",
-    icon: "👤",
-  },
+
 ];
 
 export default function HODSidebar() {

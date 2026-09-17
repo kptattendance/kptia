@@ -1976,35 +1976,37 @@ export default function FacultyAttendancePage() {
 
                                 <td className="px-4 py-4">
 
-                                  <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-3">
+  {student.imageUrl ? (
+    <img
+      src={student.imageUrl}
+      alt={student.name || "Student"}
+      className="h-9 w-9 shrink-0 rounded-full object-cover border border-slate-200"
+      onError={(e) => {
+        e.currentTarget.style.display = "none";
+        e.currentTarget.nextElementSibling.style.display = "flex";
+      }}
+    />
+  ) : null}
 
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
+  <div
+    className={`h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 ${
+      student.imageUrl ? "hidden" : "flex"
+    }`}
+  >
+    {student.name?.charAt(0)?.toUpperCase() || "S"}
+  </div>
 
-                                      {student.name
-                                        ?.charAt(
-                                          0
-                                        )
-                                        ?.toUpperCase()}
+  <div className="min-w-0">
+    <p className="truncate text-sm font-semibold text-slate-900">
+      {student.name}
+    </p>
 
-                                    </div>
-
-                                    <div className="min-w-0">
-
-                                      <p className="truncate text-sm font-semibold text-slate-900">
-                                        {
-                                          student.name
-                                        }
-                                      </p>
-
-                                      <p className="mt-0.5 truncate text-xs text-slate-400">
-                                        {
-                                          student.email
-                                        }
-                                      </p>
-
-                                    </div>
-
-                                  </div>
+    <p className="mt-0.5 text-[10px] text-slate-400">
+      Batch {student.batchNumber}
+    </p>
+  </div>
+</div>
 
                                 </td>
 

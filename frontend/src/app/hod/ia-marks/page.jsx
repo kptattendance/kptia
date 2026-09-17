@@ -2,10 +2,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import * as XLSX from "xlsx";
 import {
   BarChart3,
   RefreshCw,
   ChevronDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 
@@ -133,61 +135,316 @@ export default function HODIAMarksPage() {
     );
   }, [subjects]);
 
+const tableData = useMemo(() => {
+  const studentMap = new Map();
+
+  subjects.forEach((subject) => {
+    (subject.students || []).forEach(
+      (student) => {
+
+        const studentId =
+          student.studentId;
+
+        if (!studentId) return;
+
+        if (!studentMap.has(studentId)) {
+
+          studentMap.set(studentId, {
+            studentId,
+
+            registerNumber:
+              student.registerNumber,
+
+            name:
+              student.name,
+
+            // IMPORTANT
+            imageUrl:
+              student.imageUrl ||
+              student.photoUrl ||
+              "",
+
+            batchNumber:
+              student.batchNumber,
+
+            subjectMarks: {},
+          });
+        }
+
+        const row =
+          studentMap.get(studentId);
+
+        // If image comes from another subject
+        // record, keep it.
+        if (
+          !row.imageUrl &&
+          student.imageUrl
+        ) {
+          row.imageUrl =
+            student.imageUrl;
+        }
+
+        const iaData =
+          student.iaMarks?.[
+            `IA${selectedIA}`
+          ];
+
+        if (iaData) {
+
+          row.subjectMarks[
+            subject.subjectId
+          ] = {
+            marks:
+              iaData.marks,
+
+            status:
+              iaData.status,
+          };
+        }
+      }
+    );
+  });
+
+  return Array.from(
+    studentMap.values()
+  ).sort((a, b) =>
+    String(
+      a.registerNumber
+    ).localeCompare(
+      String(
+        b.registerNumber
+      )
+    )
+  );
+
+}, [subjects, selectedIA]);
+
   // =====================================================
-  // CREATE STUDENT-WISE TABLE DATA
+  // EXCEL DOWNLOAD
   // =====================================================
 
-  const tableData = useMemo(() => {
-    const studentMap = new Map();
+  const downloadExcel = () => {
+    if (!tableData.length || !selectedIA) return;
 
-    subjects.forEach((subject) => {
-      (subject.students || []).forEach(
-        (student) => {
-          const studentId =
-            student.studentId;
+    try {
+      const department =
+        subjects?.[0]?.department
+          ? String(subjects[0].department).toUpperCase()
+          : "N/A";
 
-          if (!studentMap.has(studentId)) {
-            studentMap.set(studentId, {
-              studentId,
-              registerNumber:
-                student.registerNumber,
-              name: student.name,
-              batchNumber:
-                student.batchNumber,
-              subjectMarks: {},
-            });
-          }
+      const subjectNames = subjects
+        .map((subject) => subject.name)
+        .filter(Boolean)
+        .join(", ");
 
-          const row =
-            studentMap.get(studentId);
+      const subjectCodes = subjects
+        .map((subject) => subject.code)
+        .filter(Boolean)
+        .join(", ");
 
-          const iaData =
-            student.iaMarks?.[
-              `IA${selectedIA}`
-            ];
-
-          if (iaData) {
-            row.subjectMarks[
-              subject.subjectId
-            ] = {
-              marks: iaData.marks,
-              status: iaData.status,
-            };
-          }
+      const generatedOn = new Date().toLocaleString(
+        "en-IN",
+        {
+          dateStyle: "medium",
+          timeStyle: "short",
         }
       );
-    });
 
-    return Array.from(
-      studentMap.values()
-    ).sort((a, b) =>
-      String(
-        a.registerNumber
-      ).localeCompare(
-        String(b.registerNumber)
-      )
-    );
-  }, [subjects, selectedIA]);
+      /*
+       * Informative report header
+       */
+      const reportHeader = [
+        ["KARNATAKA GOVERNMENT POLYTECHNIC, MANGALURU"],
+        ["INTERNAL ASSESSMENT MARKS REPORT"],
+        [],
+        ["Academic Year", academicYear],
+        ["Department", department],
+        ["Semester", `Semester ${semester}`],
+        ["Internal Assessment", `IA ${selectedIA}`],
+        ["Subjects", subjectNames],
+        ["Subject Codes", subjectCodes],
+        ["Generated On", generatedOn],
+        [],
+      ];
+
+      /*
+       * Student-wise data
+       */
+      const dataRows = tableData.map(
+        (student, index) => {
+          const row = {
+            "S.No.": index + 1,
+            "Register No.": student.registerNumber || "",
+            "Student Name": student.name || "",
+            Batch: student.batchNumber
+              ? `Batch ${student.batchNumber}`
+              : "",
+          };
+
+          subjects.forEach((subject) => {
+            const mark =
+              student.subjectMarks?.[
+                subject.subjectId
+              ];
+
+            row[
+              `${subject.code || ""} - ${
+                subject.name || ""
+              }`
+            ] = mark
+              ? mark.status === "ABSENT"
+                ? "AB"
+                : mark.marks ?? ""
+              : "—";
+          });
+
+          return row;
+        }
+      );
+
+      const worksheet =
+        XLSX.utils.aoa_to_sheet(reportHeader);
+
+      /*
+       * Put student table after report information
+       */
+      XLSX.utils.sheet_add_json(
+        worksheet,
+        dataRows,
+        {
+          origin: "A12",
+          skipHeader: false,
+        }
+      );
+
+      /*
+       * Merge report title rows
+       */
+      const totalColumns =
+        4 + subjects.length;
+
+      worksheet["!merges"] = [
+        {
+          s: { r: 0, c: 0 },
+          e: {
+            r: 0,
+            c: Math.max(totalColumns - 1, 3),
+          },
+        },
+        {
+          s: { r: 1, c: 0 },
+          e: {
+            r: 1,
+            c: Math.max(totalColumns - 1, 3),
+          },
+        },
+      ];
+
+      /*
+       * Column widths
+       */
+      worksheet["!cols"] = [
+        { wch: 8 },
+        { wch: 18 },
+        { wch: 30 },
+        { wch: 12 },
+        ...subjects.map((subject) => ({
+          wch: Math.max(
+            18,
+            Math.min(
+              35,
+              String(
+                `${subject.code || ""} - ${
+                  subject.name || ""
+                }`
+              ).length + 3
+            )
+          ),
+        })),
+      ];
+
+      /*
+       * Freeze student table header
+       */
+      worksheet["!freeze"] = {
+        xSplit: 4,
+        ySplit: 12,
+      };
+
+      /*
+       * Auto filter for student table
+       */
+      const lastColumn =
+        XLSX.utils.encode_col(
+          totalColumns - 1
+        );
+
+      const lastRow =
+        11 + dataRows.length;
+
+      worksheet["!autofilter"] = {
+        ref: `A12:${lastColumn}${lastRow}`,
+      };
+
+      /*
+       * Add a small report footer
+       */
+      const footerRow =
+        14 + dataRows.length;
+
+      XLSX.utils.sheet_add_aoa(
+        worksheet,
+        [
+          [
+            `Report: Semester ${semester} | IA ${selectedIA} | ${academicYear}`,
+          ],
+        ],
+        {
+          origin: `A${footerRow}`,
+        }
+      );
+
+      const workbook =
+        XLSX.utils.book_new();
+
+      XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        "IA Marks Report"
+      );
+
+      const safeDepartment =
+        department.replace(
+          /[\\/:*?"<>|]/g,
+          ""
+        );
+
+      const safeSubject =
+        String(
+          subjects?.[0]?.name ||
+            "Semester"
+        )
+          .replace(
+            /[\\/:*?"<>|]/g,
+            ""
+          )
+          .trim();
+
+      const fileName =
+        `HOD_IA_Report_${safeDepartment}_Sem${semester}_IA${selectedIA}_${academicYear}_${safeSubject}.xlsx`;
+
+      XLSX.writeFile(
+        workbook,
+        fileName
+      );
+
+    } catch (error) {
+      console.error(
+        "Excel download error:",
+        error
+      );
+    }
+  };
 
   // =====================================================
   // RENDER
@@ -222,25 +479,38 @@ export default function HODIAMarksPage() {
 
           </div>
 
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={
-              loading || !semester
-            }
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <RefreshCw
-              size={16}
-              className={
-                loading
-                  ? "animate-spin"
-                  : ""
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={
+                loading || !semester
               }
-            />
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw
+                size={16}
+                className={
+                  loading
+                    ? "animate-spin"
+                    : ""
+                }
+              />
+              Refresh
+            </button>
 
-            Refresh
-          </button>
+            {selectedIA &&
+              tableData.length > 0 && (
+                <button
+                  type="button"
+                  onClick={downloadExcel}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                >
+                  <FileSpreadsheet size={16} />
+                  Download Excel
+                </button>
+              )}
+          </div>
 
         </div>
 
@@ -497,13 +767,19 @@ export default function HODIAMarksPage() {
 
               <div className="overflow-x-auto">
 
-                <table className="w-full min-w-[900px] border-collapse text-sm">
+                <table className="w-full min-w-[1050px] border-collapse text-sm">
 
                   <thead>
 
                     <tr className="border-b border-slate-200 bg-slate-50">
 
-                      <th className="sticky left-0 z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="sticky left-0 z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        S.No.
+                      </th>
+                      <th className="sticky left-[55px] z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Photo
+                      </th>
+                      <th className="sticky left-[125px] z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                         Register No.
                       </th>
 
@@ -558,20 +834,98 @@ export default function HODIAMarksPage() {
                           className="border-b border-slate-100 transition hover:bg-slate-50"
                         >
 
-                          {/* REGISTER NUMBER */}
+                          {/* S.NO */}
+                          <td className="sticky left-0 z-10 border-r border-slate-100 bg-white px-3 py-3.5 text-center font-semibold text-slate-500">
+                            {tableData.indexOf(student) + 1}
+                          </td>
 
-                          <td className="sticky left-0 z-10 whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-medium text-slate-700">
-                            {
-                              student.registerNumber
-                            }
+                      {/* PHOTO */}
+
+<td
+  className="
+    sticky left-[55px]
+    z-10
+    border-r
+    border-slate-100
+    bg-white
+    px-3
+    py-2.5
+  "
+>
+  <div className="flex justify-center">
+
+    {student.imageUrl ? (
+      <img
+        src={student.imageUrl}
+        alt={student.name || "Student Photo"}
+        className="
+          h-10
+          w-10
+          rounded-full
+          object-cover
+          ring-2
+          ring-slate-100
+          bg-slate-100
+        "
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={(e) => {
+          e.currentTarget.style.display =
+            "none";
+
+          const fallback =
+            e.currentTarget.parentElement
+              ?.querySelector(
+                "[data-photo-fallback]"
+              );
+
+          if (fallback) {
+            fallback.classList.remove(
+              "hidden"
+            );
+          }
+        }}
+      />
+    ) : null}
+
+    <div
+      data-photo-fallback
+      className={`
+        flex
+        h-10
+        w-10
+        items-center
+        justify-center
+        rounded-full
+        bg-slate-100
+        text-xs
+        font-bold
+        text-slate-500
+        ${
+          student.imageUrl
+            ? "hidden"
+            : ""
+        }
+      `}
+    >
+      {String(
+        student.name || "S"
+      )
+        .charAt(0)
+        .toUpperCase()}
+    </div>
+
+  </div>
+</td>
+
+                          {/* REGISTER NUMBER */}
+                          <td className="sticky left-[125px] z-10 whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-medium text-slate-700">
+                            {student.registerNumber}
                           </td>
 
                           {/* STUDENT NAME */}
-
-                          <td className="sticky left-[130px] z-10 whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-semibold text-slate-900">
-                            {
-                              student.name
-                            }
+                          <td className="whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-semibold text-slate-900">
+                            {student.name}
                           </td>
 
                           {/* BATCH */}
