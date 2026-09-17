@@ -40,6 +40,7 @@ export default function StudentTable({
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
   const [batchFilter, setBatchFilter] = useState("");
+  const [semesterFilter, setSemesterFilter] = useState("");
 
   const [openMenu, setOpenMenu] = useState(null);
 
@@ -160,10 +161,16 @@ export default function StudentTable({
         String(student.batch) ===
           String(batchFilter);
 
+      const matchesSemester =
+        !semesterFilter ||
+        String(student.semester) ===
+          String(semesterFilter);
+
       return (
         matchesSearch &&
         matchesDepartment &&
-        matchesBatch
+        matchesBatch &&
+        matchesSemester
       );
     });
   }, [
@@ -171,18 +178,21 @@ export default function StudentTable({
     search,
     departmentFilter,
     batchFilter,
+    semesterFilter,
   ]);
 
   const clearFilters = () => {
     setSearch("");
     setDepartmentFilter("");
     setBatchFilter("");
+    setSemesterFilter("");
   };
 
   const hasFilters =
     search ||
     departmentFilter ||
-    batchFilter;
+    batchFilter ||
+    semesterFilter;
 
   // ==========================================
   // MULTIPLE SELECTION
@@ -757,6 +767,25 @@ export default function StudentTable({
                 value={batch}
               >
                 {batch}
+              </option>
+            ))}
+          </select>
+
+          {/* SEMESTER */}
+          <select
+            value={semesterFilter}
+            onChange={(e) =>
+              setSemesterFilter(e.target.value)
+            }
+            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100 lg:w-40"
+          >
+            <option value="">
+              All Semesters
+            </option>
+
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+              <option key={sem} value={sem}>
+                Semester {sem}
               </option>
             ))}
           </select>
