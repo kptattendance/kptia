@@ -72,8 +72,17 @@ export default function BulkStudentUpload({
 
       setUploadResult(response.data);
 
+      if (
+        response.data?.success &&
+        onSuccess
+      ) {
+        onSuccess(response.data);
+      }
     } catch (err) {
-      console.error("Bulk student upload error:", err);
+      console.error(
+        "Bulk student upload error:",
+        err
+      );
 
       setError(
         err.response?.data?.message ||
@@ -84,33 +93,37 @@ export default function BulkStudentUpload({
     }
   };
 
-const downloadTemplate = () => {
-  const csv =
-    "registerNumber,name,email,phone,department,admissionYear,semester,batch,batchNumber\n" +
-    "1KT23CS001,Student One,student1@gmail.com,9876543210,cs,2023,5,2023-2026,1\n" +
-    "1KT23CS002,Student Two,student2@gmail.com,9876543211,cs,2023,3,2023-2026,2\n" +
-    "1KT23EC001,Student Three,student3@gmail.com,9876543212,ec,2023,3,2023-2026,1\n";
+  // ==========================================================
+  // DOWNLOAD CSV TEMPLATE
+  // ==========================================================
 
-  const blob = new Blob([csv], {
-    type: "text/csv;charset=utf-8;",
-  });
+  const downloadTemplate = () => {
+    const csv =
+      "registerNumber,name,gender,email,phone,department,admissionYear,semester,batch,batchNumber\n" +
+      "1KT23CS001,Student One,male,student1@gmail.com,9876543210,cs,2023,5,2023-2026,1\n" +
+      "1KT23CS002,Student Two,female,student2@gmail.com,9876543211,cs,2023,3,2023-2026,2\n" +
+      "1KT23EC001,Student Three,male,student3@gmail.com,9876543212,ec,2023,3,2023-2026,1\n";
 
-  const url =
-    window.URL.createObjectURL(blob);
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
 
-  const link =
-    document.createElement("a");
+    const url =
+      window.URL.createObjectURL(blob);
 
-  link.href = url;
-  link.download =
-    "students_template.csv";
+    const link =
+      document.createElement("a");
 
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+    link.href = url;
+    link.download =
+      "students_template.csv";
 
-  window.URL.revokeObjectURL(url);
-};
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    window.URL.revokeObjectURL(url);
+  };
 
   const resetUpload = () => {
     setSelectedFile(null);
@@ -186,24 +199,41 @@ const downloadTemplate = () => {
             </svg>
 
             <div>
+
               <p className="text-sm font-semibold text-blue-900">
                 CSV format
               </p>
 
               <p className="mt-1 text-sm leading-6 text-blue-700">
-  Required columns:
-  {" "}
-  <span className="font-medium">
-    
-     registerNumber, name, email, phone, department,
-    admissionYear, semester, batch
-  </span>
-</p>
+                <span className="font-medium">
+                  Required columns:
+                </span>{" "}
+                registerNumber, name, gender, email,
+                phone, department, admissionYear,
+                semester, batch, batchNumber
+              </p>
 
-<p className="mt-1 text-xs text-blue-600">
-  Student photos are not required during
-  bulk upload. Photos can be added later.
-</p>
+              <p className="mt-2 text-xs text-blue-600">
+                Gender must be entered as{" "}
+                <span className="font-semibold">
+                  male
+                </span>
+                ,{" "}
+                <span className="font-semibold">
+                  female
+                </span>
+                , or{" "}
+                <span className="font-semibold">
+                  other
+                </span>
+                .
+              </p>
+
+              <p className="mt-1 text-xs text-blue-600">
+                Student photos are not required during
+                bulk upload. Photos can be added later.
+              </p>
+
             </div>
 
           </div>
@@ -315,6 +345,7 @@ const downloadTemplate = () => {
                     : "bg-red-100"
                 }`}
               >
+
                 {uploadResult.success ? (
                   <svg
                     className="h-4 w-4 text-emerald-600"
@@ -334,6 +365,7 @@ const downloadTemplate = () => {
                     !
                   </span>
                 )}
+
               </div>
 
               <div className="min-w-0 flex-1">
@@ -360,6 +392,7 @@ const downloadTemplate = () => {
                       <p className="text-xs text-slate-500">
                         Total
                       </p>
+
                       <p className="mt-1 text-lg font-semibold text-slate-900">
                         {uploadResult.summary.total ??
                           0}
@@ -370,6 +403,7 @@ const downloadTemplate = () => {
                       <p className="text-xs text-slate-500">
                         Added
                       </p>
+
                       <p className="mt-1 text-lg font-semibold text-emerald-600">
                         {uploadResult.summary.added ??
                           uploadResult.summary.inserted ??
@@ -381,6 +415,7 @@ const downloadTemplate = () => {
                       <p className="text-xs text-slate-500">
                         Skipped
                       </p>
+
                       <p className="mt-1 text-lg font-semibold text-amber-600">
                         {uploadResult.summary.skipped ??
                           0}
@@ -391,6 +426,7 @@ const downloadTemplate = () => {
                       <p className="text-xs text-slate-500">
                         Errors
                       </p>
+
                       <p className="mt-1 text-lg font-semibold text-red-600">
                         {uploadResult.summary.errors ??
                           0}

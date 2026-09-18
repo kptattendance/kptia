@@ -9,6 +9,10 @@ import mongoose from "mongoose";
 // BULK ADD STUDENTS FROM CSV
 // ==========================================================
 
+// ==========================================================
+// BULK ADD STUDENTS FROM CSV
+// ==========================================================
+
 export const bulkAddStudents = async (req, res) => {
   try {
     const { role, department: hodDept } = req.user;
@@ -48,17 +52,18 @@ export const bulkAddStudents = async (req, res) => {
     const results = [];
 
     for (const s of students) {
-     let {
-  registerNumber,
-  name,
-  email,
-  phone,
-  department,
-  admissionYear,
-  semester,
-  batch,
-  batchNumber,
-} = s;
+      let {
+        registerNumber,
+        name,
+        gender,
+        email,
+        phone,
+        department,
+        admissionYear,
+        semester,
+        batch,
+        batchNumber,
+      } = s;
 
       // ------------------------------------------------------
       // NORMALIZE
@@ -69,6 +74,9 @@ export const bulkAddStudents = async (req, res) => {
 
       name =
         name?.trim().toUpperCase();
+
+      gender =
+        gender?.trim().toLowerCase();
 
       email =
         email?.trim().toLowerCase();
@@ -87,27 +95,51 @@ export const bulkAddStudents = async (req, res) => {
 
       batch =
         batch?.trim();
-batchNumber =
-  batchNumber?.trim();
+
+      batchNumber =
+        batchNumber?.trim();
+
       // ------------------------------------------------------
       // REQUIRED FIELDS
       // ------------------------------------------------------
 
       if (
-      !registerNumber ||
-!name ||
-!email ||
-!phone ||
-!department ||
-!admissionYear ||
-!semester ||
-!batch ||
-!batchNumber
+        !registerNumber ||
+        !name ||
+        !gender ||
+        !email ||
+        !phone ||
+        !department ||
+        !admissionYear ||
+        !semester ||
+        !batch ||
+        !batchNumber
       ) {
         results.push({
           registerNumber: registerNumber || "",
           success: false,
           message: "Missing required fields",
+        });
+
+        continue;
+      }
+
+      // ------------------------------------------------------
+      // VALIDATE GENDER
+      // ------------------------------------------------------
+
+      const validGenders = [
+        "male",
+        "female",
+        "other",
+      ];
+
+      if (!validGenders.includes(gender)) {
+        results.push({
+          registerNumber,
+          success: false,
+          message:
+            "Invalid gender. Gender must be male, female or other",
         });
 
         continue;
@@ -155,25 +187,28 @@ batchNumber =
 
         continue;
       }
-// ------------------------------------------------------
-// VALIDATE BATCH NUMBER
-// ------------------------------------------------------
 
-const parsedBatchNumber = Number(batchNumber);
+      // ------------------------------------------------------
+      // VALIDATE BATCH NUMBER
+      // ------------------------------------------------------
 
-if (
-  !Number.isInteger(parsedBatchNumber) ||
-  ![1, 2].includes(parsedBatchNumber)
-) {
-  results.push({
-    registerNumber,
-    success: false,
-    message:
-      "Invalid batch number. Batch number must be 1 or 2",
-  });
+      const parsedBatchNumber =
+        Number(batchNumber);
 
-  continue;
-}
+      if (
+        !Number.isInteger(parsedBatchNumber) ||
+        ![1, 2].includes(parsedBatchNumber)
+      ) {
+        results.push({
+          registerNumber,
+          success: false,
+          message:
+            "Invalid batch number. Batch number must be 1 or 2",
+        });
+
+        continue;
+      }
+
       // ------------------------------------------------------
       // VALIDATE DEPARTMENT
       // ------------------------------------------------------
@@ -194,7 +229,8 @@ if (
         results.push({
           registerNumber,
           success: false,
-          message: `Invalid department: ${department}`,
+          message:
+            `Invalid department: ${department}`,
         });
 
         continue;
@@ -256,13 +292,16 @@ if (
         // ----------------------------------------------------
 
         const existingEmail =
-          await Student.findOne({ email });
+          await Student.findOne({
+            email,
+          });
 
         if (existingEmail) {
           results.push({
             registerNumber,
             success: false,
-            message: "Email already exists",
+            message:
+              "Email already exists",
           });
 
           continue;
@@ -298,55 +337,57 @@ if (
             emailAddress: [email],
             firstName: name,
 
-     publicMetadata: {
-  role: "student",
-  department,
-  admissionYear:
-    parsedAdmissionYear,
-  semester:
-    parsedSemester,
-  batch,
-  batchNumber:
-    parsedBatchNumber,
-},
+            publicMetadata: {
+              role: "student",
+              department,
+              gender,
+              admissionYear:
+                parsedAdmissionYear,
+              semester:
+                parsedSemester,
+              batch,
+              batchNumber:
+                parsedBatchNumber,
+            },
           });
 
         try {
-   // --------------------------------------------------
-// CREATE USER DOCUMENT
-// --------------------------------------------------
+          // --------------------------------------------------
+          // CREATE USER DOCUMENT
+          // --------------------------------------------------
 
-const user = new User({
-  clerkId: clerkUser.id,
-  name,
-  email,
-  phone,
-  role: "student",
-  department,
-});
+          const user = new User({
+            clerkId: clerkUser.id,
+            name,
+            email,
+            phone,
+            role: "student",
+            department,
+          });
 
-await user.save();
+          await user.save();
 
-// --------------------------------------------------
-// CREATE STUDENT DOCUMENT
-// --------------------------------------------------
+          // --------------------------------------------------
+          // CREATE STUDENT DOCUMENT
+          // --------------------------------------------------
 
-const student = new Student({
-  clerkId: clerkUser.id,
-  registerNumber,
-  name,
-  email,
-  phone,
-  department,
-  admissionYear:
-    parsedAdmissionYear,
-  batch,
-  batchNumber:
-    parsedBatchNumber,
-  role: "student",
-});
+          const student = new Student({
+            clerkId: clerkUser.id,
+            registerNumber,
+            name,
+            gender,
+            email,
+            phone,
+            department,
+            admissionYear:
+              parsedAdmissionYear,
+            batch,
+            batchNumber:
+              parsedBatchNumber,
+            role: "student",
+          });
 
-await student.save();
+          await student.save();
 
           // --------------------------------------------------
           // CREATE INITIAL SEMESTER RECORD
@@ -372,39 +413,38 @@ await student.save();
             student,
           });
         } catch (mongoError) {
+          // --------------------------------------------------
+          // ROLLBACK USER DOCUMENT
+          // --------------------------------------------------
 
-  // --------------------------------------------------
-  // ROLLBACK USER DOCUMENT
-  // --------------------------------------------------
+          try {
+            await User.deleteOne({
+              clerkId: clerkUser.id,
+            });
+          } catch (userDeleteError) {
+            console.error(
+              "Failed to rollback User document:",
+              userDeleteError.message
+            );
+          }
 
-  try {
-    await User.deleteOne({
-      clerkId: clerkUser.id,
-    });
-  } catch (userDeleteError) {
-    console.error(
-      "Failed to rollback User document:",
-      userDeleteError.message
-    );
-  }
+          // --------------------------------------------------
+          // ROLLBACK CLERK USER
+          // --------------------------------------------------
 
-  // --------------------------------------------------
-  // ROLLBACK CLERK USER
-  // --------------------------------------------------
+          try {
+            await clerkClient.users.deleteUser(
+              clerkUser.id
+            );
+          } catch (deleteError) {
+            console.error(
+              "Failed to rollback Clerk user:",
+              deleteError.message
+            );
+          }
 
-  try {
-    await clerkClient.users.deleteUser(
-      clerkUser.id
-    );
-  } catch (deleteError) {
-    console.error(
-      "Failed to rollback Clerk user:",
-      deleteError.message
-    );
-  }
-
-  throw mongoError;
-}
+          throw mongoError;
+        }
       } catch (err) {
         console.error(
           `Error adding student ${registerNumber}:`,
@@ -422,17 +462,25 @@ await student.save();
     }
 
     const added =
-      results.filter((r) => r.success).length;
+      results.filter(
+        (r) => r.success
+      ).length;
 
     const skipped =
-      results.filter((r) => !r.success).length;
+      results.filter(
+        (r) => !r.success
+      ).length;
 
     const errors =
       results
-        .filter((r) => !r.success)
+        .filter(
+          (r) => !r.success
+        )
         .map((r) => ({
-          registerNumber: r.registerNumber,
-          message: r.message,
+          registerNumber:
+            r.registerNumber,
+          message:
+            r.message,
         }));
 
     return res.status(201).json({
@@ -482,6 +530,7 @@ export const createStudent = async (req, res) => {
     const {
       registerNumber,
       name,
+      gender,
       email,
       phone,
       department,
@@ -538,6 +587,7 @@ export const createStudent = async (req, res) => {
     if (
       !registerNumber ||
       !name ||
+      !gender ||
       !email ||
       !phone ||
       !department ||
@@ -551,7 +601,34 @@ export const createStudent = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "All required fields must be provided",
+          "All required fields including gender must be provided",
+      });
+    }
+
+    // ------------------------------------------------------
+    // VALIDATE GENDER
+    // ------------------------------------------------------
+
+    const normalizedGender =
+      gender
+        .trim()
+        .toLowerCase();
+
+    const validGenders = [
+      "male",
+      "female",
+      "other",
+    ];
+
+    if (
+      !validGenders.includes(
+        normalizedGender
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid gender. Gender must be male, female or other",
       });
     }
 
@@ -582,7 +659,9 @@ export const createStudent = async (req, res) => {
       Number(admissionYear);
 
     if (
-      !Number.isInteger(parsedAdmissionYear) ||
+      !Number.isInteger(
+        parsedAdmissionYear
+      ) ||
       parsedAdmissionYear < 2000 ||
       parsedAdmissionYear > 2100
     ) {
@@ -601,8 +680,12 @@ export const createStudent = async (req, res) => {
       Number(batchNumber);
 
     if (
-      !Number.isInteger(parsedBatchNumber) ||
-      ![1, 2].includes(parsedBatchNumber)
+      !Number.isInteger(
+        parsedBatchNumber
+      ) ||
+      ![1, 2].includes(
+        parsedBatchNumber
+      )
     ) {
       return res.status(400).json({
         success: false,
@@ -716,6 +799,9 @@ export const createStudent = async (req, res) => {
           department:
             normalizedDepartment,
 
+          gender:
+            normalizedGender,
+
           admissionYear:
             parsedAdmissionYear,
 
@@ -732,38 +818,49 @@ export const createStudent = async (req, res) => {
 
     try {
       // ----------------------------------------------------
-// CREATE USER DOCUMENT
-// ----------------------------------------------------
+      // CREATE USER DOCUMENT
+      // ----------------------------------------------------
 
-const user = new User({
-  clerkId: clerkUser.id,
-  name: normalizedName,
-  email: normalizedEmail,
-  phone: normalizedPhone,
-  role: "student",
-  department: normalizedDepartment,
-});
+      const user = new User({
+        clerkId: clerkUser.id,
+        name: normalizedName,
+        email: normalizedEmail,
+        phone: normalizedPhone,
+        role: "student",
+        department:
+          normalizedDepartment,
+      });
 
-await user.save();
+      await user.save();
 
-// ----------------------------------------------------
-// CREATE STUDENT DOCUMENT
-// ----------------------------------------------------
+      // ----------------------------------------------------
+      // CREATE STUDENT DOCUMENT
+      // ----------------------------------------------------
 
-const student = new Student({
-  clerkId: clerkUser.id,
-  registerNumber: normalizedRegisterNumber,
-  name: normalizedName,
-  email: normalizedEmail,
-  phone: normalizedPhone,
-  department: normalizedDepartment,
-  admissionYear: parsedAdmissionYear,
-  batch: normalizedBatch,
-  batchNumber: parsedBatchNumber,
-  role: "student",
-});
+      const student = new Student({
+        clerkId: clerkUser.id,
+        registerNumber:
+          normalizedRegisterNumber,
+        name:
+          normalizedName,
+        gender:
+          normalizedGender,
+        email:
+          normalizedEmail,
+        phone:
+          normalizedPhone,
+        department:
+          normalizedDepartment,
+        admissionYear:
+          parsedAdmissionYear,
+        batch:
+          normalizedBatch,
+        batchNumber:
+          parsedBatchNumber,
+        role: "student",
+      });
 
-await student.save();
+      await student.save();
 
       // ----------------------------------------------------
       // INITIAL SEMESTER
@@ -796,44 +893,41 @@ await student.save();
         data:
           student,
       });
+    } catch (mongoError) {
+      // ----------------------------------------------------
+      // ROLLBACK USER DOCUMENT
+      // ----------------------------------------------------
 
-    }  catch (mongoError) {
+      try {
+        await User.deleteOne({
+          clerkId:
+            clerkUser.id,
+        });
+      } catch (userDeleteError) {
+        console.error(
+          "Failed to rollback User document:",
+          userDeleteError.message
+        );
+      }
 
-  // ----------------------------------------------------
-  // ROLLBACK USER DOCUMENT
-  // ----------------------------------------------------
+      // ----------------------------------------------------
+      // ROLLBACK CLERK USER
+      // ----------------------------------------------------
 
-  try {
-    await User.deleteOne({
-      clerkId: clerkUser.id,
-    });
-  } catch (userDeleteError) {
-    console.error(
-      "Failed to rollback User document:",
-      userDeleteError.message
-    );
-  }
+      try {
+        await clerkClient.users.deleteUser(
+          clerkUser.id
+        );
+      } catch (deleteError) {
+        console.error(
+          "Failed to rollback Clerk user:",
+          deleteError.message
+        );
+      }
 
-  // ----------------------------------------------------
-  // ROLLBACK CLERK USER
-  // ----------------------------------------------------
-
-  try {
-    await clerkClient.users.deleteUser(
-      clerkUser.id
-    );
-  } catch (deleteError) {
-    console.error(
-      "Failed to rollback Clerk user:",
-      deleteError.message
-    );
-  }
-
-  throw mongoError;
-}
-
+      throw mongoError;
+    }
   } catch (err) {
-
     console.error(
       "CreateStudent Error:",
       err
@@ -860,7 +954,6 @@ await student.save();
     });
   }
 };
-
 // ==========================================================
 // GET STUDENTS
 // ==========================================================
@@ -1218,10 +1311,42 @@ export const updateStudent = async (req, res) => {
           .toLowerCase();
     }
 
-    if (updateData.phone) {
-      updateData.phone =
-        updateData.phone.trim();
-    }
+  if (updateData.phone) {
+  updateData.phone =
+    updateData.phone.trim();
+}
+
+if (updateData.gender) {
+  updateData.gender =
+    updateData.gender
+      .trim()
+      .toLowerCase();
+
+  const validGenders = [
+    "male",
+    "female",
+    "other",
+  ];
+
+  if (
+    !validGenders.includes(
+      updateData.gender
+    )
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Invalid gender. Gender must be male, female or other",
+    });
+  }
+}
+
+if (updateData.department) {
+  updateData.department =
+    updateData.department
+      .trim()
+      .toLowerCase();
+}
 
     if (updateData.department) {
       updateData.department =
@@ -1459,28 +1584,33 @@ export const updateStudent = async (req, res) => {
 // DELETE STUDENT
 // ==========================================================
 
-export const deleteStudent = async (
-  req,
-  res
-) => {
+// ==========================================================
+// DELETE STUDENT
+// ==========================================================
+
+export const deleteStudent = async (req, res) => {
   try {
     const {
       role,
       department,
     } = req.user;
 
-    const student =
-      await Student.findById(
-        req.params.id
-      );
+    // ------------------------------------------------------
+    // FIND STUDENT
+    // ------------------------------------------------------
+
+    const student = await Student.findById(req.params.id);
 
     if (!student) {
       return res.status(404).json({
         success: false,
-        message:
-          "Student not found",
+        message: "Student not found",
       });
     }
+
+    // ------------------------------------------------------
+    // HOD ACCESS
+    // ------------------------------------------------------
 
     if (
       role === "hod" &&
@@ -1505,7 +1635,7 @@ export const deleteStudent = async (
     }
 
     // ------------------------------------------------------
-    // DELETE CLERK
+    // DELETE CLERK USER
     // ------------------------------------------------------
 
     if (student.clerkId) {
@@ -1513,10 +1643,16 @@ export const deleteStudent = async (
         await clerkClient.users.deleteUser(
           student.clerkId
         );
+
+        console.log(
+          `Clerk user deleted: ${student.clerkId}`
+        );
+
       } catch (clerkErr) {
+
         if (clerkErr?.status === 404) {
           console.warn(
-            "Clerk user already deleted"
+            `Clerk user ${student.clerkId} already deleted`
           );
         } else {
           console.error(
@@ -1528,7 +1664,31 @@ export const deleteStudent = async (
     }
 
     // ------------------------------------------------------
-    // DELETE CLOUDINARY
+    // DELETE USER DOCUMENT
+    // ------------------------------------------------------
+
+    if (student.clerkId) {
+      try {
+        const userDeleteResult =
+          await User.deleteOne({
+            clerkId: student.clerkId,
+          });
+
+        console.log(
+          `User collection deletion result:`,
+          userDeleteResult
+        );
+
+      } catch (userErr) {
+        console.error(
+          "User collection deletion failed:",
+          userErr
+        );
+      }
+    }
+
+    // ------------------------------------------------------
+    // DELETE CLOUDINARY PHOTO
     // ------------------------------------------------------
 
     if (student.imagePublicId) {
@@ -1536,6 +1696,7 @@ export const deleteStudent = async (
         await cloudinary.uploader.destroy(
           student.imagePublicId
         );
+
       } catch (imgErr) {
         console.warn(
           "Cloudinary deletion failed:",
@@ -1558,12 +1719,18 @@ export const deleteStudent = async (
 
     await student.deleteOne();
 
+    // ------------------------------------------------------
+    // RESPONSE
+    // ------------------------------------------------------
+
     return res.json({
       success: true,
       message:
-        "Student deleted successfully",
+        "Student, User and Clerk account deleted successfully",
     });
+
   } catch (err) {
+
     console.error(
       "DeleteStudent Error:",
       err

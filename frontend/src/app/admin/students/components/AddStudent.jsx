@@ -18,6 +18,12 @@ const departments = [
   { value: "sc", label: "Science & English" },
 ];
 
+const genders = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+];
+
 export default function AddStudent({
   onSuccess,
   onCancel,
@@ -27,11 +33,12 @@ export default function AddStudent({
   const [form, setForm] = useState({
     registerNumber: "",
     name: "",
+    gender: "",
     email: "",
     phone: "",
     department: "",
     admissionYear: "",
-  semester: "",
+    semester: "",
     batch: "",
     batchNumber: "",
   });
@@ -80,17 +87,40 @@ export default function AddStudent({
 
     setError("");
 
+    // ------------------------------------------------------
+    // REQUIRED FIELD VALIDATION
+    // ------------------------------------------------------
+
     if (
       !form.registerNumber.trim() ||
       !form.name.trim() ||
+      !form.gender ||
       !form.email.trim() ||
       !form.phone.trim() ||
       !form.department ||
       !form.admissionYear ||
+      !form.semester ||
       !form.batch.trim() ||
       !form.batchNumber
     ) {
-      setError("Please fill in all required fields.");
+      setError(
+        "Please fill in all required fields."
+      );
+      return;
+    }
+
+    // ------------------------------------------------------
+    // GENDER VALIDATION
+    // ------------------------------------------------------
+
+    if (
+      !["male", "female", "other"].includes(
+        form.gender
+      )
+    ) {
+      setError(
+        "Please select a valid gender."
+      );
       return;
     }
 
@@ -101,6 +131,10 @@ export default function AddStudent({
 
       const formData = new FormData();
 
+      // ----------------------------------------------------
+      // BASIC INFORMATION
+      // ----------------------------------------------------
+
       formData.append(
         "registerNumber",
         form.registerNumber.trim()
@@ -109,6 +143,11 @@ export default function AddStudent({
       formData.append(
         "name",
         form.name.trim()
+      );
+
+      formData.append(
+        "gender",
+        form.gender
       );
 
       formData.append(
@@ -125,7 +164,16 @@ export default function AddStudent({
         "department",
         form.department
       );
-formData.append("semester", form.semester);
+
+      // ----------------------------------------------------
+      // ACADEMIC INFORMATION
+      // ----------------------------------------------------
+
+      formData.append(
+        "semester",
+        form.semester
+      );
+
       formData.append(
         "admissionYear",
         form.admissionYear
@@ -141,9 +189,20 @@ formData.append("semester", form.semester);
         form.batchNumber
       );
 
+      // ----------------------------------------------------
+      // PHOTO
+      // ----------------------------------------------------
+
       if (image) {
-        formData.append("image", image);
+        formData.append(
+          "image",
+          image
+        );
       }
+
+      // ----------------------------------------------------
+      // SUBMIT
+      // ----------------------------------------------------
 
       await axios.post(
         `${API_URL}/api/students/addstudent`,
@@ -156,8 +215,12 @@ formData.append("semester", form.semester);
       );
 
       onSuccess?.();
+
     } catch (err) {
-      console.error("Add student error:", err);
+      console.error(
+        "Add student error:",
+        err
+      );
 
       setError(
         err.response?.data?.message ||
@@ -173,6 +236,7 @@ formData.append("semester", form.semester);
       onSubmit={handleSubmit}
       className="rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
+
       {/* HEADER */}
 
       <div className="border-b border-slate-100 px-6 py-5">
@@ -211,6 +275,7 @@ formData.append("semester", form.semester);
                 />
               ) : (
                 <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-slate-100 ring-1 ring-slate-200">
+
                   <svg
                     className="h-9 w-9 text-slate-400"
                     fill="none"
@@ -224,13 +289,16 @@ formData.append("semester", form.semester);
                       d="M15 19a4 4 0 0 0-6 0m3-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 8v-2a4 4 0 0 0-3-3.87M18 3.13a3 3 0 0 1 0 5.74"
                     />
                   </svg>
+
                 </div>
               )}
 
             </div>
 
             <div>
+
               <label className="inline-flex cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+
                 Choose Photo
 
                 <input
@@ -239,6 +307,7 @@ formData.append("semester", form.semester);
                   onChange={handleImageChange}
                   className="hidden"
                 />
+
               </label>
 
               {preview && (
@@ -254,6 +323,7 @@ formData.append("semester", form.semester);
               <p className="mt-2 text-xs text-slate-400">
                 JPG, PNG or WebP. Maximum 5 MB.
               </p>
+
             </div>
 
           </div>
@@ -262,6 +332,7 @@ formData.append("semester", form.semester);
         {/* BASIC INFORMATION */}
 
         <div>
+
           <h3 className="mb-4 text-sm font-semibold text-slate-900">
             Basic Information
           </h3>
@@ -273,7 +344,9 @@ formData.append("semester", form.semester);
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Register Number
-                <span className="ml-1 text-red-500">*</span>
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
               </label>
 
               <input
@@ -290,7 +363,9 @@ formData.append("semester", form.semester);
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Full Name
-                <span className="ml-1 text-red-500">*</span>
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
               </label>
 
               <input
@@ -302,12 +377,46 @@ formData.append("semester", form.semester);
               />
             </div>
 
+            {/* GENDER */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Gender
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <select
+                name="gender"
+                value={form.gender}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select gender
+                </option>
+
+                {genders.map((gender) => (
+                  <option
+                    key={gender.value}
+                    value={gender.value}
+                  >
+                    {gender.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* EMAIL */}
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Email
-                <span className="ml-1 text-red-500">*</span>
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
               </label>
 
               <input
@@ -325,7 +434,9 @@ formData.append("semester", form.semester);
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Phone
-                <span className="ml-1 text-red-500">*</span>
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
               </label>
 
               <input
@@ -342,29 +453,9 @@ formData.append("semester", form.semester);
         </div>
 
         {/* ACADEMIC INFORMATION */}
-        <div>
-  <label className="mb-2 block text-sm font-semibold text-slate-700">
-    Current Semester
-  </label>
-
-  <select
-    name="semester"
-    value={form.semester}
-    onChange={handleChange}
-    required
-    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-400"
-  >
-    <option value="">Select semester</option>
-
-    {[1, 2, 3, 4, 5, 6, 7, 8].map((semester) => (
-      <option key={semester} value={semester}>
-        Semester {semester}
-      </option>
-    ))}
-  </select>
-</div>
 
         <div>
+
           <h3 className="mb-4 text-sm font-semibold text-slate-900">
             Academic Information
           </h3>
@@ -376,27 +467,32 @@ formData.append("semester", form.semester);
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Department
-                <span className="ml-1 text-red-500">*</span>
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
               </label>
 
               <select
                 name="department"
                 value={form.department}
                 onChange={handleChange}
+                required
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
               >
                 <option value="">
                   Select department
                 </option>
 
-                {departments.map((department) => (
-                  <option
-                    key={department.value}
-                    value={department.value}
-                  >
-                    {department.label}
-                  </option>
-                ))}
+                {departments.map(
+                  (department) => (
+                    <option
+                      key={department.value}
+                      value={department.value}
+                    >
+                      {department.label}
+                    </option>
+                  )
+                )}
               </select>
             </div>
 
@@ -405,7 +501,9 @@ formData.append("semester", form.semester);
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Admission Year
-                <span className="ml-1 text-red-500">*</span>
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
               </label>
 
               <input
@@ -416,6 +514,7 @@ formData.append("semester", form.semester);
                 placeholder="e.g. 2025"
                 min="2000"
                 max="2100"
+                required
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
               />
 
@@ -424,12 +523,48 @@ formData.append("semester", form.semester);
               </p>
             </div>
 
+            {/* CURRENT SEMESTER */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Current Semester
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <select
+                name="semester"
+                value={form.semester}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select semester
+                </option>
+
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(
+                  (semester) => (
+                    <option
+                      key={semester}
+                      value={semester}
+                    >
+                      Semester {semester}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
             {/* BATCH */}
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Batch
-                <span className="ml-1 text-red-500">*</span>
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
               </label>
 
               <input
@@ -451,7 +586,9 @@ formData.append("semester", form.semester);
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Batch Number
-                <span className="ml-1 text-red-500">*</span>
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
               </label>
 
               <select
@@ -459,14 +596,16 @@ formData.append("semester", form.semester);
                 value={form.batchNumber}
                 onChange={handleChange}
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
               >
                 <option value="">
                   Select batch
                 </option>
+
                 <option value="1">
                   Batch 1
                 </option>
+
                 <option value="2">
                   Batch 2
                 </option>
@@ -510,11 +649,15 @@ formData.append("semester", form.semester);
           disabled={saving}
           className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
+
           {saving && (
             <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
           )}
 
-          {saving ? "Adding Student..." : "Add Student"}
+          {saving
+            ? "Adding Student..."
+            : "Add Student"}
+
         </button>
 
       </div>

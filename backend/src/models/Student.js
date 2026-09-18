@@ -22,6 +22,14 @@ const studentSchema = new mongoose.Schema(
       trim: true,
     },
 
+    gender: {
+      type: String,
+      required: true,
+      enum: ["male", "female", "other"],
+      lowercase: true,
+      trim: true,
+    },
+
     email: {
       type: String,
       required: true,
