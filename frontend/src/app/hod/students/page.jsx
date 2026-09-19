@@ -18,6 +18,12 @@ const departments = [
   { value: "sc", label: "Science & English" },
 ];
 
+const genders = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+];
+
 const getDepartmentName = (value) => {
   return (
     departments.find(
@@ -234,6 +240,7 @@ export default function HODStudentsPage() {
         registerNumber:
           data.registerNumber || "",
         name: data.name || "",
+        gender: data.gender || "",
         email: data.email || "",
         phone: data.phone || "",
         department:
@@ -280,6 +287,26 @@ export default function HODStudentsPage() {
       setActionError("");
       setActionMessage("");
 
+      if (!editForm.gender) {
+        setActionError("Please select gender.");
+        setSavingEdit(false);
+        return;
+      }
+
+      const validGenders = [
+        "male",
+        "female",
+        "other",
+      ];
+
+      if (!validGenders.includes(editForm.gender)) {
+        setActionError(
+          "Invalid gender. Please select Male, Female or Other."
+        );
+        setSavingEdit(false);
+        return;
+      }
+
       const token = await getToken();
 
       const formData = new FormData();
@@ -294,6 +321,11 @@ export default function HODStudentsPage() {
       formData.append(
         "name",
         editForm.name.trim().toUpperCase()
+      );
+
+      formData.append(
+        "gender",
+        editForm.gender.trim().toLowerCase()
       );
 
       formData.append(
@@ -774,7 +806,7 @@ export default function HODStudentsPage() {
 
           <div className="overflow-x-auto">
 
-            <table className="w-full min-w-[1150px]">
+            <table className="w-full min-w-[1250px]">
 
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
@@ -789,6 +821,10 @@ export default function HODStudentsPage() {
 
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     Register No.
+                  </th>
+
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Gender
                   </th>
 
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -885,13 +921,22 @@ export default function HODStudentsPage() {
 
                         </td>
 
+                        {/* GENDER */}
+
+                        <td className="px-5 py-4">
+
+                          <span className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold capitalize text-slate-700">
+                            {student.gender || "—"}
+                          </span>
+
+                        </td>
+
                         {/* ADMISSION */}
 
                         <td className="px-5 py-4">
 
                           <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600">
-                            {student.admissionYear ||
-                              "—"}
+                            {student.admissionYear || "—"}
                           </span>
 
                         </td>
@@ -1108,6 +1153,8 @@ export default function HODStudentsPage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
 
+                {/* REGISTER NUMBER */}
+
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
                     Register Number
@@ -1122,6 +1169,8 @@ export default function HODStudentsPage() {
                   />
                 </div>
 
+                {/* NAME */}
+
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
                     Name
@@ -1135,6 +1184,8 @@ export default function HODStudentsPage() {
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-400"
                   />
                 </div>
+
+                {/* EMAIL */}
 
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -1151,6 +1202,8 @@ export default function HODStudentsPage() {
                   />
                 </div>
 
+                {/* PHONE */}
+
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-700">
                     Phone
@@ -1163,6 +1216,35 @@ export default function HODStudentsPage() {
                     required
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-400"
                   />
+                </div>
+
+                {/* GENDER */}
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Gender
+                  </label>
+
+                  <select
+                    name="gender"
+                    value={editForm.gender}
+                    onChange={handleEditChange}
+                    required
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-slate-400"
+                  >
+                    <option value="">
+                      Select Gender
+                    </option>
+
+                    {genders.map((gender) => (
+                      <option
+                        key={gender.value}
+                        value={gender.value}
+                      >
+                        {gender.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* DEPARTMENT - LOCKED */}
@@ -1220,7 +1302,7 @@ export default function HODStudentsPage() {
                       Select Semester
                     </option>
 
-                    {[1,2,3,4,5,6,7,8].map(
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map(
                       (semester) => (
                         <option
                           key={semester}
@@ -1299,15 +1381,17 @@ function HODAddStudent({
 }) {
   const { getToken } = useAuth();
 
-  const [form, setForm] = useState({
-    registerNumber: "",
-    name: "",
-    email: "",
-    phone: "",
-    admissionYear: "",
-    semester: "",
-    batch: "",
-  });
+ const [form, setForm] = useState({
+  registerNumber: "",
+  name: "",
+  gender: "",
+  email: "",
+  phone: "",
+  admissionYear: "",
+  semester: "",
+  batch: "",
+  batchNumber: "",
+});
 
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState("");
@@ -1356,18 +1440,41 @@ function HODAddStudent({
 
     setError("");
 
-    if (
-      !form.registerNumber.trim() ||
-      !form.name.trim() ||
-      !form.email.trim() ||
-      !form.phone.trim() ||
-      !department ||
-      !form.admissionYear ||
-      !form.semester ||
-      !form.batch.trim()
-    ) {
+    // ==========================================
+    // REQUIRED FIELD VALIDATION
+    // ==========================================
+
+  if (
+  !form.registerNumber.trim() ||
+  !form.name.trim() ||
+  !form.gender ||
+  !form.email.trim() ||
+  !form.phone.trim() ||
+  !department ||
+  !form.admissionYear ||
+  !form.semester ||
+  !form.batch.trim() ||
+  !form.batchNumber
+){
       setError(
         "Please fill in all required fields."
+      );
+      return;
+    }
+
+    // ==========================================
+    // GENDER VALIDATION
+    // ==========================================
+
+    const validGenders = [
+      "male",
+      "female",
+      "other",
+    ];
+
+    if (!validGenders.includes(form.gender)) {
+      setError(
+        "Please select a valid gender."
       );
       return;
     }
@@ -1389,6 +1496,13 @@ function HODAddStudent({
       formData.append(
         "name",
         form.name.trim().toUpperCase()
+      );
+
+      // IMPORTANT:
+      // Gender is required by backend.
+      formData.append(
+        "gender",
+        form.gender.trim().toLowerCase()
       );
 
       formData.append(
@@ -1422,6 +1536,13 @@ function HODAddStudent({
         "batch",
         form.batch.trim()
       );
+formData.append(
+  "batchNumber",
+  form.batchNumber
+);
+      // Batch number is not currently present
+      // in this HOD form, so backend should
+      // handle it according to existing logic.
 
       if (image) {
         formData.append("image", image);
@@ -1494,15 +1615,19 @@ function HODAddStudent({
           <div className="mt-3 flex items-center gap-5">
 
             {preview ? (
+
               <img
                 src={preview}
                 alt="Student preview"
                 className="h-20 w-20 rounded-2xl object-cover ring-1 ring-slate-200"
               />
+
             ) : (
+
               <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
                 👤
               </div>
+
             )}
 
             <div>
@@ -1548,6 +1673,8 @@ function HODAddStudent({
 
           <div className="grid gap-5 md:grid-cols-2">
 
+            {/* REGISTER NUMBER */}
+
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Register Number
@@ -1566,6 +1693,8 @@ function HODAddStudent({
               />
             </div>
 
+            {/* FULL NAME */}
+
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Full Name
@@ -1583,6 +1712,8 @@ function HODAddStudent({
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
               />
             </div>
+
+            {/* EMAIL */}
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -1603,6 +1734,8 @@ function HODAddStudent({
               />
             </div>
 
+            {/* PHONE */}
+
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Phone
@@ -1620,6 +1753,38 @@ function HODAddStudent({
                 required
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
               />
+            </div>
+
+            {/* GENDER */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Gender
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <select
+                name="gender"
+                value={form.gender}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select Gender
+                </option>
+
+                {genders.map((gender) => (
+                  <option
+                    key={gender.value}
+                    value={gender.value}
+                  >
+                    {gender.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
           </div>
@@ -1675,7 +1840,7 @@ function HODAddStudent({
                   Select semester
                 </option>
 
-                {[1,2,3,4,5,6,7,8].map(
+                {[1, 2, 3, 4, 5, 6, 7, 8].map(
                   (semester) => (
                     <option
                       key={semester}
@@ -1710,7 +1875,36 @@ function HODAddStudent({
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
               />
             </div>
+{/* BATCH NUMBER */}
 
+<div>
+  <label className="mb-2 block text-sm font-medium text-slate-700">
+    Batch Number
+    <span className="ml-1 text-red-500">
+      *
+    </span>
+  </label>
+
+  <select
+    name="batchNumber"
+    value={form.batchNumber}
+    onChange={handleChange}
+    required
+    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+  >
+    <option value="">
+      Select Batch Number
+    </option>
+
+    <option value="1">
+      Batch 1
+    </option>
+
+    <option value="2">
+      Batch 2
+    </option>
+  </select>
+</div>
             {/* BATCH */}
 
             <div>
