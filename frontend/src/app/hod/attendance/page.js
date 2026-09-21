@@ -15,6 +15,7 @@ import {
   Lock,
   Building2,
   GraduationCap,
+  Download,
 } from "lucide-react";
 
 const API_URL =
@@ -83,6 +84,975 @@ const months = [
   { value: 12, label: "December" },
 ];
 
+// =====================================================
+// EXCEL REPORT
+// =====================================================
+
+const downloadExcelReport = async ({
+  department,
+  semester,
+  filteredStudents,
+  batchSelection,
+  departmentLabel,
+  monthLabel,
+  year,
+  subjects,
+}) => {
+  try {
+    if (!department || !semester) {
+      alert("Please select department and semester.");
+      return;
+    }
+
+    if (!filteredStudents.length) {
+      alert("No student attendance data available.");
+      return;
+    }
+
+    // Load Excel library only when required
+    const XLSX = await import("xlsx-js-style");
+
+    const workbook = XLSX.utils.book_new();
+
+    // =================================================
+    // REPORT INFORMATION
+    // =================================================
+
+    const batchLabel =
+      batchSelection === "both"
+        ? "Batch 1 & Batch 2"
+        : `Batch ${batchSelection}`;
+
+    const generatedDate = new Date().toLocaleString(
+      "en-IN",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
+
+    // =================================================
+    // MAIN REPORT DATA
+    // =================================================
+
+    const reportRows = [];
+
+    // -------------------------------------------------
+    // HEADER
+    // -------------------------------------------------
+
+    reportRows.push([
+      "GOVERNMENT OF KARNATAKA",
+    ]);
+
+    reportRows.push([
+      "DEPARTMENT OF COLLEGIATE AND TECHNICAL EDUCATION",
+    ]);
+
+    reportRows.push([
+      "KARNATAKA (GOVT.) POLYTECHNIC, MANGALURU",
+    ]);
+
+    reportRows.push([
+      "(First Autonomous Polytechnic in India from AICTE, New Delhi)",
+    ]);
+
+    reportRows.push([
+      "Kadri Hills., Mangaluru–575004, Dakshina Kannada, Karnataka",
+    ]);
+
+    reportRows.push([]);
+
+    reportRows.push([
+      "SEMESTER ATTENDANCE REPORT",
+    ]);
+
+    reportRows.push([]);
+
+    reportRows.push([
+      "Department",
+      departmentLabel,
+      "Semester",
+      `Semester ${semester}`,
+    ]);
+
+    reportRows.push([
+      "Month",
+      monthLabel,
+      "Year",
+      year,
+    ]);
+
+    reportRows.push([
+      "Batch",
+      batchLabel,
+      "Total Students",
+      filteredStudents.length,
+    ]);
+
+    reportRows.push([
+      "Total Subjects",
+      subjects.length,
+      "Generated On",
+      generatedDate,
+    ]);
+
+    reportRows.push([]);
+
+    // =================================================
+    // TABLE HEADER
+    // =================================================
+
+    reportRows.push([
+      "Sl. No.",
+      "Register Number",
+      "Student Name",
+      "Batch",
+
+      ...subjects.flatMap((subject) => [
+        `${subject.code} - ${subject.name}`,
+        "",
+        "",
+      ]),
+
+      "Overall Attendance",
+      "",
+      "",
+    ]);
+
+    reportRows.push([
+      "",
+      "",
+      "",
+      "",
+
+      ...subjects.flatMap(() => [
+        "Attended",
+        "Conducted",
+        "Percentage",
+      ]),
+
+      "Attended",
+      "Conducted",
+      "Percentage",
+    ]);
+
+    // =================================================
+    // STUDENT DATA
+    // =================================================
+
+    const studentReportData = [];
+
+    filteredStudents.forEach(
+      (student, studentIndex) => {
+        let totalAttended = 0;
+        let totalConducted = 0;
+
+        const row = [
+          studentIndex + 1,
+          student.registerNumber || "",
+          student.name || "",
+          Number(student.batchNumber) || "",
+        ];
+
+        subjects.forEach((subject) => {
+          const record =
+            student.subjects[
+              String(subject._id)
+            ];
+
+          const attended = Number(
+            record?.attended || 0
+          );
+
+          const conducted = Number(
+            record?.conducted || 0
+          );
+
+          const percentage =
+            conducted > 0
+              ? (attended / conducted) * 100
+              : null;
+
+          if (conducted > 0) {
+            totalAttended += attended;
+            totalConducted += conducted;
+          }
+
+          row.push(
+            attended,
+            conducted,
+            percentage !== null
+              ? Number(percentage.toFixed(2))
+              : ""
+          );
+        });
+
+        const overallPercentage =
+          totalConducted > 0
+            ? (totalAttended / totalConducted) * 100
+            : null;
+
+        row.push(
+          totalAttended,
+          totalConducted,
+          overallPercentage !== null
+            ? Number(
+                overallPercentage.toFixed(2)
+              )
+            : ""
+        );
+
+        reportRows.push(row);
+
+        studentReportData.push({
+          student,
+          totalAttended,
+          totalConducted,
+          percentage: overallPercentage,
+        });
+      }
+    );
+
+    // =================================================
+    // SUMMARY
+    // =================================================
+
+    const studentsAbove75 =
+      studentReportData.filter(
+        (item) =>
+          item.percentage !== null &&
+          item.percentage >= 75
+      );
+
+    const studentsBelow75 =
+      studentReportData.filter(
+        (item) =>
+          item.percentage !== null &&
+          item.percentage < 75
+      );
+
+    const studentsWithoutAttendance =
+      studentReportData.filter(
+        (item) =>
+          item.percentage === null
+      );
+
+    const validPercentages =
+      studentReportData
+        .filter(
+          (item) =>
+            item.percentage !== null
+        )
+        .map(
+          (item) => item.percentage
+        );
+
+    const averageAttendance =
+      validPercentages.length > 0
+        ? validPercentages.reduce(
+            (sum, value) =>
+              sum + value,
+            0
+          ) /
+          validPercentages.length
+        : 0;
+
+    // -------------------------------------------------
+    // SUMMARY SECTION
+    // -------------------------------------------------
+
+    reportRows.push([]);
+    reportRows.push([]);
+    reportRows.push([
+      "ATTENDANCE SUMMARY",
+    ]);
+
+    reportRows.push([
+      "Total Students",
+      filteredStudents.length,
+    ]);
+
+    reportRows.push([
+      "Students with 75% and Above",
+      studentsAbove75.length,
+    ]);
+
+    reportRows.push([
+      "Students Below 75%",
+      studentsBelow75.length,
+    ]);
+
+    reportRows.push([
+      "Students Without Attendance",
+      studentsWithoutAttendance.length,
+    ]);
+
+    reportRows.push([
+      "Average Attendance",
+      `${averageAttendance.toFixed(2)}%`,
+    ]);
+
+    // =================================================
+    // LOW ATTENDANCE STUDENTS
+    // =================================================
+
+    reportRows.push([]);
+    reportRows.push([]);
+
+    reportRows.push([
+      "STUDENTS BELOW 75% ATTENDANCE",
+    ]);
+
+    reportRows.push([]);
+
+    reportRows.push([
+      "Sl. No.",
+      "Register Number",
+      "Student Name",
+      "Batch",
+      "Total Classes Attended",
+      "Total Classes Conducted",
+      "Overall Attendance %",
+    ]);
+
+    studentsBelow75.forEach(
+      (item, index) => {
+        reportRows.push([
+          index + 1,
+          item.student.registerNumber || "",
+          item.student.name || "",
+          Number(
+            item.student.batchNumber
+          ) || "",
+          item.totalAttended,
+          item.totalConducted,
+          Number(
+            item.percentage.toFixed(2)
+          ),
+        ]);
+      }
+    );
+
+    // =================================================
+    // CREATE WORKSHEET
+    // =================================================
+
+    const worksheet =
+      XLSX.utils.aoa_to_sheet(
+        reportRows
+      );
+
+    // =================================================
+    // MERGE MAIN HEADINGS
+    // =================================================
+
+    const totalColumns =
+      4 +
+      subjects.length * 3 +
+      3;
+
+    const lastColumn =
+      totalColumns - 1;
+
+    worksheet["!merges"] = [
+      {
+        s: { r: 0, c: 0 },
+        e: { r: 0, c: lastColumn },
+      },
+      {
+        s: { r: 1, c: 0 },
+        e: { r: 1, c: lastColumn },
+      },
+      {
+        s: { r: 2, c: 0 },
+        e: { r: 2, c: lastColumn },
+      },
+      {
+        s: { r: 3, c: 0 },
+        e: { r: 3, c: lastColumn },
+      },
+      {
+        s: { r: 4, c: 0 },
+        e: { r: 4, c: lastColumn },
+      },
+      {
+        s: { r: 6, c: 0 },
+        e: { r: 6, c: lastColumn },
+      },
+    ];
+
+    // =================================================
+    // MERGE SUBJECT HEADINGS
+    // =================================================
+
+    const subjectHeaderRow = 13;
+    const subjectSubHeaderRow = 14;
+
+    let subjectStartColumn = 4;
+
+    subjects.forEach(() => {
+      worksheet["!merges"].push({
+        s: {
+          r: subjectHeaderRow,
+          c: subjectStartColumn,
+        },
+        e: {
+          r: subjectHeaderRow,
+          c: subjectStartColumn + 2,
+        },
+      });
+
+      subjectStartColumn += 3;
+    });
+
+    // Merge overall attendance
+    worksheet["!merges"].push({
+      s: {
+        r: subjectHeaderRow,
+        c: subjectStartColumn,
+      },
+      e: {
+        r: subjectHeaderRow,
+        c: subjectStartColumn + 2,
+      },
+    });
+
+    // =================================================
+    // COLUMN WIDTHS
+    // =================================================
+
+    const columnWidths = [
+      8,
+      18,
+      28,
+      10,
+    ];
+
+    subjects.forEach(() => {
+      columnWidths.push(
+        25,
+        12,
+        14
+      );
+    });
+
+    columnWidths.push(
+      16,
+      14,
+      18
+    );
+
+    worksheet["!cols"] =
+      columnWidths.map(
+        (width) => ({
+          wch: width,
+        })
+      );
+
+    // =================================================
+    // ROW HEIGHTS
+    // =================================================
+
+    worksheet["!rows"] = [];
+
+    worksheet["!rows"][0] = {
+      hpt: 24,
+    };
+
+    worksheet["!rows"][1] = {
+      hpt: 22,
+    };
+
+    worksheet["!rows"][2] = {
+      hpt: 26,
+    };
+
+    worksheet["!rows"][6] = {
+      hpt: 24,
+    };
+
+    // =================================================
+    // STYLES
+    // =================================================
+
+    const titleStyle = {
+      font: {
+        bold: true,
+        sz: 16,
+      },
+      alignment: {
+        horizontal: "center",
+        vertical: "center",
+      },
+    };
+
+    const subTitleStyle = {
+      font: {
+        bold: true,
+        sz: 12,
+      },
+      alignment: {
+        horizontal: "center",
+        vertical: "center",
+      },
+    };
+
+    const institutionStyle = {
+      font: {
+        bold: true,
+        sz: 14,
+      },
+      alignment: {
+        horizontal: "center",
+        vertical: "center",
+      },
+    };
+
+    const tableHeaderStyle = {
+      font: {
+        bold: true,
+        color: {
+          rgb: "FFFFFF",
+        },
+      },
+      fill: {
+        patternType: "solid",
+        fgColor: {
+          rgb: "1E293B",
+        },
+      },
+      alignment: {
+        horizontal: "center",
+        vertical: "center",
+        wrapText: true,
+      },
+      border: {
+        top: {
+          style: "thin",
+          color: {
+            rgb: "CBD5E1",
+          },
+        },
+        bottom: {
+          style: "thin",
+          color: {
+            rgb: "CBD5E1",
+          },
+        },
+        left: {
+          style: "thin",
+          color: {
+            rgb: "CBD5E1",
+          },
+        },
+        right: {
+          style: "thin",
+          color: {
+            rgb: "CBD5E1",
+          },
+        },
+      },
+    };
+
+    const cellStyle = {
+      alignment: {
+        vertical: "center",
+      },
+      border: {
+        top: {
+          style: "thin",
+          color: {
+            rgb: "E2E8F0",
+          },
+        },
+        bottom: {
+          style: "thin",
+          color: {
+            rgb: "E2E8F0",
+          },
+        },
+        left: {
+          style: "thin",
+          color: {
+            rgb: "E2E8F0",
+          },
+        },
+        right: {
+          style: "thin",
+          color: {
+            rgb: "E2E8F0",
+          },
+        },
+      },
+    };
+
+    // Institution headings
+    for (let row = 0; row <= 4; row++) {
+      const cell =
+        XLSX.utils.encode_cell({
+          r: row,
+          c: 0,
+        });
+
+      if (worksheet[cell]) {
+        worksheet[cell].s =
+          row === 2
+            ? institutionStyle
+            : row === 3
+            ? subTitleStyle
+            : titleStyle;
+      }
+    }
+
+    // Main report title
+    if (worksheet["A7"]) {
+      worksheet["A7"].s =
+        titleStyle;
+    }
+
+    // Table headers
+    for (
+      let row = subjectHeaderRow;
+      row <= subjectSubHeaderRow;
+      row++
+    ) {
+      for (
+        let col = 0;
+        col <= lastColumn;
+        col++
+      ) {
+        const cell =
+          XLSX.utils.encode_cell({
+            r: row,
+            c: col,
+          });
+
+        if (worksheet[cell]) {
+          worksheet[cell].s =
+            tableHeaderStyle;
+        }
+      }
+    }
+
+    // Data cells
+    const dataStartRow = 15;
+
+    const dataEndRow =
+      dataStartRow +
+      filteredStudents.length -
+      1;
+
+    for (
+      let row = dataStartRow;
+      row <= dataEndRow;
+      row++
+    ) {
+      for (
+        let col = 0;
+        col <= lastColumn;
+        col++
+      ) {
+        const cell =
+          XLSX.utils.encode_cell({
+            r: row,
+            c: col,
+          });
+
+        if (worksheet[cell]) {
+          worksheet[cell].s =
+            cellStyle;
+        }
+      }
+    }
+
+    // =================================================
+    // NUMBER FORMATS
+    // =================================================
+
+    for (
+      let row = dataStartRow;
+      row <= dataEndRow;
+      row++
+    ) {
+      let col = 4;
+
+      subjects.forEach(() => {
+        if (worksheet[
+          XLSX.utils.encode_cell({
+            r: row,
+            c: col + 2,
+          })
+        ]) {
+          worksheet[
+            XLSX.utils.encode_cell({
+              r: row,
+              c: col + 2,
+            })
+          ].z = "0.00";
+        }
+
+        col += 3;
+      });
+
+      const overallPercentageCell =
+        XLSX.utils.encode_cell({
+          r: row,
+          c: lastColumn,
+        });
+
+      if (
+        worksheet[
+          overallPercentageCell
+        ]
+      ) {
+        worksheet[
+          overallPercentageCell
+        ].z = "0.00";
+      }
+    }
+
+    // =================================================
+    // FREEZE PANES
+    // =================================================
+
+    worksheet["!freeze"] = {
+      xSplit: 4,
+      ySplit: 15,
+    };
+
+    // =================================================
+    // AUTOFILTER
+    // =================================================
+
+    worksheet["!autofilter"] = {
+      ref: `A15:${XLSX.utils.encode_col(
+        lastColumn
+      )}${dataEndRow + 1}`,
+    };
+
+    // =================================================
+    // SUMMARY STYLE
+    // =================================================
+
+    const summaryTitleRow =
+      dataEndRow + 3;
+
+    const summaryStartRow =
+      summaryTitleRow + 1;
+
+    const lowTitleRow =
+      summaryStartRow + 6;
+
+    const lowHeaderRow =
+      lowTitleRow + 2;
+
+    const summaryStyle = {
+      font: {
+        bold: true,
+        sz: 12,
+      },
+      fill: {
+        patternType: "solid",
+        fgColor: {
+          rgb: "DBEAFE",
+        },
+      },
+      alignment: {
+        horizontal: "left",
+        vertical: "center",
+      },
+    };
+
+    const lowHeaderStyle = {
+      font: {
+        bold: true,
+        color: {
+          rgb: "FFFFFF",
+        },
+      },
+      fill: {
+        patternType: "solid",
+        fgColor: {
+          rgb: "DC2626",
+        },
+      },
+      alignment: {
+        horizontal: "center",
+        vertical: "center",
+        wrapText: true,
+      },
+    };
+
+    const summaryCell =
+      XLSX.utils.encode_cell({
+        r: summaryTitleRow,
+        c: 0,
+      });
+
+    if (worksheet[summaryCell]) {
+      worksheet[summaryCell].s =
+        summaryStyle;
+    }
+
+    for (
+      let row = summaryStartRow;
+      row <= summaryStartRow + 5;
+      row++
+    ) {
+      for (
+        let col = 0;
+        col < 2;
+        col++
+      ) {
+        const cell =
+          XLSX.utils.encode_cell({
+            r: row,
+            c: col,
+          });
+
+        if (worksheet[cell]) {
+          worksheet[cell].s =
+            cellStyle;
+        }
+      }
+    }
+
+    const lowTitleCell =
+      XLSX.utils.encode_cell({
+        r: lowTitleRow,
+        c: 0,
+      });
+
+    if (worksheet[lowTitleCell]) {
+      worksheet[lowTitleCell].s =
+        {
+          font: {
+            bold: true,
+            sz: 12,
+            color: {
+              rgb: "991B1B",
+            },
+          },
+          fill: {
+            patternType: "solid",
+            fgColor: {
+              rgb: "FEE2E2",
+            },
+          },
+        };
+    }
+
+    // Low attendance header
+    for (
+      let col = 0;
+      col < 7;
+      col++
+    ) {
+      const cell =
+        XLSX.utils.encode_cell({
+          r: lowHeaderRow,
+          c: col,
+        });
+
+      if (worksheet[cell]) {
+        worksheet[cell].s =
+          lowHeaderStyle;
+      }
+    }
+
+    // Low attendance data
+    const lowDataStart =
+      lowHeaderRow + 1;
+
+    studentsBelow75.forEach(
+      (_, index) => {
+        const row =
+          lowDataStart + index;
+
+        for (
+          let col = 0;
+          col < 7;
+          col++
+        ) {
+          const cell =
+            XLSX.utils.encode_cell({
+              r: row,
+              c: col,
+            });
+
+          if (worksheet[cell]) {
+            worksheet[cell].s =
+              cellStyle;
+          }
+        }
+
+        const percentageCell =
+          XLSX.utils.encode_cell({
+            r: row,
+            c: 6,
+          });
+
+        if (
+          worksheet[percentageCell]
+        ) {
+          worksheet[
+            percentageCell
+          ].z = "0.00";
+        }
+      }
+    );
+
+    // =================================================
+    // WORKSHEET NAME
+    // =================================================
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Attendance Report"
+    );
+
+    // =================================================
+    // FILE NAME
+    // =================================================
+
+    const safeDepartment =
+      departmentLabel
+        .replace(/[^a-zA-Z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+
+    const safeMonth =
+      monthLabel.replace(
+        /[^a-zA-Z0-9]+/g,
+        "_"
+      );
+
+    const fileName =
+      `Attendance_Report_${safeDepartment}_Sem${semester}_${safeMonth}_${year}.xlsx`;
+
+    // =================================================
+    // DOWNLOAD
+    // =================================================
+
+    XLSX.writeFile(
+      workbook,
+      fileName
+    );
+  } catch (error) {
+    console.error(
+      "Excel report generation failed:",
+      error
+    );
+
+    alert(
+      "Unable to generate Excel report. Please try again."
+    );
+  }
+};
 // =====================================================
 // SEMESTERS
 // =====================================================
@@ -460,20 +1430,21 @@ export default function HODAttendancePage() {
             if (!target) {
               return;
             }
+target.subjects[
+  String(subject._id)
+] = {
+  attended:
+    Number(
+      entry.classesAttended || 0
+    ),
 
-            target.subjects[
-              String(
-                subject._id
-              )
-            ] = {
-              attended:
-                Number(
-                  entry.classesAttended ||
-                    0
-                ),
-
-              conducted,
-            };
+  conducted:
+    Number(
+      entry.classesEligible ??
+      attendance.classesConducted ??
+      0
+    ),
+};
           }
         );
       }
@@ -1073,32 +2044,51 @@ export default function HODAttendancePage() {
 
                   </div>
 
-                  {students.length >
-                    0 && (
-                    <div className="relative w-full lg:w-72">
+                {students.length > 0 && (
+  <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
 
-                      <Search
-                        size={16}
-                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                      />
+    {/* SEARCH */}
+    <div className="relative w-full sm:w-72">
+      <Search
+        size={16}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+      />
 
-                      <input
-                        type="text"
-                        value={
-                          searchText
-                        }
-                        onChange={(e) =>
-                          setSearchText(
-                            e.target
-                              .value
-                          )
-                        }
-                        placeholder="Search student..."
-                        className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
-                      />
+      <input
+        type="text"
+        value={searchText}
+        onChange={(e) =>
+          setSearchText(e.target.value)
+        }
+        placeholder="Search student..."
+        className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+      />
+    </div>
 
-                    </div>
-                  )}
+    {/* EXCEL DOWNLOAD */}
+    <button
+      type="button"
+    onClick={() =>
+  downloadExcelReport({
+    department,
+    semester,
+    filteredStudents,
+    batchSelection,
+    departmentLabel,
+    monthLabel,
+    year,
+    subjects,
+  })
+}
+      disabled={loading}
+      className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <Download size={16} />
+      Download Excel
+    </button>
+
+  </div>
+)}
 
                 </div>
 

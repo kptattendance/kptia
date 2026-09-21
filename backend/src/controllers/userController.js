@@ -18,7 +18,6 @@ const canManage = (requesterRole, targetRole) => {
   return rolePermissions[requesterRole]?.includes(targetRole);
 };
 
-
 // Get Clerk users
 export const getClerkUsers = async (req, res) => {
   try {
@@ -30,24 +29,65 @@ export const getClerkUsers = async (req, res) => {
       });
     }
 
-    const users = await clerkClient.users.getUserList({
-      limit: 100,
-      offset: 0,
-    });
+    // ==========================================================
+    // FETCH ALL CLERK USERS
+    // ==========================================================
 
-    const clerkUsers = users.data.map((user) => ({
+    let allUsers = [];
+    let offset = 0;
+    const limit = 100;
+
+    while (true) {
+      const result = await clerkClient.users.getUserList({
+        limit,
+        offset,
+      });
+
+      if (!result.data || result.data.length === 0) {
+        break;
+      }
+
+      allUsers.push(...result.data);
+
+      // Move to next page
+      offset += result.data.length;
+
+      // If fewer than 100 came back, this was the last page
+      if (result.data.length < limit) {
+        break;
+      }
+    }
+
+    // ==========================================================
+    // FORMAT CLERK USERS
+    // ==========================================================
+
+    const clerkUsers = allUsers.map((user) => ({
       clerkId: user.id,
+
       firstName: user.firstName,
       lastName: user.lastName,
+
       name:
         `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
         "Unnamed User",
-      email: user.emailAddresses[0]?.emailAddress || "",
+
+      email:
+        user.emailAddresses?.[0]?.emailAddress || "",
+
       imageUrl: user.imageUrl,
+
       role: user.publicMetadata?.role || null,
-      department: user.publicMetadata?.department || null,
+
+      department:
+        user.publicMetadata?.department || null,
+
       createdAt: user.createdAt,
     }));
+
+    console.log(
+      `Clerk users fetched: ${clerkUsers.length}`
+    );
 
     return res.status(200).json({
       success: true,

@@ -218,31 +218,33 @@ const tableData = useMemo(() => {
   );
 
 }, [subjects, selectedIA]);
+const downloadExcel = () => {
+  if (!tableData.length || !selectedIA) {
+    return;
+  }
 
-  // =====================================================
-  // EXCEL DOWNLOAD
-  // =====================================================
+  try {
+    // =====================================================
+    // BASIC REPORT INFORMATION
+    // =====================================================
 
-  const downloadExcel = () => {
-    if (!tableData.length || !selectedIA) return;
+    const department =
+      subjects?.[0]?.department
+        ? String(subjects[0].department).toUpperCase()
+        : "";
 
-    try {
-      const department =
-        subjects?.[0]?.department
-          ? String(subjects[0].department).toUpperCase()
-          : "N/A";
+    const subjectNames = subjects
+      .map((subject) => subject.name)
+      .filter(Boolean)
+      .join(", ");
 
-      const subjectNames = subjects
-        .map((subject) => subject.name)
-        .filter(Boolean)
-        .join(", ");
+    const subjectCodes = subjects
+      .map((subject) => subject.code)
+      .filter(Boolean)
+      .join(", ");
 
-      const subjectCodes = subjects
-        .map((subject) => subject.code)
-        .filter(Boolean)
-        .join(", ");
-
-      const generatedOn = new Date().toLocaleString(
+    const generatedOn =
+      new Date().toLocaleString(
         "en-IN",
         {
           dateStyle: "medium",
@@ -250,416 +252,487 @@ const tableData = useMemo(() => {
         }
       );
 
-      /*
-       * Informative report header
-       */
-      const reportHeader = [
-        ["KARNATAKA GOVERNMENT POLYTECHNIC, MANGALURU"],
-        ["INTERNAL ASSESSMENT MARKS REPORT"],
-        [],
-        ["Academic Year", academicYear],
-        ["Department", department],
-        ["Semester", `Semester ${semester}`],
-        ["Internal Assessment", `IA ${selectedIA}`],
-        ["Subjects", subjectNames],
-        ["Subject Codes", subjectCodes],
-        ["Generated On", generatedOn],
-        [],
-      ];
+    // =====================================================
+    // REPORT HEADER
+    // =====================================================
 
-      /*
-       * Student-wise data
-       */
-      const dataRows = tableData.map(
-        (student, index) => {
-          const row = {
-            "S.No.": index + 1,
-            "Register No.": student.registerNumber || "",
-            "Student Name": student.name || "",
-            Batch: student.batchNumber
-              ? `Batch ${student.batchNumber}`
-              : "",
-          };
+    const reportHeader = [
+      ["GOVERNMENT OF KARNATAKA"],
+      ["DEPARTMENT OF COLLEGIATE AND TECHNICAL EDUCATION"],
+      ["KARNATAKA GOVERNMENT POLYTECHNIC, MANGALURU"],
+      ["(First Autonomous Polytechnic in India from AICTE, New Delhi)"],
+      ["Kadri Hills, Mangaluru–575004, Dakshina Kannada, Karnataka"],
+      [],
+      ["INTERNAL ASSESSMENT MARKS REPORT"],
+      [],
+      ["Academic Year", academicYear],
+      ["Department", department],
+      ["Semester", `Semester ${semester}`],
+      ["Internal Assessment", `IA ${selectedIA}`],
+      ["Subjects", subjectNames],
+      ["Subject Codes", subjectCodes],
+      ["Generated On", generatedOn],
+      [],
+    ];
 
-          subjects.forEach((subject) => {
-            const mark =
-              student.subjectMarks?.[
-                subject.subjectId
-              ];
+    // =====================================================
+    // STUDENT DATA
+    // =====================================================
 
-            row[
+    const dataRows = tableData.map(
+      (student, index) => {
+        const row = {
+          "S.No.": index + 1,
+          "Register No.": student.registerNumber || "",
+          "Student Name": student.name || "",
+          Batch: student.batchNumber
+            ? `Batch ${student.batchNumber}`
+            : "",
+        };
+
+        subjects.forEach((subject) => {
+          const mark =
+            student.subjectMarks?.[
+              subject.subjectId
+            ];
+
+          row[
+            `${subject.code || ""} - ${
+              subject.name || ""
+            }`
+          ] = mark
+            ? mark.status === "ABSENT"
+              ? "AB"
+              : mark.marks ?? ""
+            : "—";
+        });
+
+        return row;
+      }
+    );
+
+    // =====================================================
+    // CREATE WORKSHEET
+    // =====================================================
+
+    const worksheet =
+      XLSX.utils.aoa_to_sheet(
+        reportHeader
+      );
+
+    // Student table starts from Excel row 17
+    XLSX.utils.sheet_add_json(
+      worksheet,
+      dataRows,
+      {
+        origin: "A17",
+        skipHeader: false,
+      }
+    );
+
+    // =====================================================
+    // MERGE HEADER ROWS
+    // =====================================================
+
+    const totalColumns =
+      4 + subjects.length;
+
+    const mergeEndColumn =
+      Math.max(
+        totalColumns - 1,
+        3
+      );
+
+    worksheet["!merges"] = [
+      {
+        s: { r: 0, c: 0 },
+        e: {
+          r: 0,
+          c: mergeEndColumn,
+        },
+      },
+      {
+        s: { r: 1, c: 0 },
+        e: {
+          r: 1,
+          c: mergeEndColumn,
+        },
+      },
+      {
+        s: { r: 2, c: 0 },
+        e: {
+          r: 2,
+          c: mergeEndColumn,
+        },
+      },
+      {
+        s: { r: 3, c: 0 },
+        e: {
+          r: 3,
+          c: mergeEndColumn,
+        },
+      },
+      {
+        s: { r: 4, c: 0 },
+        e: {
+          r: 4,
+          c: mergeEndColumn,
+        },
+      },
+      {
+        s: { r: 6, c: 0 },
+        e: {
+          r: 6,
+          c: mergeEndColumn,
+        },
+      },
+    ];
+
+    // =====================================================
+    // COLUMN WIDTHS
+    // =====================================================
+
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 18 },
+      { wch: 30 },
+      { wch: 12 },
+
+      ...subjects.map((subject) => ({
+        wch: Math.max(
+          20,
+          Math.min(
+            35,
+            String(
               `${subject.code || ""} - ${
                 subject.name || ""
               }`
-            ] = mark
-              ? mark.status === "ABSENT"
-                ? "AB"
-                : mark.marks ?? ""
-              : "—";
-          });
+            ).length + 3
+          )
+        ),
+      })),
+    ];
 
-          return row;
-        }
+    // =====================================================
+    // FREEZE TABLE HEADER
+    // =====================================================
+
+    worksheet["!freeze"] = {
+      xSplit: 4,
+      ySplit: 17,
+    };
+
+    // =====================================================
+    // AUTO FILTER
+    // =====================================================
+
+    const lastColumn =
+      XLSX.utils.encode_col(
+        totalColumns - 1
       );
 
-      const worksheet =
-        XLSX.utils.aoa_to_sheet(reportHeader);
+    const lastRow =
+      17 + dataRows.length;
 
-      /*
-       * Put student table after report information
-       */
-      XLSX.utils.sheet_add_json(
-        worksheet,
-        dataRows,
-        {
-          origin: "A12",
-          skipHeader: false,
-        }
-      );
+    worksheet["!autofilter"] = {
+      ref: `A17:${lastColumn}${lastRow}`,
+    };
 
-      /*
-       * Merge report title rows
-       */
-      const totalColumns =
-        4 + subjects.length;
+    // =====================================================
+    // REPORT FOOTER
+    // =====================================================
 
-      worksheet["!merges"] = [
-        {
-          s: { r: 0, c: 0 },
-          e: {
-            r: 0,
-            c: Math.max(totalColumns - 1, 3),
-          },
-        },
-        {
-          s: { r: 1, c: 0 },
-          e: {
-            r: 1,
-            c: Math.max(totalColumns - 1, 3),
-          },
-        },
-      ];
+    const footerRow =
+      19 + dataRows.length;
 
-      /*
-       * Column widths
-       */
-      worksheet["!cols"] = [
-        { wch: 8 },
-        { wch: 18 },
-        { wch: 30 },
-        { wch: 12 },
-        ...subjects.map((subject) => ({
-          wch: Math.max(
-            18,
-            Math.min(
-              35,
-              String(
-                `${subject.code || ""} - ${
-                  subject.name || ""
-                }`
-              ).length + 3
-            )
-          ),
-        })),
-      ];
-
-      /*
-       * Freeze student table header
-       */
-      worksheet["!freeze"] = {
-        xSplit: 4,
-        ySplit: 12,
-      };
-
-      /*
-       * Auto filter for student table
-       */
-      const lastColumn =
-        XLSX.utils.encode_col(
-          totalColumns - 1
-        );
-
-      const lastRow =
-        11 + dataRows.length;
-
-      worksheet["!autofilter"] = {
-        ref: `A12:${lastColumn}${lastRow}`,
-      };
-
-      /*
-       * Add a small report footer
-       */
-      const footerRow =
-        14 + dataRows.length;
-
-      XLSX.utils.sheet_add_aoa(
-        worksheet,
+    XLSX.utils.sheet_add_aoa(
+      worksheet,
+      [
         [
-          [
-            `Report: Semester ${semester} | IA ${selectedIA} | ${academicYear}`,
-          ],
+          `Report: Semester ${semester} | IA ${selectedIA} | ${academicYear}`,
         ],
-        {
-          origin: `A${footerRow}`,
-        }
+      ],
+      {
+        origin: `A${footerRow}`,
+      }
+    );
+
+    // =====================================================
+    // CREATE WORKBOOK
+    // =====================================================
+
+    const workbook =
+      XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "IA Marks Report"
+    );
+
+    // =====================================================
+    // FILE NAME
+    // =====================================================
+
+    const safeDepartment =
+      department.replace(
+        /[\\/:*?"<>|]/g,
+        ""
       );
 
-      const workbook =
-        XLSX.utils.book_new();
-
-      XLSX.utils.book_append_sheet(
-        workbook,
-        worksheet,
-        "IA Marks Report"
-      );
-
-      const safeDepartment =
-        department.replace(
+    const safeSubject =
+      String(
+        subjects?.[0]?.name ||
+          "Semester"
+      )
+        .replace(
           /[\\/:*?"<>|]/g,
           ""
-        );
-
-      const safeSubject =
-        String(
-          subjects?.[0]?.name ||
-            "Semester"
         )
-          .replace(
-            /[\\/:*?"<>|]/g,
-            ""
-          )
-          .trim();
+        .trim();
 
-      const fileName =
-        `HOD_IA_Report_${safeDepartment}_Sem${semester}_IA${selectedIA}_${academicYear}_${safeSubject}.xlsx`;
+    const fileName =
+      `HOD_IA_Report_${safeDepartment}_Sem${semester}_IA${selectedIA}_${academicYear}_${safeSubject}.xlsx`;
 
-      XLSX.writeFile(
-        workbook,
-        fileName
-      );
+    XLSX.writeFile(
+      workbook,
+      fileName
+    );
 
-    } catch (error) {
-      console.error(
-        "Excel download error:",
-        error
-      );
-    }
-  };
+  } catch (error) {
+    console.error(
+      "Excel download error:",
+      error
+    );
+  }
+};
 
   // =====================================================
   // RENDER
   // =====================================================
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-[#f6f8fb] px-4 py-5 sm:px-6 lg:px-8">
+
       <div className="mx-auto max-w-[1500px]">
 
         {/* =================================================
-            HEADER
+            PAGE HEADER
         ================================================= */}
 
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
 
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
-              <BarChart3 size={22} />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
+              <BarChart3
+                size={24}
+                strokeWidth={2}
+              />
             </div>
 
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">
-                IA Marks
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                HOD Portal
+              </p>
+
+              <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                Internal Assessment Marks
               </h1>
 
-              <p className="text-sm text-slate-500">
-                Semester-wise Internal Assessment
-                details
+              <p className="mt-1 text-sm text-slate-500">
+                View semester-wise IA marks for all subjects.
               </p>
             </div>
 
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+
             <button
               type="button"
               onClick={loadData}
-              disabled={
-                loading || !semester
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={loading || !semester}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RefreshCw
                 size={16}
-                className={
-                  loading
-                    ? "animate-spin"
-                    : ""
-                }
+                className={loading ? "animate-spin" : ""}
               />
               Refresh
             </button>
 
-            {selectedIA &&
-              tableData.length > 0 && (
-                <button
-                  type="button"
-                  onClick={downloadExcel}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-                >
-                  <FileSpreadsheet size={16} />
-                  Download Excel
-                </button>
-              )}
+            {selectedIA && tableData.length > 0 && (
+              <button
+                type="button"
+                onClick={downloadExcel}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+              >
+                <FileSpreadsheet size={16} />
+                Download Excel
+              </button>
+            )}
+
           </div>
 
         </div>
 
         {/* =================================================
-            FILTER SECTION
+            FILTER CARD
         ================================================= */}
 
-        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
 
-            {/* ACADEMIC YEAR */}
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Report Selection
+            </p>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Academic Year
-              </label>
+            <h2 className="mt-1 text-lg font-bold text-slate-950">
+              Select Attendance Period & Assessment
+            </h2>
 
-              <div className="relative">
+            <p className="mt-1 text-sm text-slate-500">
+              Select the academic year, semester and internal assessment.
+            </p>
 
-                <select
-                  value={academicYear}
-                  onChange={(e) =>
-                    setAcademicYear(
-                      e.target.value
-                    )
-                  }
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm text-slate-700 outline-none transition focus:border-slate-500"
-                >
-                  <option value="2026-27">
-                    2026-27
-                  </option>
+          </div>
 
-                  <option value="2025-26">
-                    2025-26
-                  </option>
+          <div className="bg-slate-50/60 p-5 sm:p-6">
 
-                  <option value="2024-25">
-                    2024-25
-                  </option>
-                </select>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
+              {/* ACADEMIC YEAR */}
 
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Academic Year
+                </label>
+
+                <div className="relative">
+
+                  <select
+                    value={academicYear}
+                    onChange={(e) =>
+                      setAcademicYear(e.target.value)
+                    }
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
+                  >
+                    <option value="2026-27">
+                      2026-27
+                    </option>
+
+                    <option value="2025-26">
+                      2025-26
+                    </option>
+
+                    <option value="2024-25">
+                      2024-25
+                    </option>
+                  </select>
+
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                </div>
               </div>
-            </div>
 
-            {/* SEMESTER */}
+              {/* SEMESTER */}
 
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Semester
-              </label>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Semester
+                </label>
 
-              <div className="relative">
+                <div className="relative">
 
-                <select
-                  value={semester}
-                  onChange={(e) =>
-                    setSemester(
-                      e.target.value
-                    )
-                  }
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm text-slate-700 outline-none transition focus:border-slate-500"
-                >
-                  <option value="">
-                    Select Semester
-                  </option>
+                  <select
+                    value={semester}
+                    onChange={(e) =>
+                      setSemester(e.target.value)
+                    }
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100"
+                  >
+                    <option value="">
+                      Select Semester
+                    </option>
 
-                  {semesters.map(
-                    (sem) => (
+                    {semesters.map((sem) => (
                       <option
                         key={sem}
                         value={sem}
                       >
                         Semester {sem}
                       </option>
-                    )
-                  )}
-                </select>
+                    ))}
 
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
+                  </select>
 
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                </div>
               </div>
-            </div>
 
-            {/* IA */}
+              {/* IA */}
 
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Internal Assessment
-              </label>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Internal Assessment
+                </label>
 
-              <div className="relative">
+                <div className="relative">
 
-                <select
-                  value={selectedIA}
-                  onChange={(e) =>
-                    setSelectedIA(
-                      e.target.value
-                    )
-                  }
-                  disabled={
-                    !semester ||
-                    availableIANumbers.length ===
-                      0
-                  }
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm text-slate-700 outline-none transition focus:border-slate-500 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-                >
-                  <option value="">
-                    Select IA
-                  </option>
+                  <select
+                    value={selectedIA}
+                    onChange={(e) =>
+                      setSelectedIA(e.target.value)
+                    }
+                    disabled={
+                      !semester ||
+                      availableIANumbers.length === 0
+                    }
+                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="">
+                      Select IA
+                    </option>
 
-                  {availableIANumbers.map(
-                    (ia) => (
+                    {availableIANumbers.map((ia) => (
                       <option
                         key={ia}
                         value={ia}
                       >
                         IA {ia}
                       </option>
-                    )
-                  )}
-                </select>
+                    ))}
 
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
+                  </select>
 
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                </div>
               </div>
+
             </div>
 
           </div>
-
-        </div>
+        </section>
 
         {/* =================================================
             ERROR
         ================================================= */}
 
         {error && (
-          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
             {error}
           </div>
         )}
@@ -687,21 +760,24 @@ const tableData = useMemo(() => {
             NO SEMESTER
         ================================================= */}
 
-        {!loading &&
-          !semester && (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
+        {!loading && !semester && (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
 
-              <h2 className="font-semibold text-slate-700">
-                Select a Semester
-              </h2>
+            <BarChart3
+              size={34}
+              className="mx-auto mb-3 text-slate-300"
+            />
 
-              <p className="mt-1 text-sm text-slate-400">
-                Select a semester to view
-                IA marks.
-              </p>
+            <h2 className="font-semibold text-slate-700">
+              Select a Semester
+            </h2>
 
-            </div>
-          )}
+            <p className="mt-1 text-sm text-slate-400">
+              Select a semester to view IA marks.
+            </p>
+
+          </div>
+        )}
 
         {/* =================================================
             NO IA
@@ -709,17 +785,20 @@ const tableData = useMemo(() => {
 
         {!loading &&
           semester &&
-          availableIANumbers.length ===
-            0 && (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
+          availableIANumbers.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
+
+              <BarChart3
+                size={34}
+                className="mx-auto mb-3 text-slate-300"
+              />
 
               <h2 className="font-semibold text-slate-700">
                 No IA Marks Available
               </h2>
 
               <p className="mt-1 text-sm text-slate-400">
-                No IA marks have been entered
-                for Semester {semester}.
+                No IA marks have been entered for Semester {semester}.
               </p>
 
             </div>
@@ -734,38 +813,36 @@ const tableData = useMemo(() => {
           selectedIA &&
           subjects.length > 0 &&
           tableData.length > 0 && (
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-              {/* TABLE HEADER */}
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-              <div className="border-b border-slate-100 px-5 py-4">
+              <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
 
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
                   <div>
-                    <h2 className="text-base font-semibold text-slate-900">
-                      Semester {semester}
-                      {" — "}
-                      IA {selectedIA}
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      Assessment Overview
+                    </p>
+
+                    <h2 className="mt-1 text-lg font-bold text-slate-950">
+                      Semester {semester} — IA {selectedIA}
                     </h2>
 
-                    <p className="text-xs text-slate-500">
-                      Student-wise marks for all
-                      subjects
+                    <p className="mt-1 text-xs text-slate-500">
+                      Student-wise marks for all subjects.
                     </p>
                   </div>
 
-                  <div className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                  <span className="inline-flex w-fit rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
                     {tableData.length} Students
-                  </div>
+                  </span>
 
                 </div>
 
               </div>
 
-              {/* TABLE */}
-
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto overscroll-x-contain">
 
                 <table className="w-full min-w-[1050px] border-collapse text-sm">
 
@@ -773,51 +850,45 @@ const tableData = useMemo(() => {
 
                     <tr className="border-b border-slate-200 bg-slate-50">
 
-                      <th className="sticky left-0 z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-3 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="sticky left-0 z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-3 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         S.No.
                       </th>
-                      <th className="sticky left-[55px] z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+
+                      <th className="sticky left-[55px] z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-3 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Photo
                       </th>
-                      <th className="sticky left-[125px] z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+
+                      <th className="sticky left-[125px] z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Register No.
                       </th>
 
-                      <th className="sticky left-[130px] z-20 whitespace-nowrap border-r border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="whitespace-nowrap border-r border-slate-200 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Student
                       </th>
 
-                      <th className="whitespace-nowrap border-r border-slate-200 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="whitespace-nowrap border-r border-slate-200 px-4 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
                         Batch
                       </th>
 
-                      {subjects.map(
-                        (subject) => (
-                          <th
-                            key={
-                              subject.subjectId
-                            }
-                            className="min-w-[150px] whitespace-nowrap border-r border-slate-200 px-4 py-3 text-center"
+                      {subjects.map((subject) => (
+                        <th
+                          key={subject.subjectId}
+                          className="min-w-[150px] whitespace-nowrap border-r border-slate-200 px-4 py-3.5 text-center"
+                        >
+                          <Link
+                            href={`/hod/ia-marks/${subject.subjectId}?academicYear=${encodeURIComponent(
+                              academicYear
+                            )}&semester=${semester}`}
+                            className="font-semibold text-slate-700 transition hover:text-blue-600"
                           >
-                            <div className="font-semibold text-slate-700">
-                            <Link
-  href={`/hod/ia-marks/${subject.subjectId}?academicYear=${encodeURIComponent(
-    academicYear
-  )}&semester=${semester}`}
-  className="font-semibold text-slate-700 transition hover:text-blue-600"
->
-  {subject.name}
-</Link>
-                            </div>
+                            {subject.name}
+                          </Link>
 
-                            <div className="mt-0.5 text-[11px] font-medium text-slate-400">
-                              {
-                                subject.code
-                              }
-                            </div>
-                          </th>
-                        )
-                      )}
+                          <div className="mt-0.5 text-[11px] font-medium text-slate-400">
+                            {subject.code}
+                          </div>
+                        </th>
+                      ))}
 
                     </tr>
 
@@ -825,172 +896,111 @@ const tableData = useMemo(() => {
 
                   <tbody>
 
-                    {tableData.map(
-                      (student) => (
-                        <tr
-                          key={
-                            student.studentId
-                          }
-                          className="border-b border-slate-100 transition hover:bg-slate-50"
-                        >
+                    {tableData.map((student) => (
 
-                          {/* S.NO */}
-                          <td className="sticky left-0 z-10 border-r border-slate-100 bg-white px-3 py-3.5 text-center font-semibold text-slate-500">
-                            {tableData.indexOf(student) + 1}
-                          </td>
+                      <tr
+                        key={student.studentId}
+                        className="border-b border-slate-100 transition hover:bg-slate-50"
+                      >
 
-                      {/* PHOTO */}
+                        <td className="sticky left-0 z-10 border-r border-slate-100 bg-white px-3 py-3.5 text-center font-semibold text-slate-500">
+                          {tableData.indexOf(student) + 1}
+                        </td>
 
-<td
-  className="
-    sticky left-[55px]
-    z-10
-    border-r
-    border-slate-100
-    bg-white
-    px-3
-    py-2.5
-  "
->
-  <div className="flex justify-center">
+                        <td className="sticky left-[55px] z-10 border-r border-slate-100 bg-white px-3 py-2.5">
+                          <div className="flex justify-center">
 
-    {student.imageUrl ? (
-      <img
-        src={student.imageUrl}
-        alt={student.name || "Student Photo"}
-        className="
-          h-10
-          w-10
-          rounded-full
-          object-cover
-          ring-2
-          ring-slate-100
-          bg-slate-100
-        "
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        onError={(e) => {
-          e.currentTarget.style.display =
-            "none";
+                            {student.imageUrl ? (
+                              <img
+                                src={student.imageUrl}
+                                alt={student.name || "Student Photo"}
+                                className="h-10 w-10 rounded-full bg-slate-100 object-cover ring-2 ring-slate-100"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
 
-          const fallback =
-            e.currentTarget.parentElement
-              ?.querySelector(
-                "[data-photo-fallback]"
-              );
+                                  const fallback =
+                                    e.currentTarget.parentElement?.querySelector(
+                                      "[data-photo-fallback]"
+                                    );
 
-          if (fallback) {
-            fallback.classList.remove(
-              "hidden"
-            );
-          }
-        }}
-      />
-    ) : null}
-
-    <div
-      data-photo-fallback
-      className={`
-        flex
-        h-10
-        w-10
-        items-center
-        justify-center
-        rounded-full
-        bg-slate-100
-        text-xs
-        font-bold
-        text-slate-500
-        ${
-          student.imageUrl
-            ? "hidden"
-            : ""
-        }
-      `}
-    >
-      {String(
-        student.name || "S"
-      )
-        .charAt(0)
-        .toUpperCase()}
-    </div>
-
-  </div>
-</td>
-
-                          {/* REGISTER NUMBER */}
-                          <td className="sticky left-[125px] z-10 whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-medium text-slate-700">
-                            {student.registerNumber}
-                          </td>
-
-                          {/* STUDENT NAME */}
-                          <td className="whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-semibold text-slate-900">
-                            {student.name}
-                          </td>
-
-                          {/* BATCH */}
-
-                          <td className="border-r border-slate-100 px-4 py-3.5 text-center">
-                            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                              Batch{" "}
-                              {
-                                student.batchNumber
-                              }
-                            </span>
-                          </td>
-
-                          {/* SUBJECT MARKS */}
-
-                          {subjects.map(
-                            (subject) => {
-                              const mark =
-                                student
-                                  .subjectMarks[
-                                  subject
-                                    .subjectId
-                                ];
-
-                              return (
-                                <td
-                                  key={
-                                    subject.subjectId
+                                  if (fallback) {
+                                    fallback.classList.remove("hidden");
                                   }
-                                  className="border-r border-slate-100 px-4 py-3.5 text-center"
-                                >
-                                  {mark ? (
-                                    mark.status ===
-                                    "ABSENT" ? (
-                                      <span className="font-semibold text-red-500">
-                                        AB
-                                      </span>
-                                    ) : (
-                                      <span className="font-semibold text-slate-800">
-                                        {
-                                          mark.marks
-                                        }
-                                      </span>
-                                    )
-                                  ) : (
-                                    <span className="text-slate-300">
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                              );
-                            }
-                          )}
+                                }}
+                              />
+                            ) : null}
 
-                        </tr>
-                      )
-                    )}
+                            <div
+                              data-photo-fallback
+                              className={`flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 ${
+                                student.imageUrl ? "hidden" : ""
+                              }`}
+                            >
+                              {String(student.name || "S")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </div>
+
+                          </div>
+                        </td>
+
+                        <td className="sticky left-[125px] z-10 whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-medium text-slate-700">
+                          {student.registerNumber}
+                        </td>
+
+                        <td className="whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-semibold text-slate-900">
+                          {student.name}
+                        </td>
+
+                        <td className="border-r border-slate-100 px-4 py-3.5 text-center">
+                          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                            Batch {student.batchNumber}
+                          </span>
+                        </td>
+
+                        {subjects.map((subject) => {
+
+                          const mark =
+                            student.subjectMarks?.[
+                              subject.subjectId
+                            ];
+
+                          return (
+                            <td
+                              key={subject.subjectId}
+                              className="border-r border-slate-100 px-4 py-3.5 text-center"
+                            >
+                              {mark ? (
+                                mark.status === "ABSENT" ? (
+                                  <span className="font-semibold text-red-500">
+                                    AB
+                                  </span>
+                                ) : (
+                                  <span className="font-semibold text-slate-800">
+                                    {mark.marks}
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-slate-300">
+                                  —
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+
+                      </tr>
+
+                    ))}
 
                   </tbody>
 
                 </table>
 
               </div>
-
-            </div>
+            </section>
           )}
 
         {/* =================================================
@@ -1002,16 +1012,20 @@ const tableData = useMemo(() => {
           selectedIA &&
           subjects.length > 0 &&
           tableData.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center">
+
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
+
+              <BarChart3
+                size={34}
+                className="mx-auto mb-3 text-slate-300"
+              />
 
               <h2 className="font-semibold text-slate-700">
                 No Student Marks Found
               </h2>
 
               <p className="mt-1 text-sm text-slate-400">
-                No marks are available for IA{" "}
-                {selectedIA} in Semester{" "}
-                {semester}.
+                No marks are available for IA {selectedIA} in Semester {semester}.
               </p>
 
             </div>

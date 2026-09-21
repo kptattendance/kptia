@@ -385,6 +385,8 @@ export const bulkAddStudents = async (req, res) => {
             batchNumber:
               parsedBatchNumber,
             role: "student",
+            imageUrl: req.cloudinaryResult?.secure_url || "",
+imagePublicId: req.cloudinaryResult?.public_id || "",
           });
 
           await student.save();
@@ -858,6 +860,8 @@ export const createStudent = async (req, res) => {
         batchNumber:
           parsedBatchNumber,
         role: "student",
+          imageUrl: req.cloudinaryResult?.secure_url || "",
+  imagePublicId: req.cloudinaryResult?.public_id || "",
       });
 
       await student.save();

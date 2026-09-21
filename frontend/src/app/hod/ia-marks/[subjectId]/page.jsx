@@ -184,117 +184,271 @@ const handleIAChange = (value) => {
   // EXCEL REPORT
   // =====================================================
 
-  const downloadExcelReport = async () => {
-    if (!selectedIA || !data?.students?.length) {
-      return;
-    }
+const downloadExcelReport = async () => {
+  if (!selectedIA || !data?.students?.length) {
+    return;
+  }
 
-    try {
-      const XLSX = await import("xlsx");
+  try {
+    const XLSX = await import("xlsx");
 
-      const rows = [];
+    const department =
+      data.subject?.department
+        ? String(data.subject.department).toUpperCase()
+        : "";
 
-      data.students.forEach((student) => {
-        const ia = getStudentIA(student);
-        const tests = ia?.tests || [];
+    const subjectName =
+      data.subject?.name || "";
 
-        if (!ia || tests.length === 0) {
-          rows.push({
-            "S.No": rows.length + 1,
-            "Register No.": student.registerNumber || "",
-            Student: student.name || "",
-            Batch: student.batchNumber
-              ? `Batch ${student.batchNumber}`
-              : "",
-            Test: "No marks",
-            CO1: "",
-            CO2: "",
-            CO3: "",
-            CO4: "",
-            CO5: "",
-            CO6: "",
-            Total: "",
-          });
-          return;
-        }
+    const subjectCode =
+      data.subject?.code || "";
 
-        tests.forEach((test) => {
-          const co = test.coMarks || {};
+    const generatedOn = new Date().toLocaleString(
+      "en-IN",
+      {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }
+    );
 
-          rows.push({
-            "S.No": rows.length + 1,
-            "Register No.": student.registerNumber || "",
-            Student: student.name || "",
-            Batch: student.batchNumber
-              ? `Batch ${student.batchNumber}`
-              : "",
-            Test: test.testName || "",
-            CO1: co.CO1 ?? 0,
-            CO2: co.CO2 ?? 0,
-            CO3: co.CO3 ?? 0,
-            CO4: co.CO4 ?? 0,
-            CO5: co.CO5 ?? 0,
-            CO6: co.CO6 ?? 0,
-            Total:
-              test.status === "ABSENT"
-                ? "AB"
-                : testIndexSafeTotal(test),
-          });
+    // =====================================================
+    // STUDENT DATA
+    // =====================================================
+
+    const dataRows = [];
+
+    data.students.forEach((student) => {
+      const ia = getStudentIA(student);
+      const tests = ia?.tests || [];
+
+      if (!ia || tests.length === 0) {
+        dataRows.push({
+          "S.No.": dataRows.length + 1,
+          "Register No.": student.registerNumber || "",
+          "Student Name": student.name || "",
+          Batch: student.batchNumber
+            ? `Batch ${student.batchNumber}`
+            : "",
+          Test: "No marks",
+          CO1: "",
+          CO2: "",
+          CO3: "",
+          CO4: "",
+          CO5: "",
+          CO6: "",
+          Total: "",
+        });
+
+        return;
+      }
+
+      tests.forEach((test) => {
+        const co = test.coMarks || {};
+
+        dataRows.push({
+          "S.No.": dataRows.length + 1,
+          "Register No.": student.registerNumber || "",
+          "Student Name": student.name || "",
+          Batch: student.batchNumber
+            ? `Batch ${student.batchNumber}`
+            : "",
+          Test: test.testName || "",
+          CO1: co.CO1 ?? 0,
+          CO2: co.CO2 ?? 0,
+          CO3: co.CO3 ?? 0,
+          CO4: co.CO4 ?? 0,
+          CO5: co.CO5 ?? 0,
+          CO6: co.CO6 ?? 0,
+          Total:
+            test.status === "ABSENT"
+              ? "AB"
+              : testIndexSafeTotal(test),
         });
       });
+    });
 
-      const worksheet =
-        XLSX.utils.json_to_sheet(rows);
+    // =====================================================
+    // REPORT HEADER
+    // =====================================================
 
-      worksheet["!cols"] = [
-        { wch: 8 },
-        { wch: 18 },
-        { wch: 28 },
-        { wch: 12 },
-        { wch: 24 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 12 },
-      ];
+    const reportHeader = [
+      ["GOVERNMENT OF KARNATAKA"],
+      ["DEPARTMENT OF COLLEGIATE AND TECHNICAL EDUCATION"],
+      ["KARNATAKA GOVERNMENT POLYTECHNIC, MANGALURU"],
+      ["(First Autonomous Polytechnic in India from AICTE, New Delhi)"],
+      ["Kadri Hills, Mangaluru–575004, Dakshina Kannada, Karnataka"],
+      [],
+      ["INTERNAL ASSESSMENT MARKS REPORT"],
+      [],
+      ["Academic Year", academicYear],
+      ["Department", department],
+      ["Subject", subjectName],
+      ["Subject Code", subjectCode],
+      ["Semester", `Semester ${semester}`],
+      ["Internal Assessment", `IA ${selectedIA}`],
+      ["Generated On", generatedOn],
+      [],
+    ];
 
-      const workbook =
-        XLSX.utils.book_new();
+    // =====================================================
+    // CREATE WORKSHEET
+    // =====================================================
 
-      XLSX.utils.book_append_sheet(
-        workbook,
-        worksheet,
-        `IA ${selectedIA}`
+    const worksheet =
+      XLSX.utils.aoa_to_sheet(reportHeader);
+
+    // Student table starts from Excel row 17
+    XLSX.utils.sheet_add_json(
+      worksheet,
+      dataRows,
+      {
+        origin: "A17",
+        skipHeader: false,
+      }
+    );
+
+    // =====================================================
+    // MERGE INSTITUTIONAL HEADER
+    // =====================================================
+
+    const totalColumns = 12;
+
+    worksheet["!merges"] = [
+      {
+        s: { r: 0, c: 0 },
+        e: { r: 0, c: totalColumns - 1 },
+      },
+      {
+        s: { r: 1, c: 0 },
+        e: { r: 1, c: totalColumns - 1 },
+      },
+      {
+        s: { r: 2, c: 0 },
+        e: { r: 2, c: totalColumns - 1 },
+      },
+      {
+        s: { r: 3, c: 0 },
+        e: { r: 3, c: totalColumns - 1 },
+      },
+      {
+        s: { r: 4, c: 0 },
+        e: { r: 4, c: totalColumns - 1 },
+      },
+      {
+        s: { r: 6, c: 0 },
+        e: { r: 6, c: totalColumns - 1 },
+      },
+    ];
+
+    // =====================================================
+    // COLUMN WIDTHS
+    // =====================================================
+
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 18 },
+      { wch: 28 },
+      { wch: 12 },
+      { wch: 24 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 8 },
+      { wch: 12 },
+    ];
+
+    // =====================================================
+    // FREEZE STUDENT HEADER
+    // =====================================================
+
+    worksheet["!freeze"] = {
+      xSplit: 4,
+      ySplit: 17,
+    };
+
+    // =====================================================
+    // AUTO FILTER
+    // =====================================================
+
+    const lastColumn =
+      XLSX.utils.encode_col(
+        totalColumns - 1
       );
 
-      const safeSubject =
-        String(data.subject?.name || "Subject")
-          .replace(/[\\/:*?"<>|]/g, "")
-          .trim();
+    const lastRow =
+      17 + dataRows.length;
 
-      const fileName =
-        `IA_${selectedIA}_${safeSubject}_${academicYear}.xlsx`;
+    worksheet["!autofilter"] = {
+      ref: `A17:${lastColumn}${lastRow}`,
+    };
 
-      XLSX.writeFile(
-        workbook,
-        fileName
-      );
-    } catch (err) {
-      console.error(
-        "Excel report error:",
-        err
-      );
+    // =====================================================
+    // REPORT FOOTER
+    // =====================================================
 
-      Swal.fire({
-        icon: "error",
-        title: "Download Failed",
-        text: "Unable to generate the Excel report.",
-      });
-    }
-  };
+    const footerRow =
+      19 + dataRows.length;
+
+    XLSX.utils.sheet_add_aoa(
+      worksheet,
+      [
+        [
+          `Report: ${subjectName} | Semester ${semester} | IA ${selectedIA} | ${academicYear}`,
+        ],
+      ],
+      {
+        origin: `A${footerRow}`,
+      }
+    );
+
+    // =====================================================
+    // WORKBOOK
+    // =====================================================
+
+    const workbook =
+      XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      `IA ${selectedIA}`
+    );
+
+    // =====================================================
+    // FILE NAME
+    // =====================================================
+
+    const safeSubject =
+      String(subjectName || "Subject")
+        .replace(
+          /[\\/:*?"<>|]/g,
+          ""
+        )
+        .trim();
+
+    const fileName =
+      `IA_${selectedIA}_${safeSubject}_${academicYear}.xlsx`;
+
+    XLSX.writeFile(
+      workbook,
+      fileName
+    );
+
+  } catch (err) {
+    console.error(
+      "Excel report error:",
+      err
+    );
+
+    Swal.fire({
+      icon: "error",
+      title: "Download Failed",
+      text: "Unable to generate the Excel report.",
+    });
+  }
+};
 
   const testIndexSafeTotal = (test) => {
     if (

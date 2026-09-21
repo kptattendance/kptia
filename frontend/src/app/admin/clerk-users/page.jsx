@@ -31,7 +31,7 @@ export default function ClerkUsersPage() {
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-
+const [searchText, setSearchText] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("");
 
@@ -74,21 +74,27 @@ export default function ClerkUsersPage() {
   useEffect(() => {
     fetchClerkUsers();
   }, []);
+const filteredUsers = users.filter((user) => {
+  const search = searchText.trim().toLowerCase();
 
-  // ==========================================================
-  // FILTER USERS
-  // ==========================================================
+  const matchesSearch =
+    !search ||
+    user.name?.toLowerCase().includes(search) ||
+    user.email?.toLowerCase().includes(search);
 
-  const filteredUsers = users.filter((user) => {
-    const matchesRole =
-      !roleFilter || user.role === roleFilter;
+  const matchesRole =
+    !roleFilter || user.role === roleFilter;
 
-    const matchesDepartment =
-      !departmentFilter ||
-      user.department === departmentFilter;
+  const matchesDepartment =
+    !departmentFilter ||
+    user.department === departmentFilter;
 
-    return matchesRole && matchesDepartment;
-  });
+  return (
+    matchesSearch &&
+    matchesRole &&
+    matchesDepartment
+  );
+});
 
   // ==========================================================
   // SELECT / DESELECT USER
@@ -128,14 +134,11 @@ export default function ClerkUsersPage() {
     }
   };
 
-  // ==========================================================
-  // CLEAR FILTERS
-  // ==========================================================
-
   const clearFilters = () => {
-    setRoleFilter("");
-    setDepartmentFilter("");
-  };
+  setSearchText("");
+  setRoleFilter("");
+  setDepartmentFilter("");
+};
 
   // ==========================================================
   // DELETE SINGLE USER
@@ -273,7 +276,27 @@ export default function ClerkUsersPage() {
 
           {/* FILTERS */}
           <div className="flex flex-col gap-3 sm:flex-row">
+{/* SEARCH */}
+<div className="relative w-full sm:min-w-72">
+  <input
+    type="text"
+    value={searchText}
+    onChange={(e) => setSearchText(e.target.value)}
+    placeholder="Search by name or email..."
+    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-10 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white"
+  />
 
+  {searchText && (
+    <button
+      type="button"
+      onClick={() => setSearchText("")}
+      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+      aria-label="Clear search"
+    >
+      ✕
+    </button>
+  )}
+</div>
             {/* ROLE */}
             <select
               value={roleFilter}
@@ -313,7 +336,7 @@ export default function ClerkUsersPage() {
             </select>
 
             {/* CLEAR */}
-            {(roleFilter || departmentFilter) && (
+     {(searchText || roleFilter || departmentFilter) && (
               <button
                 onClick={clearFilters}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"

@@ -205,16 +205,111 @@ export const saveAttendance = async (req, res) => {
         });
       }
 
-      if (
-        attended < 0 ||
-        attended > conducted
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Classes attended cannot be less than 0 or greater than classes conducted.",
-        });
-      }
+   // -----------------------------------------
+// VALIDATE STUDENTS
+// -----------------------------------------
+
+if (students.length === 0) {
+  return res.status(400).json({
+    success: false,
+    message: "No students were selected.",
+  });
+}
+
+for (const student of students) {
+  const attended = Number(student.classesAttended);
+
+  const eligible =
+    student.classesEligible !== undefined &&
+    student.classesEligible !== null &&
+    student.classesEligible !== ""
+      ? Number(student.classesEligible)
+      : conducted;
+
+  if (!student.studentId) {
+    return res.status(400).json({
+      success: false,
+      message: "Student ID is missing.",
+    });
+  }
+
+  if (!Number.isFinite(eligible) || !Number.isInteger(eligible)) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Invalid maximum classes value.",
+    });
+  }
+
+  if (eligible < 0) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Maximum classes cannot be negative.",
+    });
+  }
+
+  if (eligible > conducted) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "A student's maximum classes cannot exceed classes conducted.",
+    });
+  }
+
+  if (!Number.isFinite(attended)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid attendance value.",
+    });
+  }
+
+  if (attended < 0 || attended > eligible) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Classes attended cannot exceed the student's maximum eligible classes.",
+    });
+  }
+
+  // -----------------------------------------
+  // VERIFY STUDENT EXISTS AND BATCH MATCHES
+  // -----------------------------------------
+
+  const dbStudent =
+    await Student.findById(student.studentId).lean();
+
+  if (!dbStudent) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "One or more selected students do not exist.",
+    });
+  }
+
+  if (
+    !selectedBatches.includes(
+      Number(dbStudent.batchNumber)
+    )
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        `Student ${dbStudent.name} does not belong to the selected batch.`,
+    });
+  }
+
+  if (
+    dbStudent.department?.toLowerCase() !==
+    department.toLowerCase()
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        `Student ${dbStudent.name} does not belong to the selected department.`,
+    });
+  }
+} 
 
       // -----------------------------------------
       // VERIFY STUDENT EXISTS AND BATCH MATCHES
@@ -282,17 +377,20 @@ export const saveAttendance = async (req, res) => {
 
         classesConducted:
           conducted,
+students: students.map((student) => ({
+  studentId: student.studentId,
 
-        students:
-          students.map((student) => ({
-            studentId:
-              student.studentId,
+  classesEligible:
+    student.classesEligible !== undefined &&
+    student.classesEligible !== null &&
+    student.classesEligible !== ""
+      ? Number(student.classesEligible)
+      : conducted,
 
-            classesAttended:
-              Number(
-                student.classesAttended
-              ),
-          })),
+  classesAttended: Number(
+    student.classesAttended
+  ),
+})),
 
         enteredBy:
           req.user.id,
@@ -331,10 +429,11 @@ export const saveAttendance = async (req, res) => {
 // GET MONTHLY ATTENDANCE
 // =====================================================
 
-export const getAttendance = async (
-  req,
-  res
-) => {
+// =====================================================
+// GET MONTHLY ATTENDANCE
+// =====================================================
+
+export const getAttendance = async (req, res) => {
   try {
     const {
       department,
@@ -359,8 +458,196 @@ export const getAttendance = async (
       });
     }
 
+    // -----------------------------------------
+    // GET ALL ATTENDANCE RECORDS FOR THIS
+    // SUBJECT + MONTH + YEAR
+    // -----------------------------------------
+
     const existingRecords =
       await Attendance.find({
+        department: department.toLowerCase(),
+        semester: Number(semester),
+        subjectId,
+        month: Number(month),
+        year: Number(year),
+      })
+        .populate(
+          "students.studentId",
+          "registerNumber name email department batchNumber imageUrl"
+        )
+        .lean();
+
+    // -----------------------------------------
+    // NO ATTENDANCE
+    // -----------------------------------------
+
+    if (existingRecords.length === 0) {
+      return res.status(200).json({
+        success: true,
+        exists: false,
+        locked: false,
+        data: null,
+      });
+    }
+
+    // -----------------------------------------
+    // REQUESTED BATCHES
+    // -----------------------------------------
+
+    let requestedBatches = [];
+
+    if (batchNumbers) {
+      requestedBatches = String(batchNumbers)
+        .split(",")
+        .map((value) => Number(value))
+        .filter((value) =>
+          [1, 2].includes(value)
+        );
+    }
+
+    // If no batch is supplied, include all.
+    if (requestedBatches.length === 0) {
+      requestedBatches = [1, 2];
+    }
+
+    // -----------------------------------------
+    // FIND ALL RELEVANT ATTENDANCE RECORDS
+    // -----------------------------------------
+
+    const matchingRecords =
+      existingRecords.filter((record) => {
+        // Old records without batchNumbers
+        // are treated as applicable to all.
+        if (
+          !Array.isArray(
+            record.batchNumbers
+          ) ||
+          record.batchNumbers.length === 0
+        ) {
+          return true;
+        }
+
+        return record.batchNumbers.some(
+          (batch) =>
+            requestedBatches.includes(
+              Number(batch)
+            )
+        );
+      });
+
+    // -----------------------------------------
+    // NO MATCHING RECORD
+    // -----------------------------------------
+
+    if (matchingRecords.length === 0) {
+      return res.status(200).json({
+        success: true,
+        exists: false,
+        locked: false,
+        data: null,
+      });
+    }
+
+    // -----------------------------------------
+    // COMBINE STUDENTS FROM ALL MATCHING
+    // BATCH RECORDS
+    //
+    // IMPORTANT:
+    // Each student keeps the classesConducted
+    // value belonging to that student's batch.
+    // -----------------------------------------
+
+    const studentMap = new Map();
+
+    for (const record of matchingRecords) {
+      const conducted =
+        Number(record.classesConducted || 0);
+
+      for (
+        const studentEntry of
+          record.students || []
+      ) {
+        const populatedStudent =
+          studentEntry.studentId;
+
+        if (!populatedStudent) {
+          continue;
+        }
+
+        const studentId =
+          String(populatedStudent._id);
+
+        studentMap.set(
+          studentId,
+          {
+            studentId: populatedStudent,
+
+            classesAttended:
+              Number(
+                studentEntry.classesAttended || 0
+              ),
+
+            // Use the individual maximum if it
+            // exists. Otherwise use classesConducted.
+            classesEligible:
+              studentEntry.classesEligible !==
+                undefined &&
+              studentEntry.classesEligible !==
+                null
+                ? Number(
+                    studentEntry.classesEligible
+                  )
+                : conducted,
+
+            // IMPORTANT:
+            // Keep the classes conducted for
+            // THIS student's attendance record.
+            classesConducted: conducted,
+          }
+        );
+      }
+    }
+
+    // -----------------------------------------
+    // DETERMINE TOP-LEVEL CLASSES CONDUCTED
+    //
+    // If both batches have different values,
+    // use the highest value for the header.
+    // The individual student value above is
+    // what must be used for percentage.
+    // -----------------------------------------
+
+    const allConducted =
+      matchingRecords.map((record) =>
+        Number(
+          record.classesConducted || 0
+        )
+      );
+
+    const classesConducted =
+      allConducted.length > 0
+        ? Math.max(...allConducted)
+        : 0;
+
+    // -----------------------------------------
+    // RETURN COMBINED ATTENDANCE
+    // -----------------------------------------
+
+    const combinedStudents =
+      Array.from(
+        studentMap.values()
+      );
+
+    return res.status(200).json({
+      success: true,
+      exists: true,
+      locked: true,
+
+      data: {
+        // Keep the existing fields
+        // so current frontend continues
+        // to work.
+
         department:
           department.toLowerCase(),
 
@@ -374,102 +661,39 @@ export const getAttendance = async (
 
         year:
           Number(year),
-      })
-        .populate(
-          "students.studentId",
-          "registerNumber name email department batchNumber imageUrl"
-        )
-        .lean();
 
-    // -----------------------------------------
-    // No attendance
-    // -----------------------------------------
+        // Header value.
+        // Individual students have their
+        // own classesConducted below.
+        classesConducted,
 
-    if (
-      existingRecords.length === 0
-    ) {
-      return res.status(200).json({
-        success: true,
-        exists: false,
-        locked: false,
-        data: null,
-      });
-    }
+        // Combine all batches.
+        batchNumbers:
+          [
+            ...new Set(
+              matchingRecords.flatMap(
+                (record) =>
+                  record.batchNumbers ||
+                  []
+              )
+            ),
+          ].sort(),
 
-    // -----------------------------------------
-    // Requested batches
-    // -----------------------------------------
+        students:
+          combinedStudents,
 
-    let requestedBatches = [];
+        // Attendance is locked if any matching
+        // attendance record exists.
+        isLocked: true,
 
-    if (batchNumbers) {
-      requestedBatches =
-        String(batchNumbers)
-          .split(",")
-          .map((value) =>
-            Number(value)
-          )
-          .filter((value) =>
-            [1, 2].includes(value)
-          );
-    }
+        lockedAt:
+          matchingRecords[0]?.lockedAt ||
+          null,
 
-    // -----------------------------------------
-    // Find overlapping record
-    // -----------------------------------------
-
-    let matchingRecord = null;
-
-    for (const record of existingRecords) {
-      // Old records without batchNumbers
-      // lock everything.
-      if (
-        !Array.isArray(
-          record.batchNumbers
-        ) ||
-        record.batchNumbers.length === 0
-      ) {
-        matchingRecord = record;
-        break;
-      }
-
-      // If no batch was supplied,
-      // any existing record counts.
-      if (
-        requestedBatches.length === 0
-      ) {
-        matchingRecord = record;
-        break;
-      }
-
-      const overlap =
-        record.batchNumbers.some(
-          (batch) =>
-            requestedBatches.includes(
-              Number(batch)
-            )
-        );
-
-      if (overlap) {
-        matchingRecord = record;
-        break;
-      }
-    }
-
-    if (!matchingRecord) {
-      return res.status(200).json({
-        success: true,
-        exists: false,
-        locked: false,
-        data: null,
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      exists: true,
-      locked: true,
-      data: matchingRecord,
+        lockedBy:
+          matchingRecords[0]?.lockedBy ||
+          null,
+      },
     });
   } catch (error) {
     console.error(

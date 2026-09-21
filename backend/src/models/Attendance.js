@@ -8,6 +8,14 @@ const attendanceStudentSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Maximum classes this particular student
+    // was eligible to attend for this attendance record.
+    classesEligible: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
     classesAttended: {
       type: Number,
       required: true,

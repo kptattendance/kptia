@@ -140,7 +140,8 @@ export default function FacultyAttendancePage() {
 
   const [classesConducted, setClassesConducted] =
     useState("");
-
+const [studentMaxClasses, setStudentMaxClasses] =
+  useState({});
   // ---------------------------------------------------
   // Status
   // ---------------------------------------------------
@@ -230,12 +231,13 @@ export default function FacultyAttendancePage() {
   // RESET ATTENDANCE AREA
   // =====================================================
 
-  const resetAttendanceArea = () => {
-    setStudents([]);
-    setAttendance({});
-    setClassesConducted("");
-    setAttendanceLocked(false);
-  };
+const resetAttendanceArea = () => {
+  setStudents([]);
+  setAttendance({});
+  setStudentMaxClasses({});
+  setClassesConducted("");
+  setAttendanceLocked(false);
+};
 
   // =====================================================
   // LOAD SUBJECTS
@@ -348,6 +350,11 @@ export default function FacultyAttendancePage() {
 
           setCheckingAttendance(true);
 
+          // Clear values from the previously selected month
+          // while the new month's attendance is being loaded.
+          setAttendance({});
+          setStudentMaxClasses({});
+          setClassesConducted("");
           setAttendanceLocked(false);
 
           const token =
@@ -483,34 +490,31 @@ export default function FacultyAttendancePage() {
                 ""
             );
 
-            const savedAttendance =
-              {};
+            const savedAttendance = {};
+const savedMaxClasses = {};
 
-            filteredStudents.forEach(
-              (student) => {
-                const savedStudent =
-                  existingAttendance.students?.find(
-                    (item) =>
-                      String(
-                        item.studentId?._id ||
-                          item.studentId
-                      ) ===
-                      String(
-                        student._id
-                      )
-                  );
+filteredStudents.forEach((student) => {
+  const savedStudent =
+    existingAttendance.students?.find(
+      (item) =>
+        String(
+          item.studentId?._id ||
+            item.studentId
+        ) ===
+        String(student._id)
+    );
 
-                savedAttendance[
-                  student._id
-                ] =
-                  savedStudent?.classesAttended ??
-                  "";
-              }
-            );
+  savedAttendance[student._id] =
+    savedStudent?.classesAttended ?? "";
 
-            setAttendance(
-              savedAttendance
-            );
+  savedMaxClasses[student._id] =
+    savedStudent?.classesEligible ??
+    existingAttendance.classesConducted ??
+    "";
+});
+
+setAttendance(savedAttendance);
+setStudentMaxClasses(savedMaxClasses);
 
             const monthName =
               months.find(
@@ -568,20 +572,16 @@ export default function FacultyAttendancePage() {
               ""
             );
 
-            const initialAttendance =
-              {};
+            const initialAttendance = {};
+            const initialMaxClasses = {};
 
-            filteredStudents.forEach(
-              (student) => {
-                initialAttendance[
-                  student._id
-                ] = "";
-              }
-            );
+            filteredStudents.forEach((student) => {
+              initialAttendance[student._id] = "";
+              initialMaxClasses[student._id] = "";
+            });
 
-            setAttendance(
-              initialAttendance
-            );
+            setAttendance(initialAttendance);
+            setStudentMaxClasses(initialMaxClasses);
           }
         } catch (error) {
           console.error(
@@ -641,17 +641,17 @@ export default function FacultyAttendancePage() {
   // ATTENDANCE PERCENTAGE
   // =====================================================
 
-  const getPercentage = (
-    studentId
-  ) => {
-    const conducted =
-      Number(classesConducted);
+  const getPercentage = (studentId) => {
+    const maxClasses =
+      studentMaxClasses[studentId] ??
+      classesConducted;
 
-    const value =
-      attendance[studentId];
+    const value = attendance[studentId];
 
     if (
-      !conducted ||
+      maxClasses === "" ||
+      maxClasses === undefined ||
+      maxClasses === null ||
       value === "" ||
       value === undefined ||
       value === null
@@ -659,21 +659,18 @@ export default function FacultyAttendancePage() {
       return null;
     }
 
-    const attended =
-      Number(value);
+    const maximum = Number(maxClasses);
+    const attended = Number(value);
 
-    if (
-      !Number.isFinite(
-        attended
-      )
-    ) {
+    if (!Number.isFinite(maximum) || maximum <= 0) {
       return null;
     }
 
-    return (
-      (attended / conducted) *
-      100
-    ).toFixed(1);
+    if (!Number.isFinite(attended)) {
+      return null;
+    }
+
+    return ((attended / maximum) * 100).toFixed(1);
   };
 
   // =====================================================
@@ -695,6 +692,125 @@ export default function FacultyAttendancePage() {
     attendance,
   ]);
 
+const handleClassesConductedChange = (value) => {
+  if (attendanceLocked) {
+    return;
+  }
+
+  setClassesConducted(value);
+
+  // Classes conducted is the default maximum
+  // for every student.
+  if (value === "") {
+    setStudentMaxClasses({});
+    return;
+  }
+
+  const numericValue = Number(value);
+
+  if (
+    Number.isNaN(numericValue) ||
+    numericValue < 0
+  ) {
+    return;
+  }
+
+  const updatedMaxClasses = {};
+
+  students.forEach((student) => {
+    updatedMaxClasses[student._id] =
+      numericValue;
+  });
+
+  setStudentMaxClasses(
+    updatedMaxClasses
+  );
+
+  // If attendance already entered is greater
+  // than the new classes conducted value,
+  // clear that attendance.
+  setAttendance((prev) => {
+    const updatedAttendance = {
+      ...prev,
+    };
+
+    students.forEach((student) => {
+      const attended = Number(
+        updatedAttendance[student._id]
+      );
+
+      if (
+        Number.isFinite(attended) &&
+        attended > numericValue
+      ) {
+        updatedAttendance[student._id] = "";
+      }
+    });
+
+    return updatedAttendance;
+  });
+};
+
+ const handleMaxClassesChange = (
+  studentId,
+  value
+) => {
+  if (attendanceLocked) {
+    return;
+  }
+
+  if (value === "") {
+    setStudentMaxClasses((prev) => ({
+      ...prev,
+      [studentId]: "",
+    }));
+
+    return;
+  }
+
+  const numericValue = Number(value);
+
+  if (
+    Number.isNaN(numericValue) ||
+    numericValue < 0
+  ) {
+    return;
+  }
+
+  // Individual maximum can never be
+  // greater than overall classes conducted.
+  if (
+    classesConducted !== "" &&
+    numericValue >
+      Number(classesConducted)
+  ) {
+    return;
+  }
+
+  setStudentMaxClasses((prev) => ({
+    ...prev,
+    [studentId]: numericValue,
+  }));
+
+  // If current attendance is greater than
+  // the newly selected maximum, clear it.
+  setAttendance((prev) => {
+    const currentAttendance =
+      Number(prev[studentId]);
+
+    if (
+      Number.isFinite(currentAttendance) &&
+      currentAttendance > numericValue
+    ) {
+      return {
+        ...prev,
+        [studentId]: "",
+      };
+    }
+
+    return prev;
+  });
+};
   // =====================================================
   // HANDLE ATTENDANCE CHANGE
   // =====================================================
@@ -732,16 +848,13 @@ export default function FacultyAttendancePage() {
     ) {
       return;
     }
-
-    if (
-      classesConducted !== "" &&
-      numericValue >
-        Number(
-          classesConducted
-        )
-    ) {
-      return;
-    }
+if (
+  classesConducted !== "" &&
+  numericValue >
+    Number(classesConducted)
+) {
+  return;
+}
 
     setAttendance((prev) => ({
       ...prev,
@@ -761,6 +874,8 @@ export default function FacultyAttendancePage() {
     setStudents([]);
 
     setAttendance({});
+
+    setStudentMaxClasses({});
 
     setClassesConducted("");
 
@@ -944,27 +1059,58 @@ export default function FacultyAttendancePage() {
         return;
       }
 
-      if (
-        attended >
+
+      const maxClasses =
         Number(
-          classesConducted
-        )
+          studentMaxClasses[student._id] ??
+            classesConducted
+        );
+
+      if (
+        !Number.isFinite(maxClasses) ||
+        maxClasses < 0
       ) {
         await Swal.fire({
           icon: "warning",
-
-          title:
-            "Invalid Attendance",
-
+          title: "Invalid Maximum Classes",
           text:
-            `Attendance for ${student.name} cannot exceed classes conducted.`,
-
-          confirmButtonColor:
-            "#0f172a",
+            `Please enter a valid maximum classes value for ${student.name}.`,
+          confirmButtonColor: "#0f172a",
         });
 
         return;
       }
+
+      if (
+        maxClasses >
+        Number(classesConducted)
+      ) {
+        await Swal.fire({
+          icon: "warning",
+          title: "Invalid Maximum Classes",
+          text:
+            `Maximum classes for ${student.name} cannot exceed classes conducted.`,
+          confirmButtonColor: "#0f172a",
+        });
+
+        return;
+      }
+
+      if (
+        attended < 0 ||
+        attended > maxClasses
+      ) {
+        await Swal.fire({
+          icon: "warning",
+          title: "Invalid Attendance",
+          text:
+            `Attendance for ${student.name} cannot exceed ${maxClasses} classes.`,
+          confirmButtonColor: "#0f172a",
+        });
+
+        return;
+      }
+
     }
 
     // ---------------------------------------------
@@ -1090,20 +1236,27 @@ export default function FacultyAttendancePage() {
             classesConducted
           ),
 
-        students:
-          students.map(
-            (student) => ({
-              studentId:
-                student._id,
+       students:
+  students.map(
+    (student) => ({
+      studentId:
+        student._id,
 
-              classesAttended:
-                Number(
-                  attendance[
-                    student._id
-                  ]
-                ),
-            })
-          ),
+      classesEligible:
+        Number(
+          studentMaxClasses[
+            student._id
+          ] ?? classesConducted
+        ),
+
+      classesAttended:
+        Number(
+          attendance[
+            student._id
+          ]
+        ),
+    })
+  ),
       };
 
       await axios.post(
@@ -1768,12 +1921,11 @@ export default function FacultyAttendancePage() {
                         attendanceLocked ||
                         checkingAttendance
                       }
-                      onChange={(e) =>
-                        setClassesConducted(
-                          e.target
-                            .value
-                        )
-                      }
+                    onChange={(e) =>
+  handleClassesConductedChange(
+    e.target.value
+  )
+}
                       placeholder="Enter number of classes"
                       className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-slate-900 focus:ring-4 focus:ring-slate-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                     />
@@ -1924,7 +2076,9 @@ export default function FacultyAttendancePage() {
                           <th className="w-48 px-4 py-4 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
                             Classes Attended
                           </th>
-
+<th className="w-40 px-4 py-4 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
+  Max Classes
+</th>
                           <th className="w-44 px-4 py-4 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
                             Attendance %
                           </th>
@@ -2017,10 +2171,11 @@ export default function FacultyAttendancePage() {
                                   <input
                                     type="number"
                                     min="0"
-                                    max={
-                                      classesConducted ||
-                                      undefined
-                                    }
+                                   max={
+  studentMaxClasses[student._id] ??
+  classesConducted ??
+  undefined
+}
                                     value={
                                       attendance[
                                         student
@@ -2047,7 +2202,33 @@ export default function FacultyAttendancePage() {
                                   />
 
                                 </td>
+{/* Maximum Eligible Classes */}
 
+<td className="px-4 py-4 text-center">
+  <input
+    type="number"
+    min="0"
+    max={
+      classesConducted || undefined
+    }
+    value={
+      studentMaxClasses[student._id] ??
+      classesConducted ??
+      ""
+    }
+    disabled={
+      attendanceLocked ||
+      checkingAttendance
+    }
+    onChange={(e) =>
+      handleMaxClassesChange(
+        student._id,
+        e.target.value
+      )
+    }
+    className="mx-auto block w-24 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+  />
+</td>
                                 {/* Percentage */}
 
                                 <td className="px-4 py-4 text-center">

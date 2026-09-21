@@ -20,7 +20,20 @@ const departments = [
 ];
 
 const CO_NAMES = ["CO1", "CO2", "CO3", "CO4", "CO5", "CO6"];
-
+const TEST_NAME_OPTIONS = [
+  "CIE1",
+  "CIE2",
+  "CIE3",
+  "ST1",
+  "ST2",
+  "ST3",
+  "Drawing1",
+  "Drawing2",
+  "Quiz1",
+  "Quiz2",
+  "Assignment1",
+  "Assignment2",
+];
 const emptyCO = () => ({
   CO1: 0,
   CO2: 0,
@@ -527,23 +540,37 @@ export default function FacultyIAMarksPage() {
     }
   };
 
-  // ==================================================
-  // ADD TEST
-  // ==================================================
+const addTest = () => {
+  if (existingIA) return;
 
-  const addTest = () => {
-    if (existingIA) return;
+  // Find the first test name that has not already been used
+  const usedNames = tests.map((test) =>
+    String(test.testName || "").trim()
+  );
 
-    setTests((prev) => [
-      ...prev,
-      {
-        testName: `IA Test ${prev.length + 1}`,
-        maxMarks: 25,
-        coMarks: emptyCO(),
-      },
-    ]);
-  };
+  const availableName = TEST_NAME_OPTIONS.find(
+    (name) => !usedNames.includes(name)
+  );
 
+  // All available test names are already used
+  if (!availableName) {
+    showAlert(
+      "warning",
+      "No Test Names Available",
+      "All available test names have already been used."
+    );
+    return;
+  }
+
+  setTests((prev) => [
+    ...prev,
+    {
+      testName: availableName,
+      maxMarks: 25,
+      coMarks: emptyCO(),
+    },
+  ]);
+};
   // ==================================================
   // REMOVE TEST
   // ==================================================
@@ -1173,29 +1200,84 @@ export default function FacultyIAMarksPage() {
         ),
       };
 
-      const batchesToSave =
-        batchNumber === "both"
-          ? [1, 2]
-          : [Number(batchNumber)];
+    const batchesToSave =
+  batchNumber === "both"
+    ? [1, 2]
+    : [Number(batchNumber)];
 
-      // Use the existing IA backend logic.
-      // For Both Batches, create one normal IA record
-      // for Batch 1 and one normal IA record for Batch 2.
-      for (const batch of batchesToSave) {
-        await axios.post(
-          `${API_URL}/api/ia/save`,
-          {
-            ...payload,
-            batchNumber: batch,
-          },
-          {
-            headers: {
-              Authorization:
-                `Bearer ${token}`,
-            },
+for (const batch of batchesToSave) {
+  // --------------------------------------------------
+  // IMPORTANT:
+  // When "Both Batches" is selected, send only the
+  // students belonging to the current batch.
+  // --------------------------------------------------
+
+  const studentsForBatch = students
+    .filter(
+      (student) =>
+        Number(student.batchNumber) === Number(batch)
+    )
+    .map((student) => ({
+      studentId: student._id,
+
+      tests: tests.map(
+        (_, testIndex) => {
+          const record = getStudentTest(
+            student._id,
+            testIndex
+          );
+
+          if (record.status === "ABSENT") {
+            return {
+              marks: null,
+              status: "ABSENT",
+              coMarks: {
+                CO1: 0,
+                CO2: 0,
+                CO3: 0,
+                CO4: 0,
+                CO5: 0,
+                CO6: 0,
+              },
+            };
           }
-        );
-      }
+
+          const coMarks =
+            record.coMarks || {};
+
+          const obtained =
+            getCOTotal(coMarks);
+
+          return {
+            marks: obtained,
+            status: "PRESENT",
+            coMarks: {
+              CO1: Number(coMarks.CO1 || 0),
+              CO2: Number(coMarks.CO2 || 0),
+              CO3: Number(coMarks.CO3 || 0),
+              CO4: Number(coMarks.CO4 || 0),
+              CO5: Number(coMarks.CO5 || 0),
+              CO6: Number(coMarks.CO6 || 0),
+            },
+          };
+        }
+      ),
+    }));
+
+  await axios.post(
+    `${API_URL}/api/ia/save`,
+    {
+      ...payload,
+      batchNumber: batch,
+      students: studentsForBatch,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+}
 
       showAlert(
         "success",
@@ -1629,77 +1711,111 @@ export default function FacultyIAMarksPage() {
 
                         {/* TEST HEADER */}
 
-                        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-end">
+                    {/* TEST HEADER */}
 
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">
-                            {index + 1}
-                          </div>
+<div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-end">
 
-                          <div className="flex-1">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                              Test Name
-                            </label>
+  {/* TEST NUMBER */}
 
-                            <input
-                              value={
-                                test.testName
-                              }
-                              disabled={
-                                !!existingIA
-                              }
-                              onChange={(e) =>
-                                updateTest(
-                                  index,
-                                  "testName",
-                                  e.target
-                                    .value
-                                )
-                              }
-                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-slate-400 disabled:bg-slate-50"
-                            />
-                          </div>
+  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">
+    {index + 1}
+  </div>
 
-                          <div className="w-full sm:w-32">
-                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                              Max Marks
-                            </label>
 
-                            <input
-                              type="number"
-                              min="1"
-                              value={
-                                test.maxMarks
-                              }
-                              disabled={
-                                !!existingIA
-                              }
-                              onChange={(e) =>
-                                updateTest(
-                                  index,
-                                  "maxMarks",
-                                  e.target
-                                    .value
-                                )
-                              }
-                              onWheel={(e) => e.currentTarget.blur()}
-                              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold outline-none focus:border-slate-400 disabled:bg-slate-50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                            />
-                          </div>
+  {/* TEST NAME */}
 
-                          {!existingIA && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                removeTest(
-                                  index
-                                )
-                              }
-                              className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
+  <div className="w-full sm:w-[25%]">
+    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
+      Test Name
+    </label>
+
+    <select
+      value={test.testName || ""}
+      disabled={!!existingIA}
+      onChange={(e) => {
+        const newName = e.target.value;
+
+        const duplicate = tests.some(
+          (item, itemIndex) =>
+            itemIndex !== index &&
+            item.testName === newName
+        );
+
+        if (duplicate) {
+          showAlert(
+            "warning",
+            "Duplicate Test Name",
+            `${newName} is already used by another test.`
+          );
+          return;
+        }
+
+        updateTest(
+          index,
+          "testName",
+          newName
+        );
+      }}
+      className="block w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+    >
+      <option value="" disabled>
+        Select Test
+      </option>
+
+      {TEST_NAME_OPTIONS.map((name) => (
+        <option
+          key={name}
+          value={name}
+        >
+          {name}
+        </option>
+      ))}
+    </select>
+  </div>
+
+
+  {/* MAX MARKS */}
+
+  <div className="w-full sm:w-32">
+    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
+      Max Marks
+    </label>
+
+    <input
+      type="number"
+      min="1"
+      value={test.maxMarks}
+      disabled={!!existingIA}
+      onChange={(e) =>
+        updateTest(
+          index,
+          "maxMarks",
+          e.target.value
+        )
+      }
+      onWheel={(e) =>
+        e.currentTarget.blur()
+      }
+      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold outline-none focus:border-slate-400 disabled:bg-slate-50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+    />
+  </div>
+
+
+  {/* REMOVE */}
+
+  {!existingIA && (
+    <button
+      type="button"
+      onClick={() =>
+        removeTest(index)
+      }
+      className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+    >
+      Remove
+    </button>
+  )}
+
+</div>
 
                         {/* CO MAXIMUM */}
 
