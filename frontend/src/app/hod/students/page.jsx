@@ -236,20 +236,18 @@ export default function HODStudentsPage() {
 
       setEditingStudent(student);
 
-      setEditForm({
-        registerNumber:
-          data.registerNumber || "",
-        name: data.name || "",
-        gender: data.gender || "",
-        email: data.email || "",
-        phone: data.phone || "",
-        department:
-          data.department || hodDepartment,
-        admissionYear:
-          data.admissionYear || "",
-        semester: data.semester || "",
-        batch: data.batch || "",
-      });
+   setEditForm({
+  registerNumber: data.registerNumber || "",
+  name: data.name || "",
+  gender: data.gender || "",
+  email: data.email || "",
+  phone: data.phone || "",
+  department: data.department || hodDepartment,
+  admissionYear: data.admissionYear || "",
+  semester: data.semester || "",
+  batch: data.batch || "",
+  batchNumber: data.batchNumber || "",
+});
 
       setActionMessage("");
       setActionError("");
@@ -358,6 +356,10 @@ export default function HODStudentsPage() {
         "batch",
         editForm.batch.trim()
       );
+      formData.append(
+  "batchNumber",
+  editForm.batchNumber
+);
 
       await axios.put(
         `${API_URL}/api/students/updatestudent/${editingStudent._id}`,
@@ -838,7 +840,9 @@ export default function HODStudentsPage() {
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     Batch
                   </th>
-
+<th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+  Batch No.
+</th>
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     Phone
                   </th>
@@ -962,7 +966,15 @@ export default function HODStudentsPage() {
                           </span>
 
                         </td>
+{/* BATCH NUMBER */}
 
+<td className="px-5 py-4">
+  <span className="inline-flex rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+    {student.batchNumber
+      ? `Batch ${student.batchNumber}`
+      : "—"}
+  </span>
+</td>
                         {/* PHONE */}
 
                         <td className="px-5 py-4">
@@ -1314,23 +1326,56 @@ export default function HODStudentsPage() {
                     )}
                   </select>
                 </div>
+                {/* BATCH NUMBER */}
+
+<div>
+  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+    Batch Number
+  </label>
+
+  <select
+    name="batchNumber"
+    value={editForm.batchNumber}
+    onChange={handleEditChange}
+    required
+    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-slate-400"
+  >
+    <option value="">
+      Select Batch Number
+    </option>
+
+    <option value="1">
+      Batch 1
+    </option>
+
+    <option value="2">
+      Batch 2
+    </option>
+  </select>
+</div>
 
                 {/* BATCH */}
 
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Batch
-                  </label>
+  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+    Batch
+  </label>
 
-                  <input
-                    name="batch"
-                    value={editForm.batch}
-                    onChange={handleEditChange}
-                    placeholder="2025-2028"
-                    required
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-400"
-                  />
-                </div>
+  <select
+    name="batch"
+    value={editForm.batch}
+    onChange={handleEditChange}
+    required
+    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+  >
+    <option value="">Select Batch</option>
+    <option value="2023-2026">2023-2026</option>
+    <option value="2024-2027">2024-2027</option>
+    <option value="2025-2028">2025-2028</option>
+    <option value="2026-2029">2026-2029</option>
+    <option value="2027-2030">2027-2030</option>
+  </select>
+</div>
 
               </div>
 

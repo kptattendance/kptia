@@ -7,22 +7,26 @@ import {
   updateStudent,
   deleteStudent,
   searchStudents,
-  // getStudentAttendanceHistory,
   bulkAddStudents,
+  bulkUploadStudents,
 } from "../controllers/studentController.js";
 
 import { authenticateUser } from "../middlewares/authMiddleware.js";
 import { uploadSingleImage } from "../middlewares/uploadImage.js";
 import { uploadCSV } from "../middlewares/uploadCSV.js";
+import { uploadExcel } from "../middlewares/uploadExcel.js";
 
 const router = express.Router();
 
-// All routes require Clerk authentication
+// ==========================================================
+// ALL ROUTES REQUIRE CLERK AUTHENTICATION
+// ==========================================================
+
 router.use(authenticateUser);
 
-// ==========================================
+// ==========================================================
 // ADD SINGLE STUDENT
-// ==========================================
+// ==========================================================
 
 router.post(
   "/addstudent",
@@ -30,27 +34,27 @@ router.post(
   createStudent
 );
 
-// ==========================================
+// ==========================================================
 // GET ALL STUDENTS
-// ==========================================
+// ==========================================================
 
 router.get(
   "/getstudents",
   getStudents
 );
 
-// ==========================================
+// ==========================================================
 // GET STUDENT BY ID
-// ==========================================
+// ==========================================================
 
 router.get(
   "/getstudent/:id",
   getStudentById
 );
 
-// ==========================================
+// ==========================================================
 // UPDATE STUDENT
-// ==========================================
+// ==========================================================
 
 router.put(
   "/updatestudent/:id",
@@ -58,50 +62,43 @@ router.put(
   updateStudent
 );
 
-// ==========================================
+// ==========================================================
 // DELETE STUDENT
-// ==========================================
+// ==========================================================
 
 router.delete(
   "/deletestudent/:id",
   deleteStudent
 );
 
-// ==========================================
+// ==========================================================
 // SEARCH STUDENTS
-// ==========================================
+// ==========================================================
 
 router.get(
   "/search",
   searchStudents
 );
 
-// ==========================================
-// STUDENT ATTENDANCE HISTORY
-// ==========================================
-
-// router.get(
-//   "/student-history",
-//   getStudentAttendanceHistory
-// );
-
-// ==========================================
-// BULK ADD STUDENTS - OLD ROUTE
-// ==========================================
+// ==========================================================
+// OLD CSV BULK ADD
+// ==========================================================
 
 router.post(
   "/bulk-add",
+  uploadCSV,
   bulkAddStudents
 );
 
-// ==========================================
-// BULK UPLOAD STUDENTS FROM CSV
-// ==========================================
+// ==========================================================
+// BULK UPLOAD STUDENTS FROM EXCEL
+// Excel + Google Drive Photo Links
+// ==========================================================
 
 router.post(
   "/bulk-upload",
-  uploadCSV,
-  bulkAddStudents
+  uploadExcel,
+  bulkUploadStudents
 );
 
 export default router;

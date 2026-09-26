@@ -4,10 +4,144 @@ import User from "../models/User.js";
 import cloudinary from "../config/cloudinary.js";
 import { clerkClient } from "@clerk/express";
 import mongoose from "mongoose";
+import axios from "axios";
+import XLSX from "xlsx";
 
 // ==========================================================
-// BULK ADD STUDENTS FROM CSV
+// GET GOOGLE DRIVE FILE ID
 // ==========================================================
+
+const getGoogleDriveFileId = (url) => {
+  if (!url) return null;
+
+  const value = String(url).trim();
+
+  // --------------------------------------------------------
+  // Format:
+  // https://drive.google.com/file/d/FILE_ID/view
+  // --------------------------------------------------------
+
+  const fileMatch = value.match(
+    /\/file\/d\/([a-zA-Z0-9_-]+)/
+  );
+
+  if (fileMatch) {
+    return fileMatch[1];
+  }
+
+  // --------------------------------------------------------
+  // Format:
+  // https://drive.google.com/open?id=FILE_ID
+  // https://drive.google.com/uc?id=FILE_ID
+  // --------------------------------------------------------
+
+  const idMatch = value.match(
+    /[?&]id=([a-zA-Z0-9_-]+)/
+  );
+
+  if (idMatch) {
+    return idMatch[1];
+  }
+
+  return null;
+};
+
+
+// ==========================================================
+// DOWNLOAD GOOGLE DRIVE PHOTO
+// AND UPLOAD TO CLOUDINARY
+// ==========================================================
+
+const uploadGoogleDrivePhoto = async (driveUrl) => {
+  if (!driveUrl) {
+    return {
+      secure_url: "",
+      public_id: "",
+    };
+  }
+
+  const fileId =
+    getGoogleDriveFileId(driveUrl);
+
+  if (!fileId) {
+    throw new Error(
+      "Invalid Google Drive photo link."
+    );
+  }
+
+  // --------------------------------------------------------
+  // GOOGLE DRIVE DOWNLOAD URL
+  // --------------------------------------------------------
+
+  const downloadUrl =
+    `https://drive.google.com/uc?export=download&id=${fileId}`;
+
+  // --------------------------------------------------------
+  // DOWNLOAD FILE
+  // --------------------------------------------------------
+
+  const response = await axios.get(
+    downloadUrl,
+    {
+      responseType: "arraybuffer",
+
+      timeout: 30000,
+
+      maxContentLength:
+        10 * 1024 * 1024,
+
+      maxBodyLength:
+        10 * 1024 * 1024,
+    }
+  );
+
+  // --------------------------------------------------------
+  // CHECK CONTENT TYPE
+  // --------------------------------------------------------
+
+  const contentType =
+    response.headers["content-type"] || "";
+
+  if (!contentType.startsWith("image/")) {
+    throw new Error(
+      "Google Drive file is not a valid image or is not publicly accessible."
+    );
+  }
+
+  // --------------------------------------------------------
+  // CONVERT TO BASE64
+  // --------------------------------------------------------
+
+  const base64 =
+    Buffer.from(response.data)
+      .toString("base64");
+
+  const dataUri =
+    `data:${contentType};base64,${base64}`;
+
+  // --------------------------------------------------------
+  // UPLOAD TO CLOUDINARY
+  // --------------------------------------------------------
+
+  const result =
+    await cloudinary.uploader.upload(
+      dataUri,
+      {
+        folder:
+          "kpt-examination/students",
+
+        resource_type: "image",
+      }
+    );
+
+  return {
+    secure_url:
+      result.secure_url,
+
+    public_id:
+      result.public_id,
+  };
+};
 
 // ==========================================================
 // BULK ADD STUDENTS FROM CSV
@@ -514,6 +648,687 @@ imagePublicId: req.cloudinaryResult?.public_id || "",
       message:
         err.message ||
         "Failed to process bulk student upload",
+    });
+  }
+};
+
+export const bulkUploadStudents = async (req, res) => {
+  const createdStudents = [];
+  const errors = [];
+
+  // ============================================================
+  // 1. CHECK EXCEL FILE
+  // ============================================================
+
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      message: "Please upload an Excel file.",
+    });
+  }
+
+  try {
+    // ============================================================
+    // 2. READ EXCEL FILE
+    // ============================================================
+
+    const workbook = XLSX.read(req.file.buffer, {
+      type: "buffer",
+      cellDates: true,
+    });
+
+    const sheetName = workbook.SheetNames[0];
+
+    if (!sheetName) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel file does not contain any worksheet.",
+      });
+    }
+
+    const worksheet = workbook.Sheets[sheetName];
+
+    const students = XLSX.utils.sheet_to_json(worksheet, {
+      defval: "",
+      raw: true,
+    });
+
+    if (!students.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is empty.",
+      });
+    }
+
+    // ============================================================
+    // 3. CURRENT USER
+    // ============================================================
+
+    const currentUser =
+      req.auth?.userId ||
+      req.auth?.user?.id ||
+      req.user?.id ||
+      req.user?.clerkId;
+
+    if (!currentUser) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    const currentUserDoc = await User.findOne({
+      clerkId: currentUser,
+    });
+
+    if (!currentUserDoc) {
+      return res.status(404).json({
+        success: false,
+        message: "Current user record not found.",
+      });
+    }
+
+    const currentRole = currentUserDoc.role;
+
+    // ============================================================
+    // 4. PROCESS EACH EXCEL ROW
+    // ============================================================
+
+    for (let i = 0; i < students.length; i++) {
+      const row = students[i];
+
+      const excelRowNumber = i + 2;
+
+      let clerkUserId = null;
+      let createdUser = null;
+      let createdStudent = null;
+      let createdSemester = null;
+
+      let cloudinaryResult = {
+        secure_url: "",
+        public_id: "",
+      };
+
+      try {
+        // ========================================================
+        // 5. READ VALUES FROM EXCEL
+        // ========================================================
+
+        const name = String(
+          row.name ||
+            row.Name ||
+            row["Student Name"] ||
+            row.studentName ||
+            ""
+        ).trim();
+
+        const registerNumber = String(
+          row.registerNumber ||
+            row.RegisterNumber ||
+            row["Register Number"] ||
+            row.regno ||
+            row.RegNo ||
+            ""
+        )
+          .trim()
+          .toUpperCase();
+
+        const email = String(
+          row.email ||
+            row.Email ||
+            row["Email ID"] ||
+            row.emailId ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const phone = String(
+          row.phone ||
+            row.Phone ||
+            row["Phone Number"] ||
+            row.mobile ||
+            row.Mobile ||
+            ""
+        ).trim();
+
+        const fatherName = String(
+          row.fatherName ||
+            row.FatherName ||
+            row["Father Name"] ||
+            ""
+        ).trim();
+
+        const motherName = String(
+          row.motherName ||
+            row.MotherName ||
+            row["Mother Name"] ||
+            ""
+        ).trim();
+
+        const gender = String(
+          row.gender ||
+            row.Gender ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const department = String(
+          row.department ||
+            row.Department ||
+            ""
+        ).trim();
+
+        const admissionYear = String(
+          row.admissionYear ||
+            row["Admission Year"] ||
+            row.AdmissionYear ||
+            ""
+        ).trim();
+
+        const academicYear = String(
+          row.academicYear ||
+            row["Academic Year"] ||
+            row.AcademicYear ||
+            ""
+        ).trim();
+
+        const batch = String(
+          row.batch ||
+            row.Batch ||
+            ""
+        ).trim();
+
+        const batchNumberRaw = String(
+          row.batchNumber ||
+            row["Batch Number"] ||
+            row.BatchNumber ||
+            ""
+        ).trim();
+
+        const semesterRaw = String(
+          row.semester ||
+            row.Semester ||
+            row.sem ||
+            row.Sem ||
+            ""
+        ).trim();
+
+        const dobRaw =
+          row.dob ||
+          row.DOB ||
+          row["Date of Birth"] ||
+          "";
+
+        // ========================================================
+        // PHOTO
+        // ========================================================
+
+        const photo = String(
+          row.Photo ||
+            row.photo ||
+            row["Photo URL"] ||
+            row["Photo"] ||
+            ""
+        ).trim();
+
+        // ========================================================
+        // 6. VALIDATION
+        // ========================================================
+
+        if (!name) {
+          throw new Error("Student name is missing.");
+        }
+
+        if (!registerNumber) {
+          throw new Error("Register number is missing.");
+        }
+
+        if (!email) {
+          throw new Error("Email is missing.");
+        }
+
+        if (!department) {
+          throw new Error("Department is missing.");
+        }
+
+        if (!gender) {
+          throw new Error("Gender is missing.");
+        }
+
+        if (
+          !["male", "female", "other"].includes(gender)
+        ) {
+          throw new Error(
+            `Invalid gender "${gender}". Allowed: male, female, other.`
+          );
+        }
+
+        if (!admissionYear) {
+          throw new Error("Admission year is missing.");
+        }
+
+        if (!semesterRaw) {
+          throw new Error("Semester is missing.");
+        }
+
+        const semester = Number(semesterRaw);
+
+        if (
+          !Number.isInteger(semester) ||
+          semester < 1 ||
+          semester > 6
+        ) {
+          throw new Error(
+            `Invalid semester "${semesterRaw}". Semester must be 1 to 6.`
+          );
+        }
+
+        if (!batch) {
+          throw new Error("Academic batch is missing.");
+        }
+
+        // ========================================================
+        // BATCH NUMBER
+        // ========================================================
+
+        let batchNumber = Number(batchNumberRaw);
+
+        if (!batchNumberRaw) {
+          batchNumber = 1;
+        }
+
+        if (![1, 2].includes(batchNumber)) {
+          throw new Error(
+            `Invalid batch number "${batchNumberRaw}". Use 1 or 2.`
+          );
+        }
+
+        // ========================================================
+        // 7. DATE OF BIRTH
+        // ========================================================
+
+        let dob = null;
+
+        if (dobRaw) {
+          if (dobRaw instanceof Date) {
+            dob = dobRaw;
+          } else if (typeof dobRaw === "number") {
+            const excelEpoch = new Date(
+              Date.UTC(1899, 11, 30)
+            );
+
+            dob = new Date(
+              excelEpoch.getTime() +
+                dobRaw * 24 * 60 * 60 * 1000
+            );
+          } else {
+            const parsedDate = new Date(dobRaw);
+
+            if (!isNaN(parsedDate.getTime())) {
+              dob = parsedDate;
+            }
+          }
+        }
+
+        // ========================================================
+        // 8. CHECK DUPLICATE REGISTER NUMBER
+        // ========================================================
+
+        const existingStudent = await Student.findOne({
+          registerNumber,
+        });
+
+        if (existingStudent) {
+          throw new Error(
+            `Register number ${registerNumber} already exists.`
+          );
+        }
+
+        // ========================================================
+        // 9. CHECK DUPLICATE EMAIL
+        // ========================================================
+
+        const existingUser = await User.findOne({
+          email,
+        });
+
+        if (existingUser) {
+          throw new Error(
+            `Email ${email} already exists.`
+          );
+        }
+
+        // ========================================================
+        // 10. HOD RESTRICTION
+        // ========================================================
+
+        if (currentRole === "hod") {
+          if (
+            currentUserDoc.department &&
+            currentUserDoc.department !== department
+          ) {
+            throw new Error(
+              "HOD can only add students from the assigned department."
+            );
+          }
+        }
+
+        // ========================================================
+        // 11. GOOGLE DRIVE PHOTO → CLOUDINARY
+        // ========================================================
+
+        if (photo) {
+          cloudinaryResult =
+            await uploadGoogleDrivePhoto(photo);
+        }
+
+        // ========================================================
+        // 12. CREATE CLERK USER
+        // ========================================================
+
+        let clerkUser;
+
+        try {
+          // No password is supplied.
+          // Student authentication will use the
+          // authentication methods configured in Clerk.
+
+          clerkUser =
+            await clerkClient.users.createUser({
+              emailAddress: [email],
+              firstName: name,
+            });
+
+          clerkUserId = clerkUser.id;
+        } catch (clerkError) {
+          throw new Error(
+            `Clerk user creation failed: ${
+              clerkError?.errors?.[0]?.message ||
+              clerkError?.message ||
+              "Unknown Clerk error"
+            }`
+          );
+        }
+
+        // ========================================================
+        // 13. CREATE USER DOCUMENT
+        // ========================================================
+
+        createdUser = await User.create({
+          clerkId: clerkUserId,
+          name,
+          email,
+          phone,
+          role: "student",
+          department,
+        });
+
+        // ========================================================
+        // 14. CREATE STUDENT DOCUMENT
+        // ========================================================
+
+        createdStudent = await Student.create({
+          clerkId: clerkUserId,
+
+          registerNumber,
+
+          name,
+
+          fatherName,
+
+          motherName,
+
+          dob,
+
+          gender,
+
+          email,
+
+          phone,
+
+          department,
+
+          admissionYear,
+
+          academicYear,
+
+          batch,
+
+          batchNumber,
+
+          semester,
+
+          imageUrl:
+            cloudinaryResult?.secure_url || "",
+
+          imagePublicId:
+            cloudinaryResult?.public_id || "",
+        });
+
+        // ========================================================
+        // 15. CREATE STUDENT SEMESTER DOCUMENT
+        // ========================================================
+
+        createdSemester =
+          await StudentSemester.create({
+            studentId: createdStudent._id,
+
+            clerkId: clerkUserId,
+
+            registerNumber,
+
+            semester,
+
+            academicYear,
+
+            department,
+
+            batch,
+
+            batchNumber,
+          });
+
+        // ========================================================
+        // 16. SUCCESS
+        // ========================================================
+
+        createdStudents.push({
+          row: excelRowNumber,
+
+          registerNumber,
+
+          name,
+
+          email,
+
+          department,
+
+          semester,
+
+          batch,
+
+          batchNumber,
+
+          photoUploaded:
+            !!cloudinaryResult?.secure_url,
+
+          studentId: createdStudent._id,
+        });
+      } catch (error) {
+        // ========================================================
+        // ROW ERROR
+        // ========================================================
+
+        const failedRegisterNumber =
+          String(
+            row.registerNumber ||
+              row.RegisterNumber ||
+              row["Register Number"] ||
+              row.regno ||
+              row.RegNo ||
+              ""
+          )
+            .trim()
+            .toUpperCase();
+
+        const failedStudentName =
+          String(
+            row.name ||
+              row.Name ||
+              row["Student Name"] ||
+              row.studentName ||
+              ""
+          ).trim();
+
+        // ========================================================
+        // ROLLBACK STUDENT SEMESTER
+        // ========================================================
+
+        try {
+          if (createdSemester?._id) {
+            await StudentSemester.findByIdAndDelete(
+              createdSemester._id
+            );
+          }
+        } catch (rollbackError) {
+          console.error(
+            "StudentSemester rollback failed:",
+            rollbackError.message
+          );
+        }
+
+        // ========================================================
+        // ROLLBACK STUDENT
+        // ========================================================
+
+        try {
+          if (createdStudent?._id) {
+            await Student.findByIdAndDelete(
+              createdStudent._id
+            );
+          }
+        } catch (rollbackError) {
+          console.error(
+            "Student rollback failed:",
+            rollbackError.message
+          );
+        }
+
+        // ========================================================
+        // ROLLBACK USER
+        // ========================================================
+
+        try {
+          if (createdUser?._id) {
+            await User.findByIdAndDelete(
+              createdUser._id
+            );
+          }
+        } catch (rollbackError) {
+          console.error(
+            "User rollback failed:",
+            rollbackError.message
+          );
+        }
+
+        // ========================================================
+        // ROLLBACK CLERK USER
+        // ========================================================
+
+        try {
+          if (clerkUserId) {
+            await clerkClient.users.deleteUser(
+              clerkUserId
+            );
+          }
+        } catch (rollbackError) {
+          console.error(
+            "Clerk rollback failed:",
+            rollbackError.message
+          );
+        }
+
+        // ========================================================
+        // ROLLBACK CLOUDINARY PHOTO
+        // ========================================================
+
+        try {
+          if (cloudinaryResult?.public_id) {
+            await cloudinary.uploader.destroy(
+              cloudinaryResult.public_id
+            );
+          }
+        } catch (rollbackError) {
+          console.error(
+            "Cloudinary rollback failed:",
+            rollbackError.message
+          );
+        }
+
+        // ========================================================
+        // STORE ERROR
+        // ========================================================
+
+        errors.push({
+          row: excelRowNumber,
+
+          registerNumber:
+            failedRegisterNumber,
+
+          name:
+            failedStudentName,
+
+          error:
+            error.message,
+        });
+      }
+    }
+
+    // ============================================================
+    // 17. FINAL RESPONSE
+    // ============================================================
+
+    return res.status(200).json({
+      success: true,
+
+      message:
+        "Bulk student upload completed.",
+
+      summary: {
+        totalRows:
+          students.length,
+
+        successful:
+          createdStudents.length,
+
+        failed:
+          errors.length,
+      },
+
+      createdStudents,
+
+      errors,
+    });
+  } catch (error) {
+    console.error(
+      "❌ Bulk Excel upload error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        error.message ||
+        "Failed to process Excel file.",
+
+      summary: {
+        totalRows: 0,
+        successful: 0,
+        failed: 0,
+      },
     });
   }
 };
