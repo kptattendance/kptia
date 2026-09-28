@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
+import * as XLSX from "xlsx";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -326,6 +327,49 @@ export default function HODSubjectsPage() {
     semesterFilter,
   ]);
 
+
+  const handleDownloadExcel = () => {
+  if (filteredSubjects.length === 0) {
+    alert("No subjects available to download.");
+    return;
+  }
+
+  const excelData = filteredSubjects.map((subject, index) => ({
+    "Sl. No.": index + 1,
+    "Subject Code": subject.code || "",
+    "Subject Name": subject.name || "",
+    "Semester": subject.semester
+      ? `Semester ${subject.semester}`
+      : "",
+    "Department": getDepartmentName(subject.department),
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 18 },
+    { wch: 40 },
+    { wch: 15 },
+    { wch: 35 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Subjects"
+  );
+
+  const departmentName = getDepartmentName(hodDepartment)
+    .replace(/[^a-zA-Z0-9]/g, "_");
+
+  XLSX.writeFile(
+    workbook,
+    `${departmentName}_Subjects.xlsx`
+  );
+};
   // =====================================================
   // UI
   // =====================================================
@@ -464,24 +508,43 @@ export default function HODSubjectsPage() {
 
         <div className="border-b border-slate-100 px-6 py-4">
 
-          <div className="flex items-center justify-between">
+      <div className="border-b border-slate-100 px-6 py-4">
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
-            <div>
+    <div>
+      <h2 className="font-semibold text-slate-900">
+        Subject List
+      </h2>
 
-              <h2 className="font-semibold text-slate-900">
-                Subject List
-              </h2>
+      <p className="mt-1 text-xs text-slate-500">
+        {filteredSubjects.length} subject
+        {filteredSubjects.length !== 1 ? "s" : ""}
+      </p>
+    </div>
 
-              <p className="mt-1 text-xs text-slate-500">
-                {filteredSubjects.length} subject
-                {filteredSubjects.length !== 1
-                  ? "s"
-                  : ""}
-              </p>
+    <button
+      onClick={handleDownloadExcel}
+      disabled={filteredSubjects.length === 0}
+      className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="h-4 w-4"
+      >
+        <path d="M12 3v12" />
+        <path d="m7 10 5 5 5-5" />
+        <path d="M5 21h14" />
+      </svg>
 
-            </div>
+      Download Excel
+    </button>
 
-          </div>
+  </div>
+</div>
 
         </div>
 
@@ -545,6 +608,9 @@ export default function HODSubjectsPage() {
               <thead>
 
                 <tr className="border-b border-slate-100 bg-slate-50 text-left">
+                  <th className="w-16 px-6 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">
+  Sl. No.
+</th>
 
                   <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Code
@@ -573,11 +639,14 @@ export default function HODSubjectsPage() {
               <tbody>
 
                 {filteredSubjects.map(
-                  (subject) => (
+                 (subject, index) => (
                     <tr
                       key={subject._id}
                       className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"
                     >
+                      <td className="px-6 py-4 text-center text-sm font-medium text-slate-500">
+  {index + 1}
+</td>
 
                       {/* CODE */}
 

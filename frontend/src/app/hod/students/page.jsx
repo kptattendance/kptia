@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
+import * as XLSX from "xlsx";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -159,41 +160,51 @@ export default function HODStudentsPage() {
   }, [students]);
 
   // ==========================================
-  // FILTER
+  // FILTER + ALPHABETICAL SORT
   // ==========================================
 
   const filteredStudents = useMemo(() => {
     const searchText = search.trim().toLowerCase();
 
-    return students.filter((student) => {
-      const matchesSearch =
-        !searchText ||
-        student.name
-          ?.toLowerCase()
-          .includes(searchText) ||
-        student.registerNumber
-          ?.toLowerCase()
-          .includes(searchText) ||
-        student.email
-          ?.toLowerCase()
-          .includes(searchText);
+    return students
+      .filter((student) => {
+        const matchesSearch =
+          !searchText ||
+          student.name
+            ?.toLowerCase()
+            .includes(searchText) ||
+          student.registerNumber
+            ?.toLowerCase()
+            .includes(searchText) ||
+          student.email
+            ?.toLowerCase()
+            .includes(searchText);
 
-      const matchesSemester =
-        !semesterFilter ||
-        String(student.semester) ===
-          String(semesterFilter);
+        const matchesSemester =
+          !semesterFilter ||
+          String(student.semester) ===
+            String(semesterFilter);
 
-      const matchesBatch =
-        !batchFilter ||
-        String(student.batch) ===
-          String(batchFilter);
+        const matchesBatch =
+          !batchFilter ||
+          String(student.batch) ===
+            String(batchFilter);
 
-      return (
-        matchesSearch &&
-        matchesSemester &&
-        matchesBatch
+        return (
+          matchesSearch &&
+          matchesSemester &&
+          matchesBatch
+        );
+      })
+      .sort((a, b) =>
+        (a.name || "").localeCompare(
+          b.name || "",
+          undefined,
+          {
+            sensitivity: "base",
+          }
+        )
       );
-    });
   }, [
     students,
     search,
@@ -211,6 +222,65 @@ export default function HODStudentsPage() {
     search ||
     semesterFilter ||
     batchFilter;
+
+  // ==========================================
+  // DOWNLOAD FILTERED STUDENTS TO EXCEL
+  // ==========================================
+
+  const handleDownloadExcel = () => {
+    if (filteredStudents.length === 0) {
+      alert("No students available to download.");
+      return;
+    }
+
+    const excelData = filteredStudents.map((student, index) => ({
+      "Sl. No.": index + 1,
+      "Student Name": student.name || "",
+      "Register Number": student.registerNumber || "",
+      "Gender": student.gender || "",
+      "Admission Year": student.admissionYear || "",
+      "Semester": student.semester
+        ? `Semester ${student.semester}`
+        : "",
+      "Batch": student.batch || "",
+      "Batch No.": student.batchNumber || "",
+      "Email": student.email || "",
+      "Phone": student.phone || "",
+      "Department": getDepartmentName(student.department),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 15 },
+      { wch: 16 },
+      { wch: 12 },
+      { wch: 35 },
+      { wch: 16 },
+      { wch: 35 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Students"
+    );
+
+    const departmentName = getDepartmentName(hodDepartment)
+      .replace(/[^a-zA-Z0-9]/g, "_");
+
+    XLSX.writeFile(
+      workbook,
+      `${departmentName}_Students.xlsx`
+    );
+  };
 
   // ==========================================
   // EDIT STUDENT
@@ -236,18 +306,18 @@ export default function HODStudentsPage() {
 
       setEditingStudent(student);
 
-   setEditForm({
-  registerNumber: data.registerNumber || "",
-  name: data.name || "",
-  gender: data.gender || "",
-  email: data.email || "",
-  phone: data.phone || "",
-  department: data.department || hodDepartment,
-  admissionYear: data.admissionYear || "",
-  semester: data.semester || "",
-  batch: data.batch || "",
-  batchNumber: data.batchNumber || "",
-});
+      setEditForm({
+        registerNumber: data.registerNumber || "",
+        name: data.name || "",
+        gender: data.gender || "",
+        email: data.email || "",
+        phone: data.phone || "",
+        department: data.department || hodDepartment,
+        admissionYear: data.admissionYear || "",
+        semester: data.semester || "",
+        batch: data.batch || "",
+        batchNumber: data.batchNumber || "",
+      });
 
       setActionMessage("");
       setActionError("");
@@ -356,10 +426,11 @@ export default function HODStudentsPage() {
         "batch",
         editForm.batch.trim()
       );
+
       formData.append(
-  "batchNumber",
-  editForm.batchNumber
-);
+        "batchNumber",
+        editForm.batchNumber
+      );
 
       await axios.put(
         `${API_URL}/api/students/updatestudent/${editingStudent._id}`,
@@ -680,7 +751,7 @@ export default function HODStudentsPage() {
               All Semesters
             </option>
 
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(
+            {[1, 2, 3, 4, 5, 6].map(
               (semester) => (
                 <option
                   key={semester}
@@ -759,6 +830,26 @@ export default function HODStudentsPage() {
               {filteredStudents.length} students
             </p>
           </div>
+
+          <button
+            onClick={handleDownloadExcel}
+            disabled={filteredStudents.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-4 w-4"
+            >
+              <path d="M12 3v12" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+            Download Excel
+          </button>
 
           {hodDepartment && (
             <span className="w-fit rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
@@ -840,9 +931,11 @@ export default function HODStudentsPage() {
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     Batch
                   </th>
-<th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-  Batch No.
-</th>
+
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Batch No.
+                  </th>
+
                   <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                     Phone
                   </th>
@@ -966,15 +1059,19 @@ export default function HODStudentsPage() {
                           </span>
 
                         </td>
-{/* BATCH NUMBER */}
 
-<td className="px-5 py-4">
-  <span className="inline-flex rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
-    {student.batchNumber
-      ? `Batch ${student.batchNumber}`
-      : "—"}
-  </span>
-</td>
+                        {/* BATCH NUMBER */}
+
+                        <td className="px-5 py-4">
+
+                          <span className="inline-flex rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                            {student.batchNumber
+                              ? `Batch ${student.batchNumber}`
+                              : "—"}
+                          </span>
+
+                        </td>
+
                         {/* PHONE */}
 
                         <td className="px-5 py-4">
@@ -1326,56 +1423,69 @@ export default function HODStudentsPage() {
                     )}
                   </select>
                 </div>
+
                 {/* BATCH NUMBER */}
 
-<div>
-  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-    Batch Number
-  </label>
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Batch Number
+                  </label>
 
-  <select
-    name="batchNumber"
-    value={editForm.batchNumber}
-    onChange={handleEditChange}
-    required
-    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-slate-400"
-  >
-    <option value="">
-      Select Batch Number
-    </option>
+                  <select
+                    name="batchNumber"
+                    value={editForm.batchNumber}
+                    onChange={handleEditChange}
+                    required
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-slate-400"
+                  >
+                    <option value="">
+                      Select Batch Number
+                    </option>
 
-    <option value="1">
-      Batch 1
-    </option>
+                    <option value="1">
+                      Batch 1
+                    </option>
 
-    <option value="2">
-      Batch 2
-    </option>
-  </select>
-</div>
+                    <option value="2">
+                      Batch 2
+                    </option>
+                  </select>
+                </div>
 
                 {/* BATCH */}
 
                 <div>
-  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-    Batch
-  </label>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                    Batch
+                  </label>
 
-  <select
-    name="batch"
-    value={editForm.batch}
-    onChange={handleEditChange}
-    required
-    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
-  >
-    <option value="">Select Batch</option>
-    <option value="2023-2026">2023-2026</option>
-    <option value="2024-2027">2024-2027</option>
-    <option value="2025-2028">2025-2028</option>
-    <option value="2026-2029">2026-2029</option>
-    <option value="2027-2030">2027-2030</option>
-  </select>
-</div>
+                  <select
+                    name="batch"
+                    value={editForm.batch}
+                    onChange={handleEditChange}
+                    required
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-100"
+                  >
+                    <option value="">
+                      Select Batch
+                    </option>
+                    <option value="2023-2026">
+                      2023-2026
+                    </option>
+                    <option value="2024-2027">
+                      2024-2027
+                    </option>
+                    <option value="2025-2028">
+                      2025-2028
+                    </option>
+                    <option value="2026-2029">
+                      2026-2029
+                    </option>
+                    <option value="2027-2030">
+                      2027-2030
+                    </option>
+                  </select>
+                </div>
 
               </div>
 
@@ -1414,7 +1524,6 @@ export default function HODStudentsPage() {
   );
 }
 
-
 /* =========================================================
    HOD ADD STUDENT
 ========================================================= */
@@ -1426,17 +1535,17 @@ function HODAddStudent({
 }) {
   const { getToken } = useAuth();
 
- const [form, setForm] = useState({
-  registerNumber: "",
-  name: "",
-  gender: "",
-  email: "",
-  phone: "",
-  admissionYear: "",
-  semester: "",
-  batch: "",
-  batchNumber: "",
-});
+  const [form, setForm] = useState({
+    registerNumber: "",
+    name: "",
+    gender: "",
+    email: "",
+    phone: "",
+    admissionYear: "",
+    semester: "",
+    batch: "",
+    batchNumber: "",
+  });
 
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState("");
@@ -1489,18 +1598,18 @@ function HODAddStudent({
     // REQUIRED FIELD VALIDATION
     // ==========================================
 
-  if (
-  !form.registerNumber.trim() ||
-  !form.name.trim() ||
-  !form.gender ||
-  !form.email.trim() ||
-  !form.phone.trim() ||
-  !department ||
-  !form.admissionYear ||
-  !form.semester ||
-  !form.batch.trim() ||
-  !form.batchNumber
-){
+    if (
+      !form.registerNumber.trim() ||
+      !form.name.trim() ||
+      !form.gender ||
+      !form.email.trim() ||
+      !form.phone.trim() ||
+      !department ||
+      !form.admissionYear ||
+      !form.semester ||
+      !form.batch.trim() ||
+      !form.batchNumber
+    ) {
       setError(
         "Please fill in all required fields."
       );
@@ -1581,10 +1690,12 @@ function HODAddStudent({
         "batch",
         form.batch.trim()
       );
-formData.append(
-  "batchNumber",
-  form.batchNumber
-);
+
+      formData.append(
+        "batchNumber",
+        form.batchNumber
+      );
+
       // Batch number is not currently present
       // in this HOD form, so backend should
       // handle it according to existing logic.
@@ -1920,36 +2031,38 @@ formData.append(
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
               />
             </div>
-{/* BATCH NUMBER */}
 
-<div>
-  <label className="mb-2 block text-sm font-medium text-slate-700">
-    Batch Number
-    <span className="ml-1 text-red-500">
-      *
-    </span>
-  </label>
+            {/* BATCH NUMBER */}
 
-  <select
-    name="batchNumber"
-    value={form.batchNumber}
-    onChange={handleChange}
-    required
-    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
-  >
-    <option value="">
-      Select Batch Number
-    </option>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Batch Number
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
 
-    <option value="1">
-      Batch 1
-    </option>
+              <select
+                name="batchNumber"
+                value={form.batchNumber}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select Batch Number
+                </option>
 
-    <option value="2">
-      Batch 2
-    </option>
-  </select>
-</div>
+                <option value="1">
+                  Batch 1
+                </option>
+
+                <option value="2">
+                  Batch 2
+                </option>
+              </select>
+            </div>
+
             {/* BATCH */}
 
             <div>

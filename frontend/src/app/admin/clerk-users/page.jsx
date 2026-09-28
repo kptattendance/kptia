@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import { useEffect, useState } from "react";
 
+import * as XLSX from "xlsx";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const departments = [
@@ -140,6 +141,65 @@ const filteredUsers = users.filter((user) => {
   setDepartmentFilter("");
 };
 
+
+// ==========================================================
+// DOWNLOAD FILTERED USERS AS EXCEL
+// ==========================================================
+
+const handleDownloadExcel = () => {
+  if (filteredUsers.length === 0) {
+    alert("No users available to download.");
+    return;
+  }
+
+  const excelData = filteredUsers.map((user, index) => ({
+    "Sl. No.": index + 1,
+    "Name": user.name || "",
+    "Email": user.email || "",
+    "Role": user.role || "",
+    "Department": getDepartmentName(user.department),
+    "Clerk ID": user.clerkId || "",
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 30 },
+    { wch: 35 },
+    { wch: 18 },
+    { wch: 35 },
+    { wch: 45 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Users"
+  );
+
+  let fileName = "Clerk_Users";
+
+  if (roleFilter) {
+    fileName += `_${roleFilter}`;
+  }
+
+  if (departmentFilter) {
+    fileName += `_${getDepartmentName(departmentFilter)}`;
+  }
+
+  fileName = fileName.replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_"
+  );
+
+  XLSX.writeFile(
+    workbook,
+    `${fileName}.xlsx`
+  );
+};
   // ==========================================================
   // DELETE SINGLE USER
   // ==========================================================
@@ -356,6 +416,14 @@ const filteredUsers = users.filter((user) => {
             {selectedUsers.length > 0 &&
               ` (${selectedUsers.length})`}
           </button>
+
+          <button
+  onClick={handleDownloadExcel}
+  disabled={filteredUsers.length === 0}
+  className="rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"
+>
+  Download Excel
+</button>
         </div>
       </div>
 

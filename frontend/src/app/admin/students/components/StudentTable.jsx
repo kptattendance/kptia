@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 
+import * as XLSX from "xlsx";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const departments = [
@@ -129,14 +130,11 @@ export default function StudentTable({
     ].sort();
   }, [students]);
 
-  // ==========================================
-  // FILTER
-  // ==========================================
-
   const filteredStudents = useMemo(() => {
-    const searchText = search.trim().toLowerCase();
+  const searchText = search.trim().toLowerCase();
 
-    return students.filter((student) => {
+  return students
+    .filter((student) => {
       const matchesSearch =
         !searchText ||
         student.name
@@ -172,14 +170,41 @@ export default function StudentTable({
         matchesBatch &&
         matchesSemester
       );
+    })
+    .sort((a, b) => {
+      // First: Department
+      const departmentA = getDepartmentName(
+        a.department
+      ).toLowerCase();
+
+      const departmentB = getDepartmentName(
+        b.department
+      ).toLowerCase();
+
+      const departmentCompare =
+        departmentA.localeCompare(departmentB);
+
+      if (departmentCompare !== 0) {
+        return departmentCompare;
+      }
+
+      // Second: Student Name
+      const nameA = (a.name || "").trim();
+      const nameB = (b.name || "").trim();
+
+      return nameA.localeCompare(
+        nameB,
+        undefined,
+        { sensitivity: "base" }
+      );
     });
-  }, [
-    students,
-    search,
-    departmentFilter,
-    batchFilter,
-    semesterFilter,
-  ]);
+}, [
+  students,
+  search,
+  departmentFilter,
+  batchFilter,
+  semesterFilter,
+]);
 
   const clearFilters = () => {
     setSearch("");
@@ -194,6 +219,96 @@ export default function StudentTable({
     batchFilter ||
     semesterFilter;
 
+
+    // ==========================================
+// DOWNLOAD EXCEL
+// ==========================================
+
+const handleDownloadExcel = () => {
+  if (filteredStudents.length === 0) {
+    alert("No students available to download.");
+    return;
+  }
+
+  const excelData = filteredStudents.map(
+    (student, index) => ({
+      "Sl. No.": index + 1,
+
+      "Student Name":
+        student.name || "",
+
+      "Register Number":
+        student.registerNumber || "",
+
+      "Department":
+        getDepartmentName(student.department),
+
+      "Admission Year":
+        student.admissionYear || "",
+
+      "Semester":
+        student.semester
+          ? `Semester ${student.semester}`
+          : "",
+
+      "Batch":
+        student.batch || "",
+
+      "Batch Number":
+        student.batchNumber || "",
+
+      "Email":
+        student.email || "",
+
+      "Phone":
+        student.phone || "",
+    })
+  );
+
+  const worksheet =
+    XLSX.utils.json_to_sheet(excelData);
+
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 30 },
+    { wch: 20 },
+    { wch: 35 },
+    { wch: 16 },
+    { wch: 15 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 35 },
+    { wch: 16 },
+  ];
+
+  const workbook =
+    XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Students"
+  );
+
+  let fileName = "Students";
+
+  if (departmentFilter) {
+    fileName =
+      `${getDepartmentName(departmentFilter)}_Students`;
+  } else {
+    fileName = "All_Departments_Students";
+  }
+
+  fileName = fileName.replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_"
+  );
+
+  XLSX.writeFile(
+    workbook,
+    `${fileName}.xlsx`
+  );
+};
   // ==========================================
   // MULTIPLE SELECTION
   // ==========================================
@@ -877,6 +992,27 @@ export default function StudentTable({
                 </span>
               </button>
             )}
+            {/* DOWNLOAD EXCEL */}
+<button
+  onClick={handleDownloadExcel}
+  disabled={filteredStudents.length === 0}
+  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    className="h-4 w-4"
+  >
+    <path d="M12 3v12" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M5 21h14" />
+  </svg>
+
+  Download Excel
+</button>
 
             {/* BULK UPLOAD */}
             <button

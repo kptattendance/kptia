@@ -3,6 +3,7 @@
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 
 const departments = [
   { value: "", label: "Select department" },
@@ -109,21 +110,78 @@ export default function HODFacultyPage() {
   }, []);
 
   // ---------------------------------------
-  // FILTER
+  // FILTER + ALPHABETICAL SORT
   // ---------------------------------------
 
   const filteredFaculty = useMemo(() => {
     const searchValue = search.trim().toLowerCase();
 
-    return faculty.filter((user) => {
-      return (
-        !searchValue ||
-        user.name?.toLowerCase().includes(searchValue) ||
-        user.email?.toLowerCase().includes(searchValue) ||
-        user.phone?.toLowerCase().includes(searchValue)
+    return faculty
+      .filter((user) => {
+        return (
+          !searchValue ||
+          user.name?.toLowerCase().includes(searchValue) ||
+          user.email?.toLowerCase().includes(searchValue) ||
+          user.phone?.toLowerCase().includes(searchValue)
+        );
+      })
+      .sort((a, b) =>
+        (a.name || "").localeCompare(
+          b.name || "",
+          undefined,
+          {
+            sensitivity: "base",
+          }
+        )
       );
-    });
   }, [faculty, search]);
+
+  // ---------------------------------------
+  // DOWNLOAD EXCEL
+  // ---------------------------------------
+
+  const handleDownloadExcel = () => {
+    if (filteredFaculty.length === 0) {
+      alert("No faculty members available to download.");
+      return;
+    }
+
+    const excelData = filteredFaculty.map((user, index) => ({
+      "Sl. No.": index + 1,
+      "Faculty Name": user.name || "",
+      "Email": user.email || "",
+      "Phone": user.phone || "",
+      "Department": getDepartmentName(user.department),
+      "Role": user.role || "staff",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+    worksheet["!cols"] = [
+      { wch: 8 },
+      { wch: 30 },
+      { wch: 35 },
+      { wch: 18 },
+      { wch: 35 },
+      { wch: 15 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      worksheet,
+      "Faculty"
+    );
+
+    const departmentName = getDepartmentName(hodDepartment)
+      .replace(/[^a-zA-Z0-9]/g, "_");
+
+    XLSX.writeFile(
+      workbook,
+      `${departmentName}_Faculty.xlsx`
+    );
+  };
 
   // ---------------------------------------
   // FORM HANDLING
@@ -330,13 +388,40 @@ export default function HODFacultyPage() {
           </p>
         </div>
 
-        <button
-          onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md"
-        >
-          <span className="text-lg leading-none">+</span>
-          Add Faculty
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+
+          {/* DOWNLOAD EXCEL */}
+          <button
+            onClick={handleDownloadExcel}
+            disabled={filteredFaculty.length === 0}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-5 w-5"
+            >
+              <path d="M12 3v12" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+
+            Download Excel
+          </button>
+
+          {/* ADD FACULTY */}
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md"
+          >
+            <span className="text-lg leading-none">+</span>
+            Add Faculty
+          </button>
+
+        </div>
       </div>
 
       {/* STATS + SEARCH */}
@@ -358,6 +443,7 @@ export default function HODFacultyPage() {
             </div>
 
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 viewBox="0 0 24 24"
@@ -371,6 +457,7 @@ export default function HODFacultyPage() {
                 <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               </svg>
+
             </div>
 
           </div>
@@ -409,7 +496,6 @@ export default function HODFacultyPage() {
           </div>
 
         </div>
-
       </div>
 
       {/* FACULTY TABLE */}
@@ -496,6 +582,10 @@ export default function HODFacultyPage() {
                 <tr className="border-b border-slate-100 bg-slate-50/70">
 
                   <th className="px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Sl. No.
+                  </th>
+
+                  <th className="px-6 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                     Faculty
                   </th>
 
@@ -516,12 +606,19 @@ export default function HODFacultyPage() {
 
               <tbody className="divide-y divide-slate-100">
 
-                {filteredFaculty.map((user) => (
+                {filteredFaculty.map((user, index) => (
 
                   <tr
                     key={user._id}
                     className="group transition hover:bg-slate-50/70"
                   >
+
+                    {/* SL NO */}
+                    <td className="px-6 py-4">
+                      <span className="text-sm font-medium text-slate-500">
+                        {index + 1}
+                      </span>
+                    </td>
 
                     {/* FACULTY */}
                     <td className="px-6 py-4">

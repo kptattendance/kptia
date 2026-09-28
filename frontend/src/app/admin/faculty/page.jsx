@@ -2,6 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
+import * as XLSX from "xlsx";
 import { useEffect, useMemo, useState } from "react";
 
 const departments = [
@@ -96,11 +97,11 @@ export default function FacultyPage() {
   // --------------------------------------------------
   // FILTER
   // --------------------------------------------------
+const filteredFaculty = useMemo(() => {
+  const searchValue = search.trim().toLowerCase();
 
-  const filteredFaculty = useMemo(() => {
-    const searchValue = search.trim().toLowerCase();
-
-    return faculty.filter((user) => {
+  return faculty
+    .filter((user) => {
       const matchesSearch =
         !searchValue ||
         user.name?.toLowerCase().includes(searchValue) ||
@@ -112,9 +113,89 @@ export default function FacultyPage() {
         user.department === departmentFilter;
 
       return matchesSearch && matchesDepartment;
-    });
-  }, [faculty, search, departmentFilter]);
+    })
+    .sort((a, b) => {
+      // First sort by department
+      const departmentA =
+        getDepartmentName(a.department).toLowerCase();
 
+      const departmentB =
+        getDepartmentName(b.department).toLowerCase();
+
+      const departmentCompare =
+        departmentA.localeCompare(departmentB);
+
+      if (departmentCompare !== 0) {
+        return departmentCompare;
+      }
+
+      // If same department, sort by faculty name
+      const nameA = (a.name || "").trim();
+      const nameB = (b.name || "").trim();
+
+      return nameA.localeCompare(
+        nameB,
+        undefined,
+        { sensitivity: "base" }
+      );
+    });
+}, [faculty, search, departmentFilter]);
+
+
+// --------------------------------------------------
+// DOWNLOAD EXCEL
+// --------------------------------------------------
+
+const handleDownloadExcel = () => {
+  if (filteredFaculty.length === 0) {
+    alert("No faculty available to download.");
+    return;
+  }
+
+  const excelData = filteredFaculty.map((user, index) => ({
+    "Sl. No.": index + 1,
+    "Faculty Name": user.name || "",
+    "Email": user.email || "",
+    "Phone": user.phone || "",
+    "Department": getDepartmentName(user.department),
+    "Role": "Staff",
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 30 },
+    { wch: 35 },
+    { wch: 16 },
+    { wch: 35 },
+    { wch: 12 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Faculty"
+  );
+
+  let fileName = "Faculty_List";
+
+  if (departmentFilter) {
+    fileName = `${getDepartmentName(departmentFilter)}_Faculty`;
+  }
+
+  fileName = fileName.replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_"
+  );
+
+  XLSX.writeFile(
+    workbook,
+    `${fileName}.xlsx`
+  );
+};
   // --------------------------------------------------
   // SELECTION
   // --------------------------------------------------
@@ -411,13 +492,38 @@ export default function FacultyPage() {
           </p>
         </div>
 
-        <button
-          onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-        >
-          <span className="text-lg leading-none">+</span>
-          Add Faculty
-        </button>
+       <div className="flex flex-col gap-2 sm:flex-row">
+
+  <button
+    onClick={handleDownloadExcel}
+    disabled={filteredFaculty.length === 0}
+    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className="h-4 w-4"
+    >
+      <path d="M12 3v12" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M5 21h14" />
+    </svg>
+
+    Download Excel
+  </button>
+
+  <button
+    onClick={openAddModal}
+    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+  >
+    <span className="text-lg leading-none">+</span>
+    Add Faculty
+  </button>
+
+</div>
       </div>
 
       {/* TOOLBAR */}

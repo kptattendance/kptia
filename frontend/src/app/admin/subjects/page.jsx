@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 
+import * as XLSX from "xlsx";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const departments = [
@@ -95,14 +96,11 @@ export default function SubjectsPage() {
     fetchSubjects();
   }, []);
 
-  // =====================================================
-  // FILTER
-  // =====================================================
+const filteredSubjects = useMemo(() => {
+  const searchText = search.trim().toLowerCase();
 
-  const filteredSubjects = useMemo(() => {
-    const searchText = search.trim().toLowerCase();
-
-    return subjects.filter((subject) => {
+  return subjects
+    .filter((subject) => {
       const matchesSearch =
         !searchText ||
         subject.code?.toLowerCase().includes(searchText) ||
@@ -121,13 +119,22 @@ export default function SubjectsPage() {
         matchesDepartment &&
         matchesSemester
       );
+    })
+    .sort((a, b) => {
+      const codeA = (a.code || "").trim();
+      const codeB = (b.code || "").trim();
+
+      return codeA.localeCompare(codeB, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
     });
-  }, [
-    subjects,
-    search,
-    departmentFilter,
-    semesterFilter,
-  ]);
+}, [
+  subjects,
+  search,
+  departmentFilter,
+  semesterFilter,
+]);
 
   // =====================================================
   // SELECTION
@@ -468,6 +475,69 @@ export default function SubjectsPage() {
     window.URL.revokeObjectURL(url);
   };
 
+
+  // =====================================================
+// DOWNLOAD FILTERED SUBJECTS AS EXCEL
+// =====================================================
+
+const handleDownloadExcel = () => {
+  if (filteredSubjects.length === 0) {
+    alert("No subjects available to download.");
+    return;
+  }
+
+  const excelData = filteredSubjects.map((subject, index) => ({
+    "Sl. No.": index + 1,
+    "Subject Code": subject.code || "",
+    "Subject Name": subject.name || "",
+    "Semester": subject.semester
+      ? `Semester ${subject.semester}`
+      : "",
+    "Department": getDepartmentName(subject.department),
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 18 },
+    { wch: 40 },
+    { wch: 15 },
+    { wch: 35 },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Subjects"
+  );
+
+  let fileName = "Subjects";
+
+  if (departmentFilter) {
+    fileName = `${getDepartmentName(
+      departmentFilter
+    )}_Subjects`;
+  }
+
+  if (semesterFilter) {
+    fileName += `_Semester_${semesterFilter}`;
+  }
+
+  fileName = fileName.replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_"
+  );
+
+  XLSX.writeFile(
+    workbook,
+    `${fileName}.xlsx`
+  );
+};
+
+
   // =====================================================
   // UI
   // =====================================================
@@ -490,6 +560,27 @@ export default function SubjectsPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+
+          <button
+  onClick={handleDownloadExcel}
+  disabled={filteredSubjects.length === 0}
+  className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    className="h-4 w-4"
+  >
+    <path d="M12 3v12" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M5 21h14" />
+  </svg>
+
+  Download Excel
+</button>
 
           <button
             onClick={openBulkModal}
