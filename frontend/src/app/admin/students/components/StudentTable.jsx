@@ -62,6 +62,9 @@ export default function StudentTable({
   const [photoStudent, setPhotoStudent] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
+  // Photo Preview
+const [previewPhoto, setPreviewPhoto] = useState(null);
+
   // Message
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
@@ -1201,17 +1204,25 @@ const handleDownloadExcel = () => {
 
                           <div className="flex items-center gap-3">
 
-                            {student.imageUrl ? (
-                              <img
-                                src={
-                                  student.imageUrl
-                                }
-                                alt={
-                                  student.name
-                                }
-                                className="h-9 w-9 shrink-0 rounded-lg object-cover"
-                              />
-                            ) : (
+                          {student.imageUrl ? (
+  <button
+    type="button"
+    onClick={() =>
+      setPreviewPhoto({
+        imageUrl: student.imageUrl,
+        name: student.name,
+      })
+    }
+    className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300"
+    title="View photo"
+  >
+    <img
+      src={student.imageUrl}
+      alt={student.name}
+      className="h-9 w-9 rounded-lg object-cover transition hover:scale-105"
+    />
+  </button>
+) : (
                               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-semibold text-white">
                                 {student.name
                                   ?.charAt(
@@ -1461,6 +1472,48 @@ const handleDownloadExcel = () => {
         </div>
       )}
 
+
+{/* ==========================================
+    PHOTO PREVIEW MODAL
+========================================== */}
+
+{previewPhoto && (
+  <div
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+    onClick={() => setPreviewPhoto(null)}
+  >
+    <div
+      className="relative flex max-h-[95vh] max-w-[95vw] flex-col items-center"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* CLOSE BUTTON */}
+      <button
+        type="button"
+        onClick={() => setPreviewPhoto(null)}
+        className="absolute -right-3 -top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-semibold text-slate-700 shadow-lg transition hover:bg-slate-100 hover:text-slate-950"
+        aria-label="Close photo preview"
+      >
+        ✕
+      </button>
+
+      {/* PHOTO */}
+      <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
+        <img
+          src={previewPhoto.imageUrl}
+          alt={previewPhoto.name || "Student photo"}
+          className="max-h-[80vh] max-w-[90vw] rounded-xl object-contain"
+        />
+      </div>
+
+      {/* STUDENT NAME */}
+      {previewPhoto.name && (
+        <div className="mt-3 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-800 shadow-lg">
+          {previewPhoto.name}
+        </div>
+      )}
+    </div>
+  </div>
+)}
       {/* ==========================================
           EDIT MODAL
       ========================================== */}
