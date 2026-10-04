@@ -7,7 +7,7 @@ import { useClerk, useUser } from "@clerk/nextjs";
 const menuItems = [
   {
     name: "Dashboard",
-    href: "/admin",
+    href: "/admin/ia-monitoring",
     icon: (
       <svg
         xmlns="http://www.w3.org/2000/svg"

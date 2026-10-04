@@ -3,16 +3,20 @@ import express from "express";
 import {
   saveAttendance,
   getAttendance,
+  getAdminAttendanceStatistics,
 } from "../controllers/attendanceController.js";
 
 import { authenticateUser } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.use(authenticateUser);
+router.post("/save", authenticateUser, saveAttendance);
 
-router.post("/save", saveAttendance);
-
-router.get("/", getAttendance);
+router.get("/", authenticateUser, getAttendance);
+router.get(
+  "/admin-statistics",
+  // authenticateUser,
+  getAdminAttendanceStatistics
+);
 
 export default router;

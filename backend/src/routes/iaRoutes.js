@@ -9,11 +9,13 @@ import {
   updateIAMarks,
   deleteIAMarks,
   getStudentIAMarks,
+  getAdminIAStatus,
 } from "../controllers/iaController.js";
 
 import {
   authenticateUser,
 } from "../middlewares/authMiddleware.js";
+import { authorizeRoles } from "../middlewares/roleMiddleware.js";
 
 const router = express.Router();
 
@@ -54,6 +56,13 @@ router.get(
   getIAMarks
 );
 
+router.get(
+  "/admin-status",
+  // authenticateUser,
+  // authorizeRoles("admin"),
+  getAdminIAStatus
+);
+
 // Get by MongoDB ID
 router.get(
   "/:id",
@@ -79,5 +88,7 @@ router.delete(
   "/:id",
   deleteIAMarks
 );
+
+
 
 export default router;

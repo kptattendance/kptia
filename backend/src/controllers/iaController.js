@@ -1866,3 +1866,517 @@ export const getStudentIAMarks = async (
     });
   }
 };
+
+// ============================================================
+// ADMIN IA MONITORING STATUS
+// ============================================================
+// Returns one matrix-friendly dataset for Admin.
+//
+// Filters:
+// academicYear
+// department = all OR department code
+// semesterType = all / odd / even
+// iaNumber
+//
+// Odd  -> 1, 3, 5
+// Even -> 2, 4, 6
+//
+// Batch 1 and Batch 2 are checked independently.
+// ============================================================
+
+export const getAdminIAStatus = async (req, res) => {
+  try {
+    const role = getRole(req);
+
+    // --------------------------------------------------------
+    // ADMIN ONLY
+    // --------------------------------------------------------
+
+    if (role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only admin can view the IA monitoring status.",
+      });
+    }
+
+   
+
+
+
+const {
+  academicYear,
+  department = "all",
+  semester = "all",
+  semesterType = "all",
+  iaNumber,
+} = req.query;
+
+if (!academicYear) {
+  return res.status(400).json({
+    success: false,
+    message: "Academic year is required.",
+  });
+}
+
+if (
+  iaNumber === undefined ||
+  iaNumber === null ||
+  iaNumber === ""
+) {
+  return res.status(400).json({
+    success: false,
+    message: "IA number is required.",
+  });
+}
+
+const iaNumberValue = Number(iaNumber);
+
+if (
+  !Number.isInteger(iaNumberValue) ||
+  iaNumberValue < 1
+) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid IA number.",
+  });
+}
+
+const requestedDepartment = String(
+  department || "all"
+)
+  .trim()
+  .toLowerCase();
+
+const requestedSemester = String(
+  semester || "all"
+)
+  .trim()
+  .toLowerCase();
+
+const requestedSemesterType = String(
+  semesterType || "all"
+)
+  .trim()
+  .toLowerCase();
+
+
+// =====================================================
+// SEMESTER FILTER
+// =====================================================
+
+let semesterNumbers = [1, 2, 3, 4, 5, 6];
+
+
+// If exact semester is selected
+if (requestedSemester !== "all") {
+  const semesterValue = Number(requestedSemester);
+
+  if (
+    !Number.isInteger(semesterValue) ||
+    semesterValue < 1 ||
+    semesterValue > 6
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid semester.",
+    });
+  }
+
+  semesterNumbers = [semesterValue];
+}
+
+
+// If semester is All, optionally use Odd/Even
+else {
+  if (requestedSemesterType === "odd") {
+    semesterNumbers = [1, 3, 5];
+  } else if (requestedSemesterType === "even") {
+    semesterNumbers = [2, 4, 6];
+  } else if (requestedSemesterType === "all") {
+    semesterNumbers = [1, 2, 3, 4, 5, 6];
+  } else {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Semester type must be all, odd or even.",
+    });
+  }
+}
+    // --------------------------------------------------------
+    // SUBJECT QUERY
+    // --------------------------------------------------------
+
+const subjectQuery = {
+  semester: { $in: semesterNumbers },
+};
+
+if (requestedDepartment !== "all") {
+  subjectQuery.department =
+    requestedDepartment.toUpperCase();
+}
+
+    // --------------------------------------------------------
+    // GET SUBJECTS
+    // --------------------------------------------------------
+
+    const subjects =
+      await Subject.find(subjectQuery)
+        .select(
+          "_id code subjectId name sequence semester department subjectCategory electiveGroup"
+        )
+        .sort({
+          department: 1,
+          semester: 1,
+          sequence: 1,
+          code: 1,
+        })
+        .lean();
+
+    // --------------------------------------------------------
+    // IA QUERY
+    // --------------------------------------------------------
+const iaQuery = {
+  academicYear,
+  iaNumber: iaNumberValue,
+  semester: { $in: semesterNumbers },
+};
+
+if (requestedDepartment !== "all") {
+  iaQuery.department = requestedDepartment;
+}
+
+    // --------------------------------------------------------
+    // GET ALL MATCHING IA RECORDS
+    // --------------------------------------------------------
+
+    const iaRecords =
+      await IAMarks.find(iaQuery)
+        .select(
+          "_id department semester subjectId batchNumber isLocked createdAt"
+        )
+        .lean();
+
+    // --------------------------------------------------------
+    // FAST LOOKUP
+    // --------------------------------------------------------
+
+    const statusMap = new Map();
+
+    iaRecords.forEach((record) => {
+      const key =
+        `${String(record.subjectId)}_${Number(
+          record.batchNumber
+        )}`;
+
+      statusMap.set(key, record);
+    });
+
+    // --------------------------------------------------------
+    // BUILD SUBJECT INFORMATION
+    // --------------------------------------------------------
+
+    const subjectMap = new Map();
+
+    subjects.forEach((subject) => {
+      const subjectId =
+        String(subject._id);
+
+      subjectMap.set(subjectId, {
+        subjectId:
+          subject._id,
+
+        code:
+          subject.code || "",
+
+        subjectIdCode:
+          subject.subjectId || "",
+
+        name:
+          subject.name || "",
+
+        sequence:
+          subject.sequence || "",
+
+        semester:
+          Number(subject.semester),
+
+        department:
+          String(
+            subject.department || ""
+          )
+            .trim()
+            .toLowerCase(),
+
+        subjectCategory:
+          String(
+            subject.subjectCategory ||
+              "REGULAR"
+          ).toUpperCase(),
+
+        electiveGroup:
+          subject.electiveGroup || null,
+      });
+    });
+
+    // --------------------------------------------------------
+    // BUILD MATRIX ROWS
+    // --------------------------------------------------------
+    //
+    // One row = Department + Semester.
+    //
+    // subjects = only subjects belonging to that
+    // department + semester.
+    //
+    // --------------------------------------------------------
+
+    const rowMap = new Map();
+
+    subjects.forEach((subject) => {
+      const dept =
+        String(
+          subject.department || ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const sem =
+        Number(subject.semester);
+
+      const rowKey =
+        `${dept}_${sem}`;
+
+      if (!rowMap.has(rowKey)) {
+        rowMap.set(rowKey, {
+          department: dept,
+
+          departmentLabel:
+            dept.toUpperCase(),
+
+          semester: sem,
+
+          subjects: [],
+        });
+      }
+
+      const batch1Record =
+        statusMap.get(
+          `${String(subject._id)}_1`
+        );
+
+      const batch2Record =
+        statusMap.get(
+          `${String(subject._id)}_2`
+        );
+
+      rowMap.get(rowKey).subjects.push({
+        subjectId:
+          subject._id,
+
+        code:
+          subject.code || "",
+
+        name:
+          subject.name || "",
+
+        sequence:
+          subject.sequence || "",
+
+        subjectCategory:
+          String(
+            subject.subjectCategory ||
+              "REGULAR"
+          ).toUpperCase(),
+
+        batch1: {
+          entered:
+            Boolean(batch1Record),
+
+          recordId:
+            batch1Record?._id ||
+            null,
+
+          locked:
+            batch1Record
+              ? Boolean(
+                  batch1Record.isLocked
+                )
+              : false,
+        },
+
+        batch2: {
+          entered:
+            Boolean(batch2Record),
+
+          recordId:
+            batch2Record?._id ||
+            null,
+
+          locked:
+            batch2Record
+              ? Boolean(
+                  batch2Record.isLocked
+                )
+              : false,
+        },
+      });
+    });
+
+    // --------------------------------------------------------
+    // SORT SUBJECTS INSIDE EACH ROW
+    // --------------------------------------------------------
+
+    rowMap.forEach((row) => {
+      row.subjects.sort((a, b) => {
+        const sequenceCompare =
+          String(
+            a.sequence || ""
+          ).localeCompare(
+            String(
+              b.sequence || ""
+            ),
+            undefined,
+            {
+              numeric: true,
+              sensitivity: "base",
+            }
+          );
+
+        if (sequenceCompare !== 0) {
+          return sequenceCompare;
+        }
+
+        return String(
+          a.code || ""
+        ).localeCompare(
+          String(
+            b.code || ""
+          )
+        );
+      });
+    });
+
+    // --------------------------------------------------------
+    // FINAL ROW ORDER
+    // --------------------------------------------------------
+
+    const rows =
+      Array.from(
+        rowMap.values()
+      ).sort((a, b) => {
+        const deptCompare =
+          a.department.localeCompare(
+            b.department
+          );
+
+        if (deptCompare !== 0) {
+          return deptCompare;
+        }
+
+        return (
+          a.semester -
+          b.semester
+        );
+      });
+
+    // --------------------------------------------------------
+    // SUMMARY
+    // --------------------------------------------------------
+
+    let totalSubjects = 0;
+    let batch1Entered = 0;
+    let batch2Entered = 0;
+
+    rows.forEach((row) => {
+      row.subjects.forEach(
+        (subject) => {
+          totalSubjects += 1;
+
+          if (
+            subject.batch1.entered
+          ) {
+            batch1Entered += 1;
+          }
+
+          if (
+            subject.batch2.entered
+          ) {
+            batch2Entered += 1;
+          }
+        }
+      );
+    });
+
+    const totalPossible =
+      totalSubjects * 2;
+
+    const totalEntered =
+      batch1Entered +
+      batch2Entered;
+
+    const percentage =
+      totalPossible > 0
+        ? Number(
+            (
+              (totalEntered /
+                totalPossible) *
+              100
+            ).toFixed(1)
+          )
+        : 0;
+
+    // --------------------------------------------------------
+    // RESPONSE
+    // --------------------------------------------------------
+
+    return res.status(200).json({
+      success: true,
+
+      filters: {
+        academicYear,
+
+        department:
+          requestedDepartment,
+
+        semesterType:
+          requestedSemesterType,
+
+        semesters:
+          semesterNumbers,
+
+        iaNumber:
+          iaNumberValue,
+      },
+
+      summary: {
+        totalRows:
+          rows.length,
+
+        totalSubjects,
+
+        batch1Entered,
+
+        batch2Entered,
+
+        totalEntered,
+
+        totalPossible,
+
+        percentage,
+      },
+
+      rows,
+    });
+  } catch (error) {
+    console.error(
+      "Get Admin IA Status Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch admin IA monitoring status.",
+    });
+  }
+};
