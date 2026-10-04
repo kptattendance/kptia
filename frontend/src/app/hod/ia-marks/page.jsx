@@ -658,509 +658,499 @@ export default function HODIAMarksPage() {
     }
   };
 
-    return (
-    <div className="min-h-screen bg-[#f6f8fb] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-[1500px]">
 
-        {/* HEADER */}
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
 
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white">
-              <BarChart3 size={24} />
-            </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                HOD Portal
-              </p>
+  return (
+  <div className="min-h-screen bg-[#f6f8fb] px-3 pb-6 pt-20 sm:px-5 sm:py-6 md:px-6 lg:px-8">
+    <div className="mx-auto w-full max-w-[1500px]">
 
-              <h1 className="mt-0.5 text-2xl font-bold text-slate-950 sm:text-3xl">
-                Internal Assessment Marks
-              </h1>
+      {/* =====================================================
+          HEADER
+      ====================================================== */}
+      <div className="mb-5 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-center lg:justify-between">
 
-              <p className="mt-1 text-sm text-slate-500">
-                View semester-wise IA marks for all subjects.
-              </p>
-            </div>
+        {/* TITLE */}
+        <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
+
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 sm:h-12 sm:w-12 sm:rounded-2xl">
+            <BarChart3 size={21} className="sm:h-6 sm:w-6" />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:text-xs">
+              HOD Portal
+            </p>
 
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={loading || !semester}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-            >
-              <RefreshCw
-                size={16}
-                className={
-                  loading ? "animate-spin" : ""
-                }
-              />
-              Refresh
-            </button>
+            <h1 className="mt-0.5 text-xl font-bold leading-tight text-slate-950 sm:text-2xl md:text-3xl">
+              Internal Assessment Marks
+            </h1>
 
-            {selectedIA &&
-              tableData.length > 0 && (
-                <button
-                  type="button"
-                  onClick={downloadExcel}
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
-                >
-                  <FileSpreadsheet size={16} />
-                  Download Excel
-                </button>
-              )}
+            <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
+              View semester-wise IA marks for all subjects.
+            </p>
           </div>
+
         </div>
 
-        {/* FILTERS */}
-        <section className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {/* ACTION BUTTONS */}
+        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
 
-          <div className="border-b border-slate-100 px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Report Selection
-            </p>
-
-            <h2 className="mt-1 text-lg font-bold text-slate-950">
-              Select Assessment
-            </h2>
-          </div>
-
-          <div className="bg-slate-50/60 p-5">
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-
-              {/* ACADEMIC YEAR */}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Academic Year
-                </label>
-
-                <div className="relative">
-                  <select
-                    value={academicYear}
-                    onChange={(e) =>
-                      setAcademicYear(
-                        e.target.value
-                      )
-                    }
-                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none focus:border-slate-500"
-                  >
-                    <option value="2026-27">
-                      2026-27
-                    </option>
-
-                    <option value="2025-26">
-                      2025-26
-                    </option>
-
-                    <option value="2024-25">
-                      2024-25
-                    </option>
-                  </select>
-
-                  <ChevronDown
-                    size={16}
-                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                </div>
-              </div>
-
-              {/* SEMESTER */}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Semester
-                </label>
-
-                <div className="relative">
-                  <select
-                    value={semester}
-                    onChange={(e) =>
-                      setSemester(
-                        e.target.value
-                      )
-                    }
-                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none focus:border-slate-500"
-                  >
-                    <option value="">
-                      Select Semester
-                    </option>
-
-                    {semesters.map(
-                      (sem) => (
-                        <option
-                          key={sem}
-                          value={sem}
-                        >
-                          Semester {sem}
-                        </option>
-                      )
-                    )}
-                  </select>
-
-                  <ChevronDown
-                    size={16}
-                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                </div>
-              </div>
-
-              {/* IA */}
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Internal Assessment
-                </label>
-
-                <div className="relative">
-                  <select
-                    value={selectedIA}
-                    onChange={(e) =>
-                      setSelectedIA(
-                        e.target.value
-                      )
-                    }
-                    disabled={
-                      !semester ||
-                      availableIANumbers.length ===
-                        0
-                    }
-                    className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none disabled:bg-slate-50"
-                  >
-                    <option value="">
-                      Select IA
-                    </option>
-
-                    {availableIANumbers.map(
-                      (ia) => (
-                        <option
-                          key={ia}
-                          value={ia}
-                        >
-                          IA {ia}
-                        </option>
-                      )
-                    )}
-                  </select>
-
-                  <ChevronDown
-                    size={16}
-                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </section>
-
-        {/* ERROR */}
-        {error && (
-          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        {/* LOADING */}
-        {loading && (
-          <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
-
+          <button
+            type="button"
+            onClick={loadData}
+            disabled={loading || !semester}
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-amber-50 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
             <RefreshCw
-              size={30}
-              className="mx-auto mb-3 animate-spin text-slate-400"
+              size={16}
+              className={loading ? "animate-spin" : ""}
             />
+            Refresh
+          </button>
 
-            <p className="text-sm text-slate-500">
-              Loading IA marks...
-            </p>
-
-          </div>
-        )}
-
-        {/* NO SEMESTER */}
-        {!loading && !semester && (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
-
-            <BarChart3
-              size={34}
-              className="mx-auto mb-3 text-slate-300"
-            />
-
-            <h2 className="font-semibold text-slate-700">
-              Select a Semester
-            </h2>
-
-            <p className="mt-1 text-sm text-slate-400">
-              Select a semester to view IA marks.
-            </p>
-
-          </div>
-        )}
-
-        {/* NO IA */}
-        {!loading &&
-          semester &&
-          availableIANumbers.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center shadow-sm">
-
-              <BarChart3
-                size={34}
-                className="mx-auto mb-3 text-slate-300"
-              />
-
-              <h2 className="font-semibold text-slate-700">
-                No IA Marks Available
-              </h2>
-
-              <p className="mt-1 text-sm text-slate-400">
-                No IA marks have been entered for Semester{" "}
-                {semester}.
-              </p>
-
-            </div>
+          {selectedIA && tableData.length > 0 && (
+            <button
+              type="button"
+              onClick={downloadExcel}
+              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 sm:w-auto"
+            >
+              <FileSpreadsheet size={16} />
+              Download Excel
+            </button>
           )}
 
-        {/* TABLE */}
-        {!loading &&
-          semester &&
-          selectedIA &&
-          subjects.length > 0 &&
-          tableData.length > 0 && (
+        </div>
+      </div>
 
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-              <div className="border-b border-slate-100 px-5 py-4">
+      {/* =====================================================
+          REPORT SELECTION
+      ====================================================== */}
+      <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:mb-6">
 
-                <div className="flex items-center justify-between gap-3">
+        <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
 
-                  <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:text-xs">
+            Report Selection
+          </p>
 
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Assessment Overview
-                    </p>
+          <h2 className="mt-1 text-base font-bold text-slate-950 sm:text-lg">
+            Select Assessment
+          </h2>
 
-                    <h2 className="mt-1 text-lg font-bold text-slate-950">
-                      Semester {semester} — IA{" "}
-                      {selectedIA}
-                    </h2>
+        </div>
 
-                    <p className="mt-1 text-xs text-slate-500">
-                      All subjects are displayed. A dash means marks have not been entered.
-                    </p>
+
+        <div className="bg-slate-50/60 p-4 sm:p-5">
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+
+            {/* =================================================
+                ACADEMIC YEAR
+            ================================================== */}
+            <div className="min-w-0">
+
+              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
+                Academic Year
+              </label>
+
+              <div className="relative">
+
+                <select
+                  value={academicYear}
+                  onChange={(e) =>
+                    setAcademicYear(e.target.value)
+                  }
+                  className="min-h-[44px] w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-50"
+                >
+
+                  <option value="2026-27">
+                    2026-27
+                  </option>
+
+                  <option value="2025-26">
+                    2025-26
+                  </option>
+
+                  <option value="2024-25">
+                    2024-25
+                  </option>
+
+                </select>
+
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+              </div>
+            </div>
+
+
+            {/* =================================================
+                SEMESTER
+            ================================================== */}
+            <div className="min-w-0">
+
+              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
+                Semester
+              </label>
+
+              <div className="relative">
+
+                <select
+                  value={semester}
+                  onChange={(e) =>
+                    setSemester(e.target.value)
+                  }
+                  className="min-h-[44px] w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-50"
+                >
+
+                  <option value="">
+                    Select Semester
+                  </option>
+
+                  {semesters.map((sem) => (
+                    <option
+                      key={sem}
+                      value={sem}
+                    >
+                      Semester {sem}
+                    </option>
+                  ))}
+
+                </select>
+
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+              </div>
+            </div>
+
+
+            {/* =================================================
+                IA
+            ================================================== */}
+            <div className="min-w-0">
+
+              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
+                Internal Assessment
+              </label>
+
+              <div className="relative">
+
+                <select
+                  value={selectedIA}
+                  onChange={(e) =>
+                    setSelectedIA(e.target.value)
+                  }
+                  disabled={
+                    !semester ||
+                    availableIANumbers.length === 0
+                  }
+                  className="min-h-[44px] w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-50 disabled:bg-slate-50 disabled:text-slate-400"
+                >
+
+                  <option value="">
+                    Select IA
+                  </option>
+
+                  {availableIANumbers.map((ia) => (
+                    <option
+                      key={ia}
+                      value={ia}
+                    >
+                      IA {ia}
+                    </option>
+                  ))}
+
+                </select>
+
+                <ChevronDown
+                  size={16}
+                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+
+      {/* =====================================================
+          ERROR
+      ====================================================== */}
+      {error && (
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:mb-6">
+          {error}
+        </div>
+      )}
+
+
+      {/* =====================================================
+          KEEP YOUR EXISTING LOADING / EMPTY SECTIONS HERE
+          UNCHANGED
+      ====================================================== */}
+
+
+  {!loading &&
+  semester &&
+  selectedIA &&
+  subjects.length > 0 &&
+  tableData.length > 0 && (
+
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+      {/* =====================================================
+          ASSESSMENT HEADER
+      ====================================================== */}
+      <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+          <div className="min-w-0">
+
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:text-xs">
+              Assessment Overview
+            </p>
+
+            <h2 className="mt-1 text-base font-bold text-slate-950 sm:text-lg">
+              Semester {semester} — IA {selectedIA}
+            </h2>
+
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
+              All subjects are displayed. A dash means marks have not been entered.
+            </p>
+
+          </div>
+
+          <span className="inline-flex w-fit shrink-0 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
+            {tableData.length} Students
+          </span>
+
+        </div>
+
+      </div>
+
+
+      {/* =====================================================
+          MOBILE TABLE HINT
+      ====================================================== */}
+      <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 text-[10px] font-medium text-slate-400 sm:hidden">
+        Swipe left/right or drag the table to view all subjects.
+      </div>
+
+
+      {/* =====================================================
+          DRAGGABLE TABLE
+      ====================================================== */}
+      <div
+        ref={tableScrollRef}
+        onMouseDown={startDrag}
+        onMouseMove={dragTable}
+        onMouseUp={stopDrag}
+        onMouseLeave={stopDrag}
+        className="relative w-full cursor-grab select-none overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+
+        <table className="min-w-max border-collapse text-sm">
+
+          <thead>
+
+            <tr className="border-b border-slate-200 bg-slate-50">
+
+              {/* S.NO */}
+              <th className="sticky left-0 z-30 w-[48px] min-w-[48px] border-r border-slate-200 bg-slate-50 px-1.5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:w-[55px] sm:min-w-[55px] sm:px-2 sm:py-3.5 sm:text-[11px]">
+                S.No.
+              </th>
+
+
+              {/* PHOTO */}
+              <th className="sticky left-[48px] z-30 w-[60px] min-w-[60px] border-r border-slate-200 bg-slate-50 px-1.5 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:left-[55px] sm:w-[70px] sm:min-w-[70px] sm:px-2 sm:py-3.5 sm:text-[11px]">
+                Photo
+              </th>
+
+
+              {/* REGISTER */}
+              <th className="sticky left-[108px] z-30 w-[120px] min-w-[120px] border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:left-[125px] sm:w-[125px] sm:min-w-[125px] sm:py-3.5 sm:text-[11px]">
+                Register No.
+              </th>
+
+
+              {/* STUDENT */}
+              <th className="sticky left-[228px] z-30 w-[190px] min-w-[190px] border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 shadow-[4px_0_8px_-7px_rgba(0,0,0,0.35)] sm:left-[250px] sm:w-[220px] sm:min-w-[220px] sm:px-4 sm:py-3.5 sm:text-[11px]">
+                Student
+              </th>
+
+
+              {/* BATCH */}
+              <th className="w-[90px] min-w-[90px] border-r border-slate-200 px-3 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:w-[100px] sm:min-w-[100px] sm:px-4 sm:py-3.5 sm:text-[11px]">
+                Batch
+              </th>
+
+
+              {/* SUBJECTS */}
+              {subjects.map((subject) => (
+                <th
+                  key={String(subject._id)}
+                  className="w-[145px] min-w-[145px] border-r border-slate-200 px-3 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:w-[160px] sm:min-w-[160px] sm:px-4 sm:py-3.5 sm:text-[11px]"
+                >
+                  <div className="max-w-[130px] whitespace-normal leading-4 sm:max-w-[145px]">
+                    {subject.code}
+                  </div>
+
+                  <div className="mt-1 max-w-[130px] whitespace-normal text-[9px] font-medium normal-case leading-3 text-slate-400 sm:max-w-[145px] sm:text-[10px]">
+                    {subject.name}
+                  </div>
+                </th>
+              ))}
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            {tableData.map((student, index) => (
+
+              <tr
+                key={
+                  student.studentId ||
+                  student.registerNumber
+                }
+                className="border-b border-slate-100 hover:bg-slate-50"
+              >
+
+                {/* S.NO */}
+                <td className="sticky left-0 z-20 w-[48px] min-w-[48px] border-r border-slate-100 bg-white px-1.5 py-3 text-center font-semibold text-slate-500 sm:w-[55px] sm:min-w-[55px] sm:px-2 sm:py-3.5">
+                  {index + 1}
+                </td>
+
+
+                {/* PHOTO */}
+                <td className="sticky left-[48px] z-20 w-[60px] min-w-[60px] border-r border-slate-100 bg-white px-1.5 py-2.5 sm:left-[55px] sm:w-[70px] sm:min-w-[70px] sm:px-2">
+
+                  <div className="flex justify-center">
+
+                    {student.imageUrl ? (
+
+                      <img
+                        src={student.imageUrl}
+                        alt={
+                          student.name ||
+                          "Student"
+                        }
+                        className="h-9 w-9 rounded-full bg-slate-100 object-cover ring-2 ring-slate-100 sm:h-10 sm:w-10"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+
+                    ) : (
+
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 sm:h-10 sm:w-10">
+                        {String(
+                          student.name ||
+                            "S"
+                        )
+                          .charAt(0)
+                          .toUpperCase()}
+                      </div>
+
+                    )}
 
                   </div>
 
-                  <span className="inline-flex rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
-                    {tableData.length} Students
+                </td>
+
+
+                {/* REGISTER */}
+                <td className="sticky left-[108px] z-20 w-[120px] min-w-[120px] whitespace-nowrap border-r border-slate-100 bg-white px-3 py-3 text-xs font-medium text-slate-700 sm:left-[125px] sm:w-[125px] sm:min-w-[125px] sm:py-3.5 sm:text-sm">
+                  {student.registerNumber}
+                </td>
+
+
+                {/* STUDENT */}
+                <td className="sticky left-[228px] z-20 w-[190px] min-w-[190px] whitespace-nowrap border-r border-slate-100 bg-white px-3 py-3 font-semibold text-slate-900 shadow-[4px_0_8px_-7px_rgba(0,0,0,0.25)] sm:left-[250px] sm:w-[220px] sm:min-w-[220px] sm:px-4 sm:py-3.5 sm:text-sm">
+                  {student.name}
+                </td>
+
+
+                {/* BATCH */}
+                <td className="w-[90px] min-w-[90px] border-r border-slate-100 px-2 py-3 text-center sm:w-[100px] sm:min-w-[100px] sm:px-4 sm:py-3.5">
+
+                  <span className="inline-flex whitespace-nowrap rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600 sm:px-2.5 sm:py-1 sm:text-xs">
+                    Batch {student.batchNumber}
                   </span>
 
-                </div>
-              </div>
+                </td>
 
-              {/* DRAGGABLE TABLE */}
-           <div
-  ref={tableScrollRef}
-  onMouseDown={startDrag}
-  onMouseMove={dragTable}
-  onMouseUp={stopDrag}
-  onMouseLeave={stopDrag}
-  className="relative cursor-grab select-none overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
->
 
-                <table className="min-w-max border-collapse text-sm">
+                {/* SUBJECT MARKS */}
+                {subjects.map((subject) => {
 
-                  <thead>
+                  const key =
+                    String(subject._id);
 
-                    <tr className="border-b border-slate-200 bg-slate-50">
+                  const mark =
+                    student
+                      .subjectMarks?.[key];
 
-                      <th className="sticky left-0 z-30 w-[55px] min-w-[55px] border-r border-slate-200 bg-slate-50 px-2 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        S.No.
-                      </th>
+                  return (
 
-                      <th className="sticky left-[55px] z-30 w-[70px] min-w-[70px] border-r border-slate-200 bg-slate-50 px-2 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Photo
-                      </th>
+                    <td
+                      key={key}
+                      className="w-[145px] min-w-[145px] border-r border-slate-100 px-3 py-3 text-center sm:w-[160px] sm:min-w-[160px] sm:px-4 sm:py-3.5"
+                    >
 
-                      <th className="sticky left-[125px] z-30 w-[125px] min-w-[125px] border-r border-slate-200 bg-slate-50 px-3 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Register No.
-                      </th>
+                      {mark ? (
 
-                      {/* FROZEN STUDENT NAME */}
-                      <th className="sticky left-[250px] z-30 w-[220px] min-w-[220px] border-r border-slate-200 bg-slate-50 px-4 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Student
-                      </th>
+                        mark.status ===
+                        "ABSENT" ? (
 
-                      <th className="w-[100px] min-w-[100px] border-r border-slate-200 px-4 py-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                        Batch
-                      </th>
+                          <span className="font-semibold text-red-500">
+                            AB
+                          </span>
 
-                      {subjects.map(
-                        (subject) => (
-                          <th
-                            key={subject._id}
-                            className="w-[160px] min-w-[160px] border-r border-slate-200 px-4 py-3.5 text-center"
-                          >
+                        ) : (
 
-                            <Link
-                              href={`/hod/ia-marks/${subject._id}?academicYear=${encodeURIComponent(
-                                academicYear
-                              )}&semester=${semester}`}
-                              onMouseDown={(e) =>
-                                e.stopPropagation()
-                              }
-                              className="font-semibold text-slate-700 hover:text-blue-600"
-                            >
-                              {subject.name}
-                            </Link>
+                          <span className="font-semibold text-slate-800">
+                            {mark.marks}
+                          </span>
 
-                            <div className="mt-0.5 text-[11px] font-medium text-slate-400">
-                              {subject.sequence
-                                ? `${subject.sequence} • `
-                                : ""}
-                              {subject.code}
-                            </div>
-
-                          </th>
                         )
+
+                      ) : (
+
+                        <span className="text-slate-300">
+                          —
+                        </span>
+
                       )}
 
-                    </tr>
+                    </td>
 
-                  </thead>
+                  );
 
-                  <tbody>
+                })}
 
-                    {tableData.map(
-                      (student, index) => (
+              </tr>
 
-                        <tr
-                          key={
-                            student.studentId ||
-                            student.registerNumber
-                          }
-                          className="border-b border-slate-100 hover:bg-slate-50"
-                        >
+            ))}
 
-                          <td className="sticky left-0 z-20 w-[55px] min-w-[55px] border-r border-slate-100 bg-white px-2 py-3.5 text-center font-semibold text-slate-500">
-                            {index + 1}
-                          </td>
+          </tbody>
 
-                          <td className="sticky left-[55px] z-20 w-[70px] min-w-[70px] border-r border-slate-100 bg-white px-2 py-2.5">
+        </table>
 
-                            <div className="flex justify-center">
+      </div>
 
-                              {student.imageUrl ? (
-
-                                <img
-                                  src={student.imageUrl}
-                                  alt={
-                                    student.name ||
-                                    "Student"
-                                  }
-                                  className="h-10 w-10 rounded-full bg-slate-100 object-cover ring-2 ring-slate-100"
-                                  loading="lazy"
-                                  referrerPolicy="no-referrer"
-                                />
-
-                              ) : (
-
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">
-                                  {String(
-                                    student.name ||
-                                      "S"
-                                  )
-                                    .charAt(0)
-                                    .toUpperCase()}
-                                </div>
-
-                              )}
-
-                            </div>
-
-                          </td>
-
-                          <td className="sticky left-[125px] z-20 w-[125px] min-w-[125px] whitespace-nowrap border-r border-slate-100 bg-white px-3 py-3.5 font-medium text-slate-700">
-                            {student.registerNumber}
-                          </td>
-
-                          {/* FROZEN STUDENT NAME */}
-                          <td className="sticky left-[250px] z-20 w-[220px] min-w-[220px] whitespace-nowrap border-r border-slate-100 bg-white px-4 py-3.5 font-semibold text-slate-900">
-                            {student.name}
-                          </td>
-
-                          <td className="w-[100px] min-w-[100px] border-r border-slate-100 px-4 py-3.5 text-center">
-
-                            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                              Batch{" "}
-                              {student.batchNumber}
-                            </span>
-
-                          </td>
-
-                          {subjects.map(
-                            (subject) => {
-
-                              const key =
-                                String(
-                                  subject._id
-                                );
-
-                              const mark =
-                                student
-                                  .subjectMarks?.[
-                                  key
-                                ];
-
-                              return (
-                                <td
-                                  key={key}
-                                  className="w-[160px] min-w-[160px] border-r border-slate-100 px-4 py-3.5 text-center"
-                                >
-
-                                  {mark ? (
-
-                                    mark.status ===
-                                    "ABSENT" ? (
-
-                                      <span className="font-semibold text-red-500">
-                                        AB
-                                      </span>
-
-                                    ) : (
-
-                                      <span className="font-semibold text-slate-800">
-                                        {mark.marks}
-                                      </span>
-
-                                    )
-
-                                  ) : (
-
-                                    <span className="text-slate-300">
-                                      —
-                                    </span>
-
-                                  )}
-
-                                </td>
-                              );
-                            }
-                          )}
-
-                        </tr>
-                      )
-                    )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            </section>
-          )}
+    </section>
+  )}
 
         {/* NO STUDENTS */}
         {!loading &&
