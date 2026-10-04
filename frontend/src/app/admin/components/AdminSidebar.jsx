@@ -138,6 +138,28 @@ const menuItems = [
       </svg>
     ),
   },
+  
+  {
+    name: "Mongo Users",
+    href: "/admin/mongo-users",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="h-5 w-5"
+      >
+        <path d="M4 19V5" />
+        <path d="M4 19h16" />
+        <path d="M8 16v-5" />
+        <path d="M12 16V7" />
+        <path d="M16 16v-8" />
+        <path d="M20 16V4" />
+      </svg>
+    ),
+  },
   {
     name: "Clerk Users",
     href: "/admin/clerk-users",

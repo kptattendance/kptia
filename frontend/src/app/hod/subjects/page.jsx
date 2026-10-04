@@ -103,18 +103,16 @@ export default function HODSubjectsPage() {
       );
 
       const data =
-        response.data?.data || [];
+        response.data?.subjects  || [];
 
-      // Extra frontend safety:
-      // HOD should only see own department subjects.
       const departmentSubjects =
-        data.filter(
-          (subject) =>
-            subject.department
-              ?.trim()
-              .toLowerCase() === department
-        );
-
+  data.filter(
+    (subject) =>
+      subject.department
+        ?.trim()
+        .toLowerCase() ===
+      department.trim().toLowerCase()
+  );
       setSubjects(departmentSubjects);
     } catch (err) {
       console.error(
@@ -486,7 +484,7 @@ export default function HODSubjectsPage() {
               All Semesters
             </option>
 
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(
+            {[1, 2, 3, 4, 5, 6].map(
               (semester) => (
                 <option
                   key={semester}

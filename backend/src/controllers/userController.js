@@ -104,38 +104,184 @@ export const getClerkUsers = async (req, res) => {
 };
 
 
-// Delete Clerk user
-export const deleteClerkUser = async (req, res) => {
-  try {
-    // Only admin should be allowed
-    if (req.user.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied",
-      });
-    }
+// =====================================================
+// DELETE CLERK USER
+// DELETE /api/users/clerk-users/:clerkId
+//
+// IMPORTANT:
+// Although this route is called "clerk-users",
+// it performs COMPLETE deletion.
+//
+// Deletes:
+// 1. Cloudinary
+// 2. Clerk
+// 3. MongoDB User
+// =====================================================
 
+export const deleteClerkUser = async (
+  req,
+  res
+) => {
+  try {
     const { clerkId } = req.params;
+
+    // =================================================
+    // VALIDATION
+    // =================================================
 
     if (!clerkId) {
       return res.status(400).json({
         success: false,
-        message: "Clerk user ID is required",
+        message:
+          "Clerk user ID is required.",
       });
     }
 
-    await clerkClient.users.deleteUser(clerkId);
+    // =================================================
+    // REQUESTER
+    // =================================================
+
+    const requesterRole =
+      req.user?.role;
+
+    const requesterId =
+      req.user?.id;
+
+    // =================================================
+    // FIND MONGO USER
+    // =================================================
+
+    const mongoUser =
+      await User.findOne({
+        clerkId,
+      });
+
+    // =================================================
+    // IF MONGO USER EXISTS
+    // =================================================
+
+    if (mongoUser) {
+
+      // -----------------------------------------------
+      // PREVENT SELF DELETE
+      // -----------------------------------------------
+
+      if (
+        mongoUser.clerkId === requesterId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "You cannot delete your own account.",
+        });
+      }
+
+      // -----------------------------------------------
+      // ROLE PERMISSION
+      // -----------------------------------------------
+
+      if (
+        !canManage(
+          requesterRole,
+          mongoUser.role
+        )
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You do not have permission to delete this user.",
+        });
+      }
+    }
+
+    // =================================================
+    // COMPLETE CLEANUP
+    // =================================================
+
+    let result;
+
+    if (mongoUser) {
+      result =
+        await completeDeleteUser(
+          mongoUser._id.toString()
+        );
+    } else {
+      // Mongo record does not exist.
+      //
+      // Still try to delete the Clerk account.
+
+      let clerkDeleted = false;
+
+      try {
+        await clerkClient.users.deleteUser(
+          clerkId
+        );
+
+        clerkDeleted = true;
+
+        console.log(
+          `Clerk user deleted: ${clerkId}`
+        );
+
+      } catch (error) {
+
+        const status =
+          error?.status ||
+          error?.statusCode;
+
+        if (status === 404) {
+          clerkDeleted = true;
+        } else {
+          throw error;
+        }
+      }
+
+      result = {
+        mongoDeleted: false,
+        clerkDeleted,
+        cloudinaryDeleted: false,
+        clerkId,
+      };
+    }
+
+    // =================================================
+    // SUCCESS
+    // =================================================
 
     return res.status(200).json({
       success: true,
-      message: "Clerk user deleted successfully",
+
+      message:
+        "User completely deleted from MongoDB, Clerk and Cloudinary.",
+
+      data: {
+        clerkId,
+
+        mongoDeleted:
+          result.mongoDeleted,
+
+        clerkDeleted:
+          result.clerkDeleted,
+
+        cloudinaryDeleted:
+          result.cloudinaryDeleted,
+      },
     });
+
   } catch (error) {
-    console.error("Delete Clerk User Error:", error);
+    console.error(
+      "Complete Clerk User Delete Error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: "Failed to delete Clerk user",
+      message:
+        "Failed to completely delete user.",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : undefined,
     });
   }
 };
@@ -329,62 +475,145 @@ export const updateUser = async (req, res) => {
   }
 };
 
-// DELETE user
+// =====================================================
+// DELETE USER
+// DELETE /api/users/deleteuser/:id
+//
+// COMPLETE DELETE:
+// 1. Cloudinary
+// 2. Clerk
+// 3. MongoDB User
+//
+// :id can be MongoDB _id OR Clerk user ID
+// =====================================================
+
 export const deleteUser = async (req, res) => {
   try {
-    const { role: clerkRole, id: requesterId } = req.user;
+    const {
+      role: requesterRole,
+      id: requesterId,
+    } = req.user;
+
     const { id } = req.params;
 
-    let user;
-    if (id.startsWith("user_")) {
-      user = await User.findOne({ clerkId: id });
+    // =================================================
+    // FIND TARGET USER
+    // =================================================
+
+    let targetUser = null;
+
+    if (
+      typeof id === "string" &&
+      id.startsWith("user_")
+    ) {
+      targetUser = await User.findOne({
+        clerkId: id,
+      });
     } else {
-      user = await User.findById(id);
-    }
-
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    if (user.clerkId === requesterId) {
-      return res.status(400).json({
-        success: false,
-        message: "You cannot delete your own account.",
-      });
-    }
-
-    if (!canManage(clerkRole, user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have permission to delete this user.",
-      });
-    }
-
-    // 1. Delete Cloudinary image first (optional)
-    if (user.imagePublicId) {
       try {
-        const result = await cloudinary.uploader.destroy(user.imagePublicId);
-        console.log("Cloudinary deletion result:", result);
-      } catch (err) {
-        console.error("Cloudinary deletion error:", err);
+        targetUser = await User.findById(id);
+      } catch {
+        targetUser = await User.findOne({
+          clerkId: id,
+        });
       }
     }
 
-    // 2. Delete Clerk user
-    try {
-      await clerkClient.users.deleteUser(user.clerkId);
-    } catch (err) {
-      console.error("Clerk deletion error:", err);
+    // =================================================
+    // USER NOT FOUND IN MONGO
+    // =================================================
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "User not found in MongoDB.",
+      });
     }
 
-    // 3. Delete MongoDB record
-    await user.deleteOne();
+    // =================================================
+    // PREVENT SELF DELETE
+    // =================================================
 
-    res.json({ success: true, message: "User deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    if (
+      targetUser.clerkId === requesterId
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "You cannot delete your own account.",
+      });
+    }
+
+    // =================================================
+    // PERMISSION CHECK
+    // =================================================
+
+    if (
+      !canManage(
+        requesterRole,
+        targetUser.role
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You do not have permission to delete this user.",
+      });
+    }
+
+    // =================================================
+    // COMPLETE CLEANUP
+    // =================================================
+
+    const result =
+      await completeDeleteUser(
+        targetUser._id.toString()
+      );
+
+    // =================================================
+    // SUCCESS
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      message:
+        "User completely deleted from MongoDB, Clerk and Cloudinary.",
+
+      data: {
+        mongoUserId:
+          targetUser._id,
+
+        clerkId:
+          result.clerkId,
+
+        mongoDeleted:
+          result.mongoDeleted,
+
+        clerkDeleted:
+          result.clerkDeleted,
+
+        cloudinaryDeleted:
+          result.cloudinaryDeleted,
+      },
+    });
+
+  } catch (error) {
+    console.error(
+      "Complete Delete User Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to completely delete user.",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : undefined,
+    });
   }
 };
 
@@ -449,4 +678,206 @@ export const getCurrentUser = async (req, res) => {
       message: "Failed to fetch current user.",
     });
   }
+};
+
+
+
+// =====================================================
+// COMPLETE USER CLEANUP
+// =====================================================
+// Deletes:
+// 1. Cloudinary profile image
+// 2. Clerk account
+// 3. MongoDB User document
+//
+// The supplied identifier can be:
+// - MongoDB _id
+// - Clerk user ID
+// =====================================================
+
+const completeDeleteUser = async (identifier) => {
+  let user = null;
+
+  // ===================================================
+  // 1. FIND MONGO USER
+  // ===================================================
+
+  if (
+    typeof identifier === "string" &&
+    identifier.startsWith("user_")
+  ) {
+    // Identifier is Clerk ID
+
+    user = await User.findOne({
+      clerkId: identifier,
+    });
+  } else {
+    // Identifier may be MongoDB _id
+
+    try {
+      user = await User.findById(identifier);
+    } catch (error) {
+      // If it is not a valid MongoDB ObjectId,
+      // try it as Clerk ID.
+
+      user = await User.findOne({
+        clerkId: identifier,
+      });
+    }
+  }
+
+  // ===================================================
+  // 2. IF MONGO USER NOT FOUND
+  // ===================================================
+
+  if (!user) {
+    // It may be a Clerk user that has no MongoDB record.
+
+    if (
+      typeof identifier === "string" &&
+      identifier.startsWith("user_")
+    ) {
+      return {
+        user: null,
+        clerkId: identifier,
+        mongoDeleted: false,
+        clerkDeleted: false,
+        cloudinaryDeleted: false,
+        mongoFound: false,
+      };
+    }
+
+    throw new Error("User not found.");
+  }
+
+  const clerkId = user.clerkId;
+  const imagePublicId = user.imagePublicId;
+
+  let cloudinaryDeleted = false;
+  let clerkDeleted = false;
+  let mongoDeleted = false;
+
+  // ===================================================
+  // 3. DELETE CLOUDINARY IMAGE
+  // ===================================================
+
+  if (imagePublicId) {
+    try {
+      const cloudinaryResult =
+        await cloudinary.uploader.destroy(
+          imagePublicId
+        );
+
+      console.log(
+        "Cloudinary deletion result:",
+        cloudinaryResult
+      );
+
+      // Cloudinary normally returns:
+      // { result: "ok" }
+      //
+      // "not found" also means there is nothing
+      // left to clean up.
+
+      if (
+        cloudinaryResult?.result === "ok" ||
+        cloudinaryResult?.result === "not found"
+      ) {
+        cloudinaryDeleted = true;
+      }
+    } catch (error) {
+      console.error(
+        "Cloudinary deletion error:",
+        error
+      );
+
+      // Continue cleanup.
+    }
+  } else {
+    // No image existed.
+
+    cloudinaryDeleted = true;
+  }
+
+  // ===================================================
+  // 4. DELETE CLERK ACCOUNT
+  // ===================================================
+
+  if (clerkId) {
+    try {
+      await clerkClient.users.deleteUser(
+        clerkId
+      );
+
+      clerkDeleted = true;
+
+      console.log(
+        `Clerk user deleted: ${clerkId}`
+      );
+    } catch (error) {
+      // If Clerk account is already gone,
+      // consider this cleanup successful.
+
+      const status =
+        error?.status ||
+        error?.statusCode;
+
+      if (status === 404) {
+        clerkDeleted = true;
+
+        console.log(
+          `Clerk user already deleted: ${clerkId}`
+        );
+      } else {
+        console.error(
+          `Clerk deletion error for ${clerkId}:`,
+          error
+        );
+      }
+    }
+  } else {
+    // No Clerk ID stored.
+
+    clerkDeleted = true;
+  }
+
+  // ===================================================
+  // 5. DELETE MONGODB USER
+  // ===================================================
+
+  try {
+    const deleteResult =
+      await User.deleteOne({
+        _id: user._id,
+      });
+
+    mongoDeleted =
+      deleteResult.deletedCount === 1;
+
+    if (mongoDeleted) {
+      console.log(
+        `MongoDB User deleted: ${user._id}`
+      );
+    } else {
+      console.log(
+        `MongoDB User was not found during deletion: ${user._id}`
+      );
+    }
+  } catch (error) {
+    console.error(
+      "MongoDB User deletion error:",
+      error
+    );
+
+    throw error;
+  }
+
+  return {
+    user,
+    clerkId: clerkId || null,
+    mongoDeleted,
+    clerkDeleted,
+    cloudinaryDeleted,
+    mongoFound: true,
+  };
 };

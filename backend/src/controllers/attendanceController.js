@@ -514,27 +514,25 @@ export const getAttendance = async (req, res) => {
     // FIND ALL RELEVANT ATTENDANCE RECORDS
     // -----------------------------------------
 
-    const matchingRecords =
-      existingRecords.filter((record) => {
-        // Old records without batchNumbers
-        // are treated as applicable to all.
-        if (
-          !Array.isArray(
-            record.batchNumbers
-          ) ||
-          record.batchNumbers.length === 0
-        ) {
-          return true;
-        }
+const matchingRecords =
+  existingRecords.filter((record) => {
+    // Records created by the current system
+    // must always have batchNumbers.
 
-        return record.batchNumbers.some(
-          (batch) =>
-            requestedBatches.includes(
-              Number(batch)
-            )
-        );
-      });
+    if (
+      !Array.isArray(record.batchNumbers) ||
+      record.batchNumbers.length === 0
+    ) {
+      return false;
+    }
 
+    return record.batchNumbers.some(
+      (batch) =>
+        requestedBatches.includes(
+          Number(batch)
+        )
+    );
+  });
     // -----------------------------------------
     // NO MATCHING RECORD
     // -----------------------------------------
@@ -564,19 +562,30 @@ export const getAttendance = async (req, res) => {
         Number(record.classesConducted || 0);
 
       for (
-        const studentEntry of
-          record.students || []
-      ) {
-        const populatedStudent =
-          studentEntry.studentId;
+  const studentEntry of
+    record.students || []
+) {
+  const populatedStudent =
+    studentEntry.studentId;
 
-        if (!populatedStudent) {
-          continue;
-        }
+  if (!populatedStudent) {
+    continue;
+  }
 
-        const studentId =
-          String(populatedStudent._id);
+  // -------------------------------------------------
+  // NEVER SHOW A STUDENT FROM ANOTHER BATCH
+  // -------------------------------------------------
 
+  if (
+    !requestedBatches.includes(
+      Number(populatedStudent.batchNumber)
+    )
+  ) {
+    continue;
+  }
+
+  const studentId =
+    String(populatedStudent._id);
         studentMap.set(
           studentId,
           {

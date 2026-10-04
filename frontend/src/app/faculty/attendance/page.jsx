@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
+import * as XLSX from "xlsx";
 import Swal from "sweetalert2";
 import {
   CalendarDays,
@@ -297,7 +298,13 @@ const resetAttendanceArea = () => {
             : result?.subjects?.data ||
               [];
 
-        setSubjects(data);
+       setSubjects(
+  data.filter(
+    (subject) =>
+      String(subject.subjectCategory || "").toUpperCase() !==
+      "BRIDGE"
+  )
+);
       } catch (error) {
         console.error(
           "Failed to load subjects:",
@@ -366,7 +373,7 @@ const resetAttendanceArea = () => {
 
           const studentResponse =
             await axios.get(
-              `${API_URL}/api/students/getstudents`,
+              `${API_URL}/api/students`,
               {
                 headers: {
                   Authorization:
@@ -401,38 +408,47 @@ const resetAttendanceArea = () => {
           // FILTER BATCH
           // ---------------------------------------------
 
-          const filteredStudents =
-            allStudents.filter(
-              (student) => {
-                const studentBatch =
-                  Number(
-                    student.batchNumber
-                  );
+       const filteredStudents =
+  allStudents
+    .filter((student) => {
+      const studentBatch =
+        Number(student.batchNumber);
 
-                if (
-                  batchSelection ===
-                  "both"
-                ) {
-                  return (
-                    studentBatch ===
-                      1 ||
-                    studentBatch ===
-                      2
-                  );
-                }
+      if (batchSelection === "both") {
+        return (
+          studentBatch === 1 ||
+          studentBatch === 2
+        );
+      }
 
-                return (
-                  studentBatch ===
-                  Number(
-                    batchSelection
-                  )
-                );
-              }
-            );
+      return (
+        studentBatch ===
+        Number(batchSelection)
+      );
+    })
+    .sort((a, b) => {
+      const rollA = Number(a.rollNumber);
+      const rollB = Number(b.rollNumber);
 
-          setStudents(
-            filteredStudents
-          );
+      // Numeric sorting when roll numbers are numeric
+      if (
+        Number.isFinite(rollA) &&
+        Number.isFinite(rollB)
+      ) {
+        return rollA - rollB;
+      }
+
+      // Fallback for non-numeric roll numbers
+      return String(
+        a.rollNumber || ""
+      ).localeCompare(
+        String(b.rollNumber || ""),
+        undefined,
+        { numeric: true }
+      );
+    });
+
+setStudents(filteredStudents);
 
           // ---------------------------------------------
           // CHECK EXISTING ATTENDANCE
@@ -692,6 +708,170 @@ setStudentMaxClasses(savedMaxClasses);
     attendance,
   ]);
 
+
+  // =====================================================
+// EXPORT ATTENDANCE TO EXCEL
+// =====================================================
+
+const exportAttendanceToExcel = () => {
+  if (!students.length) {
+    Swal.fire({
+      icon: "warning",
+      title: "No Students",
+      text: "There are no students available to export.",
+      confirmButtonColor: "#0f172a",
+    });
+
+    return;
+  }
+
+  if (!subjectId) {
+    Swal.fire({
+      icon: "warning",
+      title: "Subject Not Selected",
+      text: "Please select a subject first.",
+      confirmButtonColor: "#0f172a",
+    });
+
+    return;
+  }
+
+  const monthName =
+    months.find(
+      (item) => item.value === Number(month)
+    )?.label || month;
+
+  const rows = students.map(
+    (student, index) => {
+      const attended =
+        attendance[student._id] ?? "";
+
+      const maxClasses =
+        studentMaxClasses[student._id] ??
+        classesConducted ??
+        "";
+
+      const percentage =
+        getPercentage(student._id);
+
+      return {
+        "Sl. No.": index + 1,
+
+        "Register Number":
+          student.registerNumber || "",
+
+        "Roll Number":
+          student.rollNumber || "",
+
+        "Student Name":
+          student.name || "",
+
+        "Batch":
+          student.batchNumber || "",
+
+        "Classes Conducted":
+          classesConducted === ""
+            ? ""
+            : Number(classesConducted),
+
+        "Max Classes":
+          maxClasses === ""
+            ? ""
+            : Number(maxClasses),
+
+        "Classes Attended":
+          attended === ""
+            ? ""
+            : Number(attended),
+
+        "Attendance %":
+          percentage === null
+            ? ""
+            : Number(percentage),
+      };
+    }
+  );
+
+  // --------------------------------------------------
+  // CREATE WORKSHEET
+  // --------------------------------------------------
+
+  const worksheet =
+    XLSX.utils.json_to_sheet(rows);
+
+  // --------------------------------------------------
+  // COLUMN WIDTHS
+  // --------------------------------------------------
+
+  worksheet["!cols"] = [
+    { wch: 8 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 30 },
+    { wch: 10 },
+    { wch: 18 },
+    { wch: 15 },
+    { wch: 18 },
+    { wch: 16 },
+  ];
+
+  // --------------------------------------------------
+  // FREEZE HEADER ROW
+  // --------------------------------------------------
+
+  worksheet["!freeze"] = {
+    xSplit: 0,
+    ySplit: 1,
+  };
+
+  // --------------------------------------------------
+  // CREATE WORKBOOK
+  // --------------------------------------------------
+
+  const workbook =
+    XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Attendance"
+  );
+
+  // --------------------------------------------------
+  // SAFE FILE NAME
+  // --------------------------------------------------
+
+  const subjectCode =
+    selectedSubject?.code || "SUBJECT";
+
+  const safeDepartment =
+    String(department || "DEPARTMENT")
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, "_");
+
+  const safeSubject =
+    String(subjectCode)
+      .toUpperCase()
+      .replace(/[^A-Z0-9_-]/g, "_");
+
+  const safeBatch =
+    batchSelection === "both"
+      ? "BOTH"
+      : `BATCH${batchSelection}`;
+
+  const fileName =
+    `Attendance_${safeDepartment}_SEM${semester}_${safeSubject}_${monthName}_${year}_${safeBatch}.xlsx`;
+
+  // --------------------------------------------------
+  // DOWNLOAD
+  // --------------------------------------------------
+
+  XLSX.writeFile(
+    workbook,
+    fileName
+  );
+};
+
 const handleClassesConductedChange = (value) => {
   if (attendanceLocked) {
     return;
@@ -848,10 +1028,15 @@ const handleClassesConductedChange = (value) => {
     ) {
       return;
     }
+const maxClasses =
+  studentMaxClasses[studentId] ??
+  classesConducted;
+
 if (
-  classesConducted !== "" &&
-  numericValue >
-    Number(classesConducted)
+  maxClasses !== "" &&
+  maxClasses !== undefined &&
+  maxClasses !== null &&
+  numericValue > Number(maxClasses)
 ) {
   return;
 }
@@ -1384,6 +1569,18 @@ if (
     }, 50);
   };
 
+  <style jsx global>{`
+  /* Hide number input spinner arrows */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+`}</style>
   // =====================================================
   // UI
   // =====================================================
@@ -1913,6 +2110,7 @@ if (
 
                     <input
                       type="number"
+                      onWheel={(e) => e.currentTarget.blur()}
                       min="0"
                       value={
                         classesConducted
@@ -2001,54 +2199,53 @@ if (
                   {/* -----------------------------------------
                       Summary bar
                   ----------------------------------------- */}
+<div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
 
-                  <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+  <div className="flex flex-wrap items-center gap-2">
 
-                    <div className="flex flex-wrap items-center gap-2">
+    <div className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+      <Users
+        size={14}
+        className="text-slate-400"
+      />
 
-                      <div className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+      {students.length} Students
+    </div>
 
-                        <Users
-                          size={14}
-                          className="text-slate-400"
-                        />
+    <div className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
 
-                        {students.length}{" "}
-                        Students
+      <Check
+        size={14}
+        className="text-emerald-500"
+      />
 
-                      </div>
+      {enteredCount}/{students.length} Entered
+    </div>
 
-                      <div className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+    <button
+      type="button"
+      onClick={exportAttendanceToExcel}
+      disabled={
+        students.length === 0 ||
+        checkingAttendance ||
+        loadingStudents
+      }
+      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <span className="text-sm">📊</span>
+      Export Excel
+    </button>
 
-                        <Check
-                          size={14}
-                          className="text-emerald-500"
-                        />
+  </div>
 
-                        {enteredCount}/
-                        {
-                          students.length
-                        }{" "}
-                        Entered
+  {attendanceLocked && (
+    <div className="flex items-center gap-2 text-xs font-semibold text-amber-700">
+      <ShieldCheck size={15} />
+      Attendance permanently locked
+    </div>
+  )}
 
-                      </div>
-
-                    </div>
-
-                    {attendanceLocked && (
-                      <div className="flex items-center gap-2 text-xs font-semibold text-amber-700">
-
-                        <ShieldCheck
-                          size={15}
-                        />
-
-                        Attendance permanently locked
-
-                      </div>
-                    )}
-
-                  </div>
-
+</div>
                   {/* -----------------------------------------
                       Student Table
                   ----------------------------------------- */}
@@ -2170,6 +2367,7 @@ if (
 
                                   <input
                                     type="number"
+                                    onWheel={(e) => e.currentTarget.blur()}
                                     min="0"
                                    max={
   studentMaxClasses[student._id] ??
@@ -2207,6 +2405,7 @@ if (
 <td className="px-4 py-4 text-center">
   <input
     type="number"
+    onWheel={(e) => e.currentTarget.blur()}
     min="0"
     max={
       classesConducted || undefined

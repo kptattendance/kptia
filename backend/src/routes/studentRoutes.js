@@ -1,102 +1,158 @@
 import express from "express";
 
 import {
-  createStudent,
   getStudents,
   getStudentById,
+  createStudent,
   updateStudent,
   deleteStudent,
-  searchStudents,
-  bulkAddStudents,
+  updateStudentStatus,
+  deleteMultipleStudents,
   bulkUploadStudents,
 } from "../controllers/studentController.js";
 
 import { authenticateUser } from "../middlewares/authMiddleware.js";
+import { authorizeRoles } from "../middlewares/roleMiddleware.js";
 import { uploadSingleImage } from "../middlewares/uploadImage.js";
-import { uploadCSV } from "../middlewares/uploadCSV.js";
 import { uploadExcel } from "../middlewares/uploadExcel.js";
 
 const router = express.Router();
 
-// ==========================================================
-// ALL ROUTES REQUIRE CLERK AUTHENTICATION
-// ==========================================================
+// =====================================================
+// BULK DELETE
+// =====================================================
+// Must come BEFORE /:id
+// =====================================================
 
-router.use(authenticateUser);
+router.delete(
+  "/bulk-delete",
+  authenticateUser,
+  authorizeRoles(
+    "admin",
+    "principal",
+    "coe",
+    "exam_officer"
+  ),
+  deleteMultipleStudents
+);
 
-// ==========================================================
-// ADD SINGLE STUDENT
-// ==========================================================
+// =====================================================
+// GET ALL STUDENTS
+// =====================================================
+
+router.get(
+  "/",
+  authenticateUser,
+  authorizeRoles(
+    "admin",
+    "principal",
+    "coe",
+    "exam_officer",
+    "hod",
+    "staff"
+  ),
+  getStudents
+);
+
+// =====================================================
+// CREATE STUDENT
+// =====================================================
 
 router.post(
-  "/addstudent",
+  "/",
+  authenticateUser,
+  authorizeRoles(
+    "admin",
+    "principal",
+    "coe",
+    "exam_officer",
+    "hod"
+  ),
   uploadSingleImage,
   createStudent
 );
 
-// ==========================================================
-// GET ALL STUDENTS
-// ==========================================================
-
-router.get(
-  "/getstudents",
-  getStudents
-);
-
-// ==========================================================
-// GET STUDENT BY ID
-// ==========================================================
-
-router.get(
-  "/getstudent/:id",
-  getStudentById
-);
-
-// ==========================================================
+// =====================================================
 // UPDATE STUDENT
-// ==========================================================
+// =====================================================
 
 router.put(
-  "/updatestudent/:id",
+  "/:id",
+  authenticateUser,
+  authorizeRoles(
+    "admin",
+    "principal",
+    "coe",
+    "exam_officer",
+    "hod"
+  ),
   uploadSingleImage,
   updateStudent
 );
 
-// ==========================================================
+// =====================================================
 // DELETE STUDENT
-// ==========================================================
+// =====================================================
 
 router.delete(
-  "/deletestudent/:id",
+  "/:id",
+  authenticateUser,
+  authorizeRoles(
+    "admin",
+    "principal",
+    "coe",
+    "exam_officer"
+  ),
   deleteStudent
 );
 
-// ==========================================================
-// SEARCH STUDENTS
-// ==========================================================
+// =====================================================
+// UPDATE STUDENT STATUS
+// =====================================================
+
+router.patch(
+  "/:id/status",
+  authenticateUser,
+  authorizeRoles(
+    "admin",
+    "principal",
+    "coe",
+    "exam_officer",
+    "hod"
+  ),
+  updateStudentStatus
+);
+
+// =====================================================
+// GET SINGLE STUDENT
+// =====================================================
 
 router.get(
-  "/search",
-  searchStudents
+  "/:id",
+  authenticateUser,
+  authorizeRoles(
+    "admin",
+    "principal",
+    "coe",
+    "exam_officer",
+    "hod"
+  ),
+  getStudentById
 );
 
-// ==========================================================
-// OLD CSV BULK ADD
-// ==========================================================
-
-router.post(
-  "/bulk-add",
-  uploadCSV,
-  bulkAddStudents
-);
-
-// ==========================================================
-// BULK UPLOAD STUDENTS FROM EXCEL
-// Excel + Google Drive Photo Links
-// ==========================================================
+// =====================================================
+// BULK EXCEL UPLOAD
+// =====================================================
 
 router.post(
   "/bulk-upload",
+  authenticateUser,
+  authorizeRoles(
+    "admin",
+    "principal",
+    "coe",
+    "exam_officer"
+  ),
   uploadExcel,
   bulkUploadStudents
 );

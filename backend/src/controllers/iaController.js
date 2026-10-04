@@ -16,6 +16,12 @@ const CO_NAMES = [
   "CO6",
 ];
 
+const LATERAL_ADMISSION_TYPES = [
+  "lateralPUC",
+  "lateralITI",
+  "lateralCross",
+];
+
 // --------------------------------------------------
 // HELPERS
 // --------------------------------------------------
@@ -24,9 +30,28 @@ const getRole = (req) => {
   return req.user?.role?.toLowerCase();
 };
 
+const normalizeDepartment = (value) => {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+};
+
+const normalizeSubjectCategory = (value) => {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+};
+
+const isLateralStudent = (admissionType) => {
+  return LATERAL_ADMISSION_TYPES.includes(
+    String(admissionType || "").trim()
+  );
+};
+
 const getCOTotal = (coMarks = {}) => {
   return CO_NAMES.reduce(
-    (total, co) => total + Number(coMarks[co] || 0),
+    (total, co) =>
+      total + Number(coMarks[co] || 0),
     0
   );
 };
@@ -119,7 +144,8 @@ const validateStudents = async (
   tests,
   department,
   semester,
-  batchNumber
+  batchNumber,
+  subjectCategory
 ) => {
   if (
     !Array.isArray(students) ||
@@ -127,10 +153,19 @@ const validateStudents = async (
   ) {
     return {
       valid: false,
-      message:
-        "Student IA marks are required.",
+      message: "Student IA marks are required.",
     };
   }
+
+  // --------------------------------------------------
+  // NORMALIZE VALUES
+  // --------------------------------------------------
+
+  const requestedDepartment =
+    normalizeDepartment(department);
+
+  const normalizedSubjectCategory =
+    normalizeSubjectCategory(subjectCategory);
 
   // --------------------------------------------------
   // VALIDATE BATCH NUMBER
@@ -154,11 +189,10 @@ const validateStudents = async (
   // DUPLICATE STUDENTS
   // --------------------------------------------------
 
-  const studentIds =
-    students.map(
-      (student) =>
-        String(student.studentId)
-    );
+  const studentIds = students.map(
+    (student) =>
+      String(student.studentId)
+  );
 
   const duplicateIds =
     studentIds.filter(
@@ -178,17 +212,14 @@ const validateStudents = async (
   // VALIDATE OBJECT IDS
   // --------------------------------------------------
 
-  const validObjectIds =
-    students
-      .map(
-        (student) =>
-          student.studentId
-      )
-      .filter((id) =>
-        mongoose.Types.ObjectId.isValid(
-          id
-        )
-      );
+  const validObjectIds = students
+    .map(
+      (student) =>
+        student.studentId
+    )
+    .filter((id) =>
+      mongoose.Types.ObjectId.isValid(id)
+    );
 
   if (
     validObjectIds.length !==
@@ -211,7 +242,7 @@ const validateStudents = async (
         $in: validObjectIds,
       },
     }).select(
-      "_id department batchNumber"
+      "_id department batchNumber admissionType"
     );
 
   if (
@@ -226,14 +257,18 @@ const validateStudents = async (
   }
 
   // --------------------------------------------------
-  // VERIFY EVERY STUDENT BELONGS TO
-  // SELECTED DEPARTMENT AND BATCH
+  // VERIFY EVERY STUDENT
   // --------------------------------------------------
 
   for (const dbStudent of existingStudents) {
+    // ------------------------------------------------
+    // DEPARTMENT
+    // ------------------------------------------------
+
     if (
-      dbStudent.department !==
-      department
+      normalizeDepartment(
+        dbStudent.department
+      ) !== requestedDepartment
     ) {
       return {
         valid: false,
@@ -241,6 +276,10 @@ const validateStudents = async (
           "One or more students do not belong to the selected department.",
       };
     }
+
+    // ------------------------------------------------
+    // BATCH
+    // ------------------------------------------------
 
     if (
       Number(dbStudent.batchNumber) !==
@@ -251,6 +290,37 @@ const validateStudents = async (
         message:
           `Student ${dbStudent._id} does not belong to Batch ${parsedBatchNumber}.`,
       };
+    }
+
+    // ------------------------------------------------
+    // BRIDGE COURSE
+    // ------------------------------------------------
+    //
+    // Bridge courses are ONLY for:
+    //
+    // lateralPUC
+    // lateralITI
+    // lateralCross
+    //
+    // Regular students cannot receive
+    // bridge course IA marks.
+    // ------------------------------------------------
+
+    if (
+      normalizedSubjectCategory ===
+      "BRIDGE"
+    ) {
+      if (
+        !isLateralStudent(
+          dbStudent.admissionType
+        )
+      ) {
+        return {
+          valid: false,
+          message:
+            "Bridge course IA marks can only be entered for lateral students.",
+        };
+      }
     }
   }
 
@@ -434,6 +504,7 @@ const validateStudents = async (
       cleanedStudents,
   };
 };
+
 // ==================================================
 // CREATE / SAVE IA MARKS
 // ==================================================
@@ -451,9 +522,11 @@ export const saveIAMarks = async (
     // --------------------------------------------------
 
     if (
-      !["staff", "hod", "admin"].includes(
-        role
-      )
+      ![
+        "staff",
+        "hod",
+        "admin",
+      ].includes(role)
     ) {
       return res.status(403).json({
         success: false,
@@ -496,6 +569,46 @@ export const saveIAMarks = async (
         message:
           "Academic year, department, semester, subject, IA number and batch number are required.",
       });
+    }
+
+    // --------------------------------------------------
+    // NORMALIZE DEPARTMENT
+    // --------------------------------------------------
+
+    const requestedDepartment =
+      normalizeDepartment(
+        department
+      );
+
+    if (!requestedDepartment) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Department is required.",
+      });
+    }
+
+    // --------------------------------------------------
+    // HOD OWN DEPARTMENT
+    // --------------------------------------------------
+
+    if (role === "hod") {
+      const hodDepartment =
+        normalizeDepartment(
+          req.user?.department
+        );
+
+      if (
+        !hodDepartment ||
+        hodDepartment !==
+          requestedDepartment
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "HOD can enter IA marks only for their own department.",
+        });
+      }
     }
 
     // --------------------------------------------------
@@ -578,32 +691,15 @@ export const saveIAMarks = async (
     }
 
     // --------------------------------------------------
-    // HOD OWN DEPARTMENT
-    // --------------------------------------------------
-
-    if (
-      role === "hod" &&
-      req.user.department &&
-      req.user.department !==
-        department
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "HOD can enter IA marks only for their own department.",
-      });
-    }
-
-    // --------------------------------------------------
     // FIND SUBJECT
     // --------------------------------------------------
 
-   const subject =
-  await Subject.findById(
-    subjectId
-  ).select(
-    "code name semester department"
-  );
+    const subject =
+      await Subject.findById(
+        subjectId
+      ).select(
+        "code name semester department subjectCategory"
+      );
 
     if (!subject) {
       return res.status(404).json({
@@ -614,12 +710,17 @@ export const saveIAMarks = async (
     }
 
     // --------------------------------------------------
-    // VERIFY SUBJECT
+    // VERIFY SUBJECT DEPARTMENT
     // --------------------------------------------------
 
+    const subjectDepartment =
+      normalizeDepartment(
+        subject.department
+      );
+
     if (
-      subject.department !==
-      department
+      subjectDepartment !==
+      requestedDepartment
     ) {
       return res.status(400).json({
         success: false,
@@ -627,6 +728,10 @@ export const saveIAMarks = async (
           "Selected subject does not belong to the selected department.",
       });
     }
+
+    // --------------------------------------------------
+    // VERIFY SUBJECT SEMESTER
+    // --------------------------------------------------
 
     if (
       Number(subject.semester) !==
@@ -639,20 +744,27 @@ export const saveIAMarks = async (
       });
     }
 
-  
+    // --------------------------------------------------
+    // SUBJECT CATEGORY
+    // --------------------------------------------------
+
+    const subjectCategory =
+      normalizeSubjectCategory(
+        subject.subjectCategory
+      );
 
     // --------------------------------------------------
     // CHECK EXISTING RECORD
     //
-    // IMPORTANT:
-    // IA1 Batch1 and IA1 Batch2 are different records.
-    // IA1 and IA2 are also different records.
+    // IA1 Batch1 and IA1 Batch2 are different.
+    // IA1 and IA2 are also different.
     // --------------------------------------------------
 
     const existing =
       await IAMarks.findOne({
         academicYear,
-        department,
+        department:
+          requestedDepartment,
         semester:
           semesterNumber,
         subjectId,
@@ -692,14 +804,15 @@ export const saveIAMarks = async (
     // VALIDATE STUDENTS
     // --------------------------------------------------
 
-    const studentValidation =
-      await validateStudents(
-        students,
-        testValidation.tests,
-        department,
-        semesterNumber,
-        batchNumberValue
-      );
+const studentValidation =
+  await validateStudents(
+    students,
+    testValidation.tests,
+    department,
+    semesterNumber,
+    batchNumberValue,
+    subject.subjectCategory
+  );
 
     if (
       !studentValidation.valid
@@ -722,7 +835,8 @@ export const saveIAMarks = async (
       await IAMarks.create({
         academicYear,
 
-        department,
+        department:
+          requestedDepartment,
 
         semester:
           semesterNumber,
@@ -766,9 +880,7 @@ export const saveIAMarks = async (
       data:
         iaMarks,
     });
-
   } catch (error) {
-
     console.error(
       "Save IA Marks Error:",
       error
@@ -791,6 +903,7 @@ export const saveIAMarks = async (
     });
   }
 };
+
 // ==================================================
 // GET IA MARKS BY FILTERS
 // ==================================================
@@ -846,21 +959,32 @@ export const getIAMarks = async (
       });
     }
 
+    const requestedDepartment =
+      normalizeDepartment(
+        department
+      );
+
     // --------------------------------------------------
     // HOD RESTRICTION
     // --------------------------------------------------
 
-    if (
-      role === "hod" &&
-      req.user.department &&
-      req.user.department !==
-        department
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "You can only view IA marks for your own department.",
-      });
+    if (role === "hod") {
+      const hodDepartment =
+        normalizeDepartment(
+          req.user?.department
+        );
+
+      if (
+        !hodDepartment ||
+        hodDepartment !==
+          requestedDepartment
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You can only view IA marks for your own department.",
+        });
+      }
     }
 
     // --------------------------------------------------
@@ -934,7 +1058,8 @@ export const getIAMarks = async (
     const iaMarks =
       await IAMarks.findOne({
         academicYear,
-        department,
+        department:
+          requestedDepartment,
         semester:
           semesterNumber,
         subjectId,
@@ -945,11 +1070,11 @@ export const getIAMarks = async (
       })
         .populate(
           "subjectId",
-          "code name semester department "
+          "code name semester department subjectCategory"
         )
         .populate(
           "students.studentId",
-          "registerNumber name email department batch batchNumber imageUrl"
+          "registerNumber name email department batch batchNumber admissionType imageUrl"
         )
         .lean();
 
@@ -968,9 +1093,7 @@ export const getIAMarks = async (
       success: true,
       data: iaMarks,
     });
-
   } catch (error) {
-
     console.error(
       "Get IA Marks Error:",
       error
@@ -993,11 +1116,16 @@ export const getIAMarksById = async (
   res
 ) => {
   try {
-    const role = getRole(req);
+    const role =
+      getRole(req);
 
     if (
-      !["admin", "principal", "hod", "staff"]
-        .includes(role)
+      ![
+        "admin",
+        "principal",
+        "hod",
+        "staff",
+      ].includes(role)
     ) {
       return res.status(403).json({
         success: false,
@@ -1006,9 +1134,12 @@ export const getIAMarksById = async (
       });
     }
 
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(id)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -1020,11 +1151,11 @@ export const getIAMarksById = async (
       await IAMarks.findById(id)
         .populate(
           "subjectId",
-          "code name semester department"
+          "code name semester department subjectCategory"
         )
         .populate(
           "students.studentId",
-          "registerNumber name email department"
+          "registerNumber name email department batch batchNumber admissionType imageUrl"
         )
         .lean();
 
@@ -1036,18 +1167,32 @@ export const getIAMarksById = async (
       });
     }
 
-    // HOD restriction
-    if (
-      role === "hod" &&
-      req.user.department &&
-      req.user.department !==
-        iaMarks.department
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "You can only view IA marks for your own department.",
-      });
+    // --------------------------------------------------
+    // HOD RESTRICTION
+    // --------------------------------------------------
+
+    if (role === "hod") {
+      const hodDepartment =
+        normalizeDepartment(
+          req.user?.department
+        );
+
+      const recordDepartment =
+        normalizeDepartment(
+          iaMarks.department
+        );
+
+      if (
+        !hodDepartment ||
+        hodDepartment !==
+          recordDepartment
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You can only view IA marks for your own department.",
+        });
+      }
     }
 
     return res.status(200).json({
@@ -1093,9 +1238,7 @@ export const updateIAMarks = async (
       req.params;
 
     if (
-      !mongoose.Types.ObjectId.isValid(
-        id
-      )
+      !mongoose.Types.ObjectId.isValid(id)
     ) {
       return res.status(400).json({
         success: false,
@@ -1134,14 +1277,17 @@ export const updateIAMarks = async (
       });
     }
 
+    const requestedDepartment =
+      normalizeDepartment(
+        department
+      );
+
+    // --------------------------------------------------
+    // SEMESTER
+    // --------------------------------------------------
+
     const semesterNumber =
       Number(semester);
-
-    const iaNumberValue =
-      Number(iaNumber);
-
-    const batchNumberValue =
-      Number(batchNumber);
 
     if (
       !Number.isInteger(
@@ -1157,6 +1303,13 @@ export const updateIAMarks = async (
       });
     }
 
+    // --------------------------------------------------
+    // IA NUMBER
+    // --------------------------------------------------
+
+    const iaNumberValue =
+      Number(iaNumber);
+
     if (
       !Number.isInteger(
         iaNumberValue
@@ -1170,7 +1323,17 @@ export const updateIAMarks = async (
       });
     }
 
+    // --------------------------------------------------
+    // BATCH NUMBER
+    // --------------------------------------------------
+
+    const batchNumberValue =
+      Number(batchNumber);
+
     if (
+      !Number.isInteger(
+        batchNumberValue
+      ) ||
       ![1, 2].includes(
         batchNumberValue
       )
@@ -1187,9 +1350,7 @@ export const updateIAMarks = async (
     // --------------------------------------------------
 
     const existing =
-      await IAMarks.findById(
-        id
-      );
+      await IAMarks.findById(id);
 
     if (!existing) {
       return res.status(404).json({
@@ -1203,12 +1364,12 @@ export const updateIAMarks = async (
     // SUBJECT
     // --------------------------------------------------
 
- const subject =
-  await Subject.findById(
-    subjectId
-  ).select(
-    "semester department"
-  );
+    const subject =
+      await Subject.findById(
+        subjectId
+      ).select(
+        "code name semester department subjectCategory"
+      );
 
     if (!subject) {
       return res.status(404).json({
@@ -1218,20 +1379,49 @@ export const updateIAMarks = async (
       });
     }
 
+    // --------------------------------------------------
+    // VERIFY SUBJECT DEPARTMENT
+    // --------------------------------------------------
+
+    const subjectDepartment =
+      normalizeDepartment(
+        subject.department
+      );
+
     if (
-      subject.department !==
-      department ||
-      Number(subject.semester) !==
-        semesterNumber
+      subjectDepartment !==
+      requestedDepartment
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Subject does not match the selected department and semester.",
+          "Subject does not match the selected department.",
       });
     }
 
- 
+    // --------------------------------------------------
+    // VERIFY SUBJECT SEMESTER
+    // --------------------------------------------------
+
+    if (
+      Number(subject.semester) !==
+      semesterNumber
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Subject does not match the selected semester.",
+      });
+    }
+
+    // --------------------------------------------------
+    // SUBJECT CATEGORY
+    // --------------------------------------------------
+
+    const subjectCategory =
+      normalizeSubjectCategory(
+        subject.subjectCategory
+      );
 
     // --------------------------------------------------
     // VALIDATE TESTS
@@ -1252,15 +1442,20 @@ export const updateIAMarks = async (
 
     // --------------------------------------------------
     // VALIDATE STUDENTS
+    //
+    // This also checks:
+    // Regular student + BRIDGE = rejected
+    // Lateral student + BRIDGE = allowed
     // --------------------------------------------------
 
     const studentValidation =
       await validateStudents(
         students,
         testValidation.tests,
-        department,
+        requestedDepartment,
         semesterNumber,
-        batchNumberValue
+        batchNumberValue,
+        subjectCategory
       );
 
     if (
@@ -1276,8 +1471,8 @@ export const updateIAMarks = async (
     // --------------------------------------------------
     // CHECK DUPLICATE
     //
-    // Do not allow another record to have
-    // the same IA + Batch combination.
+    // Do not allow another record with the
+    // same academic year + subject + IA + batch.
     // --------------------------------------------------
 
     const duplicate =
@@ -1288,7 +1483,8 @@ export const updateIAMarks = async (
 
         academicYear,
 
-        department,
+        department:
+          requestedDepartment,
 
         semester:
           semesterNumber,
@@ -1318,7 +1514,7 @@ export const updateIAMarks = async (
       academicYear;
 
     existing.department =
-      department;
+      requestedDepartment;
 
     existing.semester =
       semesterNumber;
@@ -1341,7 +1537,10 @@ export const updateIAMarks = async (
     existing.students =
       studentValidation.students;
 
-    // Keep frozen
+    // --------------------------------------------------
+    // KEEP FROZEN
+    // --------------------------------------------------
+
     existing.isLocked =
       true;
 
@@ -1355,14 +1554,14 @@ export const updateIAMarks = async (
 
     return res.status(200).json({
       success: true,
+
       message:
         "IA marks corrected successfully.",
+
       data:
         existing,
     });
-
   } catch (error) {
-
     console.error(
       "Update IA Marks Error:",
       error
@@ -1396,7 +1595,8 @@ export const deleteIAMarks = async (
   res
 ) => {
   try {
-    const role = getRole(req);
+    const role =
+      getRole(req);
 
     if (role !== "admin") {
       return res.status(403).json({
@@ -1406,9 +1606,12 @@ export const deleteIAMarks = async (
       });
     }
 
-    const { id } = req.params;
+    const { id } =
+      req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(id)
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -1417,7 +1620,9 @@ export const deleteIAMarks = async (
     }
 
     const iaMarks =
-      await IAMarks.findByIdAndDelete(id);
+      await IAMarks.findByIdAndDelete(
+        id
+      );
 
     if (!iaMarks) {
       return res.status(404).json({
@@ -1478,7 +1683,7 @@ export const getStudentIAMarks = async (
         role:
           "student",
       }).select(
-        "_id registerNumber name email department batch batchNumber"
+        "_id registerNumber name email department batch batchNumber admissionType"
       );
 
     if (!student) {
@@ -1557,7 +1762,6 @@ export const getStudentIAMarks = async (
     }
 
     // --------------------------------------------------
-    // IMPORTANT:
     // STUDENT'S OWN BATCH ONLY
     // --------------------------------------------------
 
@@ -1576,7 +1780,7 @@ export const getStudentIAMarks = async (
       )
         .populate(
           "subjectId",
-          "code name semester department"
+          "code name semester department subjectCategory"
         )
         .lean();
 
@@ -1588,7 +1792,6 @@ export const getStudentIAMarks = async (
       records
         .map(
           (record) => {
-
             const studentRecord =
               record.students.find(
                 (item) =>
@@ -1650,9 +1853,7 @@ export const getStudentIAMarks = async (
       data:
         result,
     });
-
   } catch (error) {
-
     console.error(
       "Get Student IA Marks Error:",
       error

@@ -40,7 +40,7 @@ export default function StudentsPage() {
 
   if (view === "bulk") {
     return (
-      <main className="min-h-screen bg-slate-50 p-6 lg:p-8">
+      <main className="min-h-screen bg-slate-50 p-6 lg:px-8">
         <div className="mx-auto max-w-5xl">
           <button
             onClick={() => setView("table")}

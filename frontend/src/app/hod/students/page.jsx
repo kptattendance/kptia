@@ -100,7 +100,7 @@ export default function HODStudentsPage() {
 
       // Backend should already restrict HOD to own department.
       const response = await axios.get(
-        `${API_URL}/api/students/getstudents`,
+        `${API_URL}/api/students`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -110,20 +110,19 @@ export default function HODStudentsPage() {
 
       const result = response.data;
 
-      const data = Array.isArray(result?.data)
-        ? result.data
-        : Array.isArray(result?.students)
-        ? result.students
-        : result?.students?.data || [];
+const data = Array.isArray(result?.students)
+  ? result.students
+  : Array.isArray(result?.data)
+  ? result.data
+  : result?.data?.students || [];
 
-      // Extra frontend safety
-      const departmentStudents = data.filter(
-        (student) =>
-          student.department?.trim().toLowerCase() ===
-          department
-      );
+const departmentStudents = data.filter(
+  (student) =>
+    student.department?.trim().toLowerCase() ===
+    department.trim().toLowerCase()
+);
 
-      setStudents(departmentStudents);
+setStudents(departmentStudents);
     } catch (err) {
       console.error("Fetch students error:", err);
 
@@ -196,15 +195,23 @@ export default function HODStudentsPage() {
           matchesBatch
         );
       })
-      .sort((a, b) =>
-        (a.name || "").localeCompare(
-          b.name || "",
-          undefined,
-          {
-            sensitivity: "base",
-          }
-        )
-      );
+   .sort((a, b) => {
+  const rollA = Number(a.rollNumber);
+  const rollB = Number(b.rollNumber);
+
+  if (!Number.isNaN(rollA) && !Number.isNaN(rollB)) {
+    return rollA - rollB;
+  }
+
+  return String(a.rollNumber || "").localeCompare(
+    String(b.rollNumber || ""),
+    undefined,
+    {
+      numeric: true,
+      sensitivity: "base",
+    }
+  );
+});
   }, [
     students,
     search,
@@ -293,7 +300,7 @@ export default function HODStudentsPage() {
       const token = await getToken();
 
       const response = await axios.get(
-        `${API_URL}/api/students/getstudent/${student._id}`,
+        `${API_URL}/api/students/${student._id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -310,7 +317,7 @@ export default function HODStudentsPage() {
         registerNumber: data.registerNumber || "",
         name: data.name || "",
         gender: data.gender || "",
-        email: data.email || "",
+       
         phone: data.phone || "",
         department: data.department || hodDepartment,
         admissionYear: data.admissionYear || "",
@@ -396,10 +403,7 @@ export default function HODStudentsPage() {
         editForm.gender.trim().toLowerCase()
       );
 
-      formData.append(
-        "email",
-        editForm.email.trim().toLowerCase()
-      );
+     
 
       formData.append(
         "phone",
@@ -433,7 +437,7 @@ export default function HODStudentsPage() {
       );
 
       await axios.put(
-        `${API_URL}/api/students/updatestudent/${editingStudent._id}`,
+        `${API_URL}/api/students/${editingStudent._id}`,
         formData,
         {
           headers: {
@@ -485,7 +489,7 @@ export default function HODStudentsPage() {
       const token = await getToken();
 
       await axios.delete(
-        `${API_URL}/api/students/deletestudent/${student._id}`,
+        `${API_URL}/api/students/${student._id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -561,7 +565,7 @@ export default function HODStudentsPage() {
       formData.append("image", file);
 
       await axios.put(
-        `${API_URL}/api/students/updatestudent/${photoStudent._id}`,
+        `${API_URL}/api/students/${photoStudent._id}`,
         formData,
         {
           headers: {
@@ -895,286 +899,553 @@ export default function HODStudentsPage() {
 
           </div>
 
-        ) : (
+            ) : (
+          <div
+            className="no-scrollbar cursor-grab overflow-x-auto select-none"
+            onMouseDown={(e) => {
+              if (e.button !== 0) return;
 
-          <div className="overflow-x-auto">
+              if (
+                e.target.closest("button") ||
+                e.target.closest("input") ||
+                e.target.closest("select") ||
+                e.target.closest("a")
+              ) {
+                return;
+              }
 
-            <table className="w-full min-w-[1250px]">
+              const container = e.currentTarget;
 
+              container._drag = {
+                dragging: true,
+                startX: e.clientX,
+                startScrollLeft: container.scrollLeft,
+              };
+
+              container.classList.add("cursor-grabbing");
+              container.classList.remove("cursor-grab");
+              document.body.style.userSelect = "none";
+            }}
+            onMouseMove={(e) => {
+              const container = e.currentTarget;
+              const drag = container._drag;
+
+              if (!drag?.dragging) return;
+
+              const distance = e.clientX - drag.startX;
+              container.scrollLeft =
+                drag.startScrollLeft - distance;
+            }}
+            onMouseUp={(e) => {
+              const container = e.currentTarget;
+
+              if (container._drag) {
+                container._drag.dragging = false;
+              }
+
+              container.classList.remove("cursor-grabbing");
+              container.classList.add("cursor-grab");
+              document.body.style.userSelect = "";
+            }}
+            onMouseLeave={(e) => {
+              const container = e.currentTarget;
+
+              if (container._drag) {
+                container._drag.dragging = false;
+              }
+
+              container.classList.remove("cursor-grabbing");
+              container.classList.add("cursor-grab");
+              document.body.style.userSelect = "";
+            }}
+            style={{
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
+            <table className="w-max min-w-full border-separate border-spacing-0">
+
+              {/* =====================================================
+                  TABLE HEADER
+              ====================================================== */}
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
 
-                  <th className="w-16 px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Sl. No.
+                  {/* SERIAL */}
+                  <th
+                    className="sticky left-0 z-30 w-14 min-w-14 border-r border-slate-100 bg-slate-50 px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    #
                   </th>
 
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {/* STUDENT */}
+                  <th
+                    className="sticky left-14 z-30 w-72 min-w-72 border-r border-slate-100 bg-slate-50 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 shadow-[4px_0_8px_-7px_rgba(0,0,0,0.35)]"
+                  >
                     Student
                   </th>
 
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {/* REGISTER */}
+                  <th
+                    className="w-44 min-w-44 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
                     Register No.
                   </th>
 
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {/* ROLL */}
+                  <th
+                    className="w-28 min-w-28 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Roll No.
+                  </th>
+
+                  {/* FATHER */}
+                  <th
+                    className="w-56 min-w-56 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Father Name
+                  </th>
+
+                  {/* MOTHER */}
+                  <th
+                    className="w-56 min-w-56 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Mother Name
+                  </th>
+
+                  {/* DOB */}
+                  <th
+                    className="w-32 min-w-32 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    DOB
+                  </th>
+
+                  {/* GENDER */}
+                  <th
+                    className="w-28 min-w-28 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
                     Gender
                   </th>
 
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {/* ADMISSION YEAR */}
+                  <th
+                    className="w-36 min-w-36 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
                     Admission Year
                   </th>
 
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Semester
-                  </th>
-
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {/* BATCH */}
+                  <th
+                    className="w-36 min-w-36 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
                     Batch
                   </th>
 
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {/* BATCH NUMBER */}
+                  <th
+                    className="w-32 min-w-32 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
                     Batch No.
                   </th>
 
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {/* ADMISSION TYPE */}
+                  <th
+                    className="w-48 min-w-48 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Admission Type
+                  </th>
+
+                  {/* SEMESTER */}
+                  <th
+                    className="w-28 min-w-28 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Semester
+                  </th>
+
+                  {/* CATEGORY */}
+                  <th
+                    className="w-32 min-w-32 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Category
+                  </th>
+
+                  {/* PHONE */}
+                  <th
+                    className="w-36 min-w-36 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
                     Phone
                   </th>
 
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Actions
+                  {/* PARENT PHONE */}
+                  <th
+                    className="w-36 min-w-36 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Parent Phone
+                  </th>
+
+                  {/* EMAIL */}
+                  <th
+                    className="w-64 min-w-64 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Email
+                  </th>
+
+                  {/* STATUS */}
+                  <th
+                    className="w-32 min-w-32 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                  >
+                    Status
+                  </th>
+
+                  {/* ACTIONS */}
+                  <th
+                    className="sticky right-0 z-30 w-28 min-w-28 border-l border-slate-100 bg-slate-50 px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 shadow-[-4px_0_8px_-7px_rgba(0,0,0,0.35)]"
+                  >
+                    Modify
                   </th>
 
                 </tr>
               </thead>
 
+              {/* =====================================================
+                  TABLE BODY
+              ====================================================== */}
               <tbody className="divide-y divide-slate-100">
 
-                {filteredStudents.map(
-                  (student, index) => {
+                {filteredStudents.map((student, index) => {
 
-                    const studentId =
-                      student._id || student.id;
+                  const studentId =
+                    student._id || student.id;
 
-                    return (
-                      <tr
-                        key={studentId}
-                        className="hover:bg-slate-50"
+                  const dobDisplay = student.dob
+                    ? new Date(student.dob).toLocaleDateString(
+                        "en-GB"
+                      )
+                    : "—";
+
+                  const admissionTypeLabel = {
+                    regular: "Regular",
+                    lateralPUC: "Lateral - PUC",
+                    lateralITI: "Lateral - ITI",
+                    lateralCross: "Lateral - Cross",
+                    workingProfessional:
+                      "Working Professional",
+                  }[
+                    student.admissionType
+                  ] || student.admissionType || "—";
+
+                  return (
+                    <tr
+                      key={studentId}
+                      className="group bg-white transition hover:bg-slate-50/80"
+                    >
+
+                      {/* =================================================
+                          SERIAL
+                      ================================================== */}
+                      <td
+                        className="sticky left-0 z-20 w-14 min-w-14 border-r border-slate-100 bg-white px-2 py-4 text-center text-sm font-medium text-slate-400 group-hover:bg-slate-50"
                       >
+                        {index + 1}
+                      </td>
 
-                        {/* SERIAL */}
+                      {/* =================================================
+                          STUDENT
+                      ================================================== */}
+                      <td
+                        className="sticky left-14 z-20 w-72 min-w-72 border-r border-slate-100 bg-white px-4 py-3 shadow-[4px_0_8px_-7px_rgba(0,0,0,0.35)] group-hover:bg-slate-50"
+                      >
+                        <div className="flex items-center gap-3">
 
-                        <td className="px-4 py-4 text-center text-sm font-medium text-slate-500">
-                          {index + 1}
-                        </td>
-
-                        {/* STUDENT */}
-
-                        <td className="px-5 py-4">
-
-                          <div className="flex items-center gap-3">
-
-                            {student.imageUrl ? (
-
+                          {student.imageUrl ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewPhoto({
+                                  imageUrl:
+                                    student.imageUrl,
+                                  name:
+                                    student.name,
+                                })
+                              }
+                              className="shrink-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300"
+                              title="View photo"
+                            >
                               <img
                                 src={student.imageUrl}
                                 alt={student.name}
-                                className="h-10 w-10 rounded-xl object-cover"
+                                className="h-11 w-11 rounded-lg object-cover transition hover:scale-105"
                               />
-
-                            ) : (
-
-                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-semibold text-white">
-                                {student.name
-                                  ?.charAt(0)
-                                  ?.toUpperCase() ||
-                                  "S"}
-                              </div>
-
-                            )}
-
-                            <div className="min-w-0">
-
-                              <p className="max-w-[220px] truncate text-sm font-semibold text-slate-900">
-                                {student.name || "—"}
-                              </p>
-
-                              <p className="max-w-[240px] truncate text-xs text-slate-500">
-                                {student.email || "—"}
-                              </p>
-
-                            </div>
-
-                          </div>
-
-                        </td>
-
-                        {/* REGISTER */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 font-mono text-xs font-medium text-slate-700">
-                            {student.registerNumber || "—"}
-                          </span>
-
-                        </td>
-
-                        {/* GENDER */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold capitalize text-slate-700">
-                            {student.gender || "—"}
-                          </span>
-
-                        </td>
-
-                        {/* ADMISSION */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600">
-                            {student.admissionYear || "—"}
-                          </span>
-
-                        </td>
-
-                        {/* SEMESTER */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
-                            {student.semester
-                              ? `Semester ${student.semester}`
-                              : "—"}
-                          </span>
-
-                        </td>
-
-                        {/* BATCH */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="inline-flex rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                            {student.batch || "—"}
-                          </span>
-
-                        </td>
-
-                        {/* BATCH NUMBER */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="inline-flex rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
-                            {student.batchNumber
-                              ? `Batch ${student.batchNumber}`
-                              : "—"}
-                          </span>
-
-                        </td>
-
-                        {/* PHONE */}
-
-                        <td className="px-5 py-4">
-
-                          <span className="text-sm text-slate-600">
-                            {student.phone || "—"}
-                          </span>
-
-                        </td>
-
-                        {/* ACTIONS */}
-
-                        <td className="relative px-5 py-4 text-right">
-
-                          <button
-                            disabled={
-                              deletingId ===
-                                studentId ||
-                              uploadingPhoto
-                            }
-                            onClick={() =>
-                              setOpenMenu(
-                                openMenu ===
-                                  studentId
-                                  ? null
-                                  : studentId
-                              )
-                            }
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
-                          >
-                            <svg
-                              className="h-5 w-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeWidth="2"
-                                d="M12 6h.01M12 12h.01M12 18h.01"
-                              />
-                            </svg>
-                          </button>
-
-                          {openMenu ===
-                            studentId && (
-
-                            <div className="absolute right-5 top-14 z-30 w-44 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-left shadow-xl">
-
-                              <button
-                                onClick={() =>
-                                  handleEdit(
-                                    student
-                                  )
-                                }
-                                className="w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
-                              >
-                                Edit Student
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  handlePhotoClick(
-                                    student
-                                  )
-                                }
-                                className="w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
-                              >
-                                Update Photo
-                              </button>
-
-                              <button
-                                onClick={() =>
-                                  handleDelete(
-                                    student
-                                  )
-                                }
-                                disabled={
-                                  deletingId ===
-                                  studentId
-                                }
-                                className="w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-                              >
-                                {deletingId ===
-                                studentId
-                                  ? "Deleting..."
-                                  : "Delete Student"}
-                              </button>
-
+                            </button>
+                          ) : (
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-sm font-semibold text-white">
+                              {student.name
+                                ?.charAt(0)
+                                ?.toUpperCase() || "S"}
                             </div>
                           )}
 
-                        </td>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-900">
+                              {student.name || "—"}
+                            </p>
 
-                      </tr>
-                    );
-                  }
-                )}
+                            <p className="mt-0.5 truncate text-xs text-slate-400">
+                              {student.email || "No email"}
+                            </p>
+                          </div>
+
+                        </div>
+                      </td>
+
+                      {/* =================================================
+                          REGISTER NUMBER
+                      ================================================== */}
+                      <td className="w-44 min-w-44 px-4 py-4">
+                        <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1.5 font-mono text-xs font-semibold text-slate-700">
+                          {student.registerNumber || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          ROLL NUMBER
+                      ================================================== */}
+                      <td className="w-28 min-w-28 px-4 py-4">
+                        <span className="text-sm font-medium text-slate-600">
+                          {student.rollNumber || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          FATHER NAME
+                      ================================================== */}
+                      <td className="w-56 min-w-56 px-4 py-4">
+                        <span className="block truncate text-sm text-slate-600">
+                          {student.fatherName || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          MOTHER NAME
+                      ================================================== */}
+                      <td className="w-56 min-w-56 px-4 py-4">
+                        <span className="block truncate text-sm text-slate-600">
+                          {student.motherName || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          DOB
+                      ================================================== */}
+                      <td className="w-32 min-w-32 px-4 py-4">
+                        <span className="text-sm text-slate-600">
+                          {dobDisplay}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          GENDER
+                      ================================================== */}
+                      <td className="w-28 min-w-28 px-4 py-4">
+                        <span className="capitalize text-sm text-slate-600">
+                          {student.gender || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          ADMISSION YEAR
+                      ================================================== */}
+                      <td className="w-36 min-w-36 px-4 py-4">
+                        <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600">
+                          {student.admissionYear || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          BATCH
+                      ================================================== */}
+                      <td className="w-36 min-w-36 px-4 py-4">
+                        <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                          {student.batch || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          BATCH NUMBER
+                      ================================================== */}
+                      <td className="w-32 min-w-32 px-4 py-4">
+                        <span className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700">
+                          {student.batchNumber
+                            ? `Batch ${student.batchNumber}`
+                            : "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          ADMISSION TYPE
+                      ================================================== */}
+                      <td className="w-48 min-w-48 px-4 py-4">
+                        <span className="inline-flex rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">
+                          {admissionTypeLabel}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          SEMESTER
+                      ================================================== */}
+                      <td className="w-28 min-w-28 px-4 py-4">
+                        <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                          {student.semester
+                            ? `Sem ${student.semester}`
+                            : "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          CATEGORY
+                      ================================================== */}
+                      <td className="w-32 min-w-32 px-4 py-4">
+                        <span className="text-sm text-slate-600">
+                          {student.category || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          PHONE
+                      ================================================== */}
+                      <td className="w-36 min-w-36 px-4 py-4">
+                        <span className="text-sm text-slate-600">
+                          {student.phone || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          PARENT PHONE
+                      ================================================== */}
+                      <td className="w-36 min-w-36 px-4 py-4">
+                        <span className="text-sm text-slate-600">
+                          {student.parentPhone || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          EMAIL
+                      ================================================== */}
+                      <td className="w-64 min-w-64 px-4 py-4">
+                        <span className="block truncate text-sm text-slate-600">
+                          {student.email || "—"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          STATUS
+                      ================================================== */}
+                      <td className="w-32 min-w-32 px-4 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${
+                            student.status === "active"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : student.status === "passed"
+                              ? "bg-blue-50 text-blue-700"
+                              : student.status === "detained"
+                              ? "bg-amber-50 text-amber-700"
+                              : student.status === "discontinued"
+                              ? "bg-red-50 text-red-700"
+                              : student.status === "transferred"
+                              ? "bg-purple-50 text-purple-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {student.status || "active"}
+                        </span>
+                      </td>
+
+                      {/* =================================================
+                          MODIFY / ACTIONS
+                      ================================================== */}
+                     <td
+  className={`sticky right-0 ${
+    openMenu === studentId ? "z-[100]" : "z-20"
+  } w-28 min-w-28 border-l border-slate-100 bg-white px-4 py-4 text-right shadow-[-4px_0_8px_-7px_rgba(0,0,0,0.35)] group-hover:bg-slate-50`}
+>
+
+                        <button
+                          disabled={
+                            deletingId === studentId ||
+                            uploadingPhoto
+                          }
+                          onClick={() =>
+                            setOpenMenu(
+                              openMenu === studentId
+                                ? null
+                                : studentId
+                            )
+                          }
+                          className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+                        >
+                          Modify
+
+                          <svg
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="m6 9 6 6 6-6"
+                            />
+                          </svg>
+                        </button>
+
+                        {openMenu === studentId && (
+                       <div className="absolute right-4 top-14 z-[9999] w-48 overflow-hidden rounded-xl border border-slate-200 bg-amber-50 py-1 text-left shadow-2xl">
+
+                            <button
+                              onClick={() =>
+                                handleEdit(student)
+                              }
+                              className="w-full px-4 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50"
+                            >
+                              Edit Student
+                            </button>
+
+                            <button
+                              onClick={() =>
+                                handlePhotoClick(student)
+                              }
+                              className="w-full px-4 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50"
+                            >
+                              Update Photo
+                            </button>
+
+                            <button
+                              onClick={() =>
+                                handleDelete(student)
+                              }
+                              disabled={
+                                deletingId === studentId
+                              }
+                              className="w-full px-4 py-2.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {deletingId === studentId
+                                ? "Deleting..."
+                                : "Delete Student"}
+                            </button>
+
+                          </div>
+                        )}
+
+                      </td>
+
+                    </tr>
+                  );
+                })}
 
               </tbody>
-
             </table>
-
           </div>
         )}
 
@@ -1294,22 +1565,6 @@ export default function HODStudentsPage() {
                   />
                 </div>
 
-                {/* EMAIL */}
-
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                    Email
-                  </label>
-
-                  <input
-                    type="email"
-                    name="email"
-                    value={editForm.email}
-                    onChange={handleEditChange}
-                    required
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-400"
-                  />
-                </div>
 
                 {/* PHONE */}
 
@@ -1469,20 +1724,15 @@ export default function HODStudentsPage() {
                     <option value="">
                       Select Batch
                     </option>
-                    <option value="2023-2026">
-                      2023-2026
+                   
+                    <option value="2025-2026">
+                      2025-2026
                     </option>
-                    <option value="2024-2027">
-                      2024-2027
+                    <option value="2026-2027">
+                      2026-2027
                     </option>
-                    <option value="2025-2028">
-                      2025-2028
-                    </option>
-                    <option value="2026-2029">
-                      2026-2029
-                    </option>
-                    <option value="2027-2030">
-                      2027-2030
+                    <option value="2027-2038">
+                      2027-2028
                     </option>
                   </select>
                 </div>
@@ -1659,10 +1909,7 @@ function HODAddStudent({
         form.gender.trim().toLowerCase()
       );
 
-      formData.append(
-        "email",
-        form.email.trim().toLowerCase()
-      );
+     
 
       formData.append(
         "phone",
@@ -1705,7 +1952,7 @@ function HODAddStudent({
       }
 
       await axios.post(
-        `${API_URL}/api/students/addstudent`,
+        `${API_URL}/api/students`,
         formData,
         {
           headers: {

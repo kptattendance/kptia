@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
+import { useEffect, useMemo, useState,useRef } from "react";
+import { useAuth, useUser } from "@clerk/nextjs";
 import axios from "axios";
 import {
   AlertTriangle,
@@ -21,6 +21,8 @@ import {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:5000";
+
+  
 
 // =====================================================
 // DEPARTMENTS
@@ -1057,17 +1059,19 @@ const downloadExcelReport = async ({
 // SEMESTERS
 // =====================================================
 
-const semesters = [1, 2, 3, 4, 5, 6, 7, 8];
+const semesters = [1, 2, 3, 4, 5, 6];
 
 // =====================================================
 // HOD ATTENDANCE PAGE
 // =====================================================
 
 export default function HODAttendancePage() {
-  const { getToken } = useAuth();
-
+const { getToken } = useAuth();
+const { user, isLoaded: isUserLoaded } = useUser();
+  const tableScrollRef = useRef(null);
   const currentDate = new Date();
-
+const [refreshKey, setRefreshKey] =
+  useState(0);
   // ---------------------------------------------------
   // FILTERS
   // ---------------------------------------------------
@@ -1082,6 +1086,27 @@ export default function HODAttendancePage() {
 
   const [department, setDepartment] =
     useState("");
+    // =====================================================
+// HOD DEPARTMENT
+// Department comes automatically from Clerk metadata.
+// HOD should not manually select another department.
+// =====================================================
+
+useEffect(() => {
+  if (!isUserLoaded || !user) return;
+
+  const hodDepartment =
+    user.publicMetadata?.department;
+
+  if (hodDepartment) {
+    setDepartment(
+      String(hodDepartment).trim().toLowerCase()
+    );
+  }
+}, [
+  user,
+  isUserLoaded,
+]);
 
   const [semester, setSemester] =
     useState("");
@@ -1128,6 +1153,7 @@ export default function HODAttendancePage() {
     return result;
   }, []);
 
+  
   // =====================================================
   // LOAD SUBJECTS + ALL ATTENDANCE
   // =====================================================
@@ -1188,7 +1214,12 @@ export default function HODAttendancePage() {
               : subjectResult?.subjects
                     ?.data || [];
 
-          setSubjects(subjectList);
+          const nonBridgeSubjects = subjectList.filter(
+  (subject) =>
+    String(subject.subjectCategory || "").toUpperCase() !== "BRIDGE"
+);
+
+setSubjects(nonBridgeSubjects);
 
           // =================================================
           // 2. LOAD ATTENDANCE FOR ALL SUBJECTS
@@ -1197,7 +1228,7 @@ export default function HODAttendancePage() {
           const attendanceMap = {};
 
           await Promise.all(
-            subjectList.map(
+            nonBridgeSubjects.map(
               async (subject) => {
                 try {
                   const response =
@@ -1294,177 +1325,262 @@ export default function HODAttendancePage() {
 
     loadSemesterAttendance();
   }, [
-    department,
-    semester,
-    month,
-    year,
-    batchSelection,
-    getToken,
+      department,
+  semester,
+  month,
+  year,
+  batchSelection,
+  refreshKey,
+  getToken,
   ]);
 
-  // =====================================================
-  // STUDENT LIST
-  // =====================================================
+ // =====================================================
+// STUDENT LIST
+// IMPORTANT:
+// 1. Load the COMPLETE student roster from Student API.
+// 2. Filter by Batch 1 / Batch 2 / Both.
+// 3. Sort strictly by Roll Number.
+// 4. Overlay attendance using Student MongoDB _id.
+// 5. Students without attendance remain in the list
+//    and their attendance cells show "—".
+// =====================================================
 
-  const students = useMemo(() => {
-    const studentMap =
-      new Map();
+const [allStudents, setAllStudents] = useState([]);
 
-    subjects.forEach(
-      (subject) => {
-        const attendance =
-          attendanceData[
-            String(
-              subject._id
-            )
-          ];
+// =====================================================
+// LOAD COMPLETE STUDENT ROSTER
+// =====================================================
 
-        if (!attendance) {
+useEffect(() => {
+  const loadStudents = async () => {
+    if (!department || !semester) {
+      setAllStudents([]);
+      return;
+    }
+
+    try {
+      const token = await getToken();
+
+      const response = await axios.get(
+        `${API_URL}/api/students`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            department,
+            semester: Number(semester),
+          },
+        }
+      );
+
+      const result = response.data;
+
+      const studentList =
+        Array.isArray(result?.students)
+          ? result.students
+          : Array.isArray(result?.data)
+          ? result.data
+          : Array.isArray(result?.students?.data)
+          ? result.students.data
+          : Array.isArray(result)
+          ? result
+          : [];
+
+      setAllStudents(studentList);
+    } catch (error) {
+      console.error(
+        "Failed to load HOD student roster:",
+        error
+      );
+
+      setAllStudents([]);
+    }
+  };
+
+  loadStudents();
+}, [
+  department,
+  semester,
+  getToken,
+]);
+
+// =====================================================
+// BUILD STUDENT LIST
+// =====================================================
+
+const students = useMemo(() => {
+  const studentMap = new Map();
+
+  // ---------------------------------------------------
+  // 1. FIRST ADD ALL STUDENTS FROM STUDENT API
+  // ---------------------------------------------------
+
+  allStudents.forEach((student) => {
+    if (!student?._id) return;
+
+    const studentId = String(student._id);
+
+    studentMap.set(studentId, {
+      _id: studentId,
+
+      registerNumber:
+        student.registerNumber || "",
+
+      rollNumber:
+        student.rollNumber || "",
+
+      name:
+        student.name || "",
+
+      email:
+        student.email || "",
+
+      imageUrl:
+        student.imageUrl ||
+        student.photoUrl ||
+        student.profileImage ||
+        "",
+
+      batchNumber:
+        Number(student.batchNumber),
+
+      subjects: {},
+    });
+  });
+
+  // ---------------------------------------------------
+  // 2. OVERLAY ATTENDANCE USING STUDENT _id
+  // ---------------------------------------------------
+
+  subjects.forEach((subject) => {
+    const attendance =
+      attendanceData[String(subject._id)];
+
+    if (!attendance) {
+      return;
+    }
+
+    const conducted =
+      Number(
+        attendance.classesConducted || 0
+      );
+
+    (attendance.students || []).forEach(
+      (entry) => {
+        const student =
+          entry.studentId;
+
+        if (!student) {
           return;
         }
 
-        (
-          attendance.students ||
-          []
-        ).forEach(
-          (entry) => {
-            const student =
-              entry.studentId;
-
-            if (!student) {
-              return;
-            }
-
-            const studentId =
-              String(
-                student._id ||
-                  student
-              );
-
-            if (
-              !studentMap.has(
-                studentId
-              )
-            ) {
-              studentMap.set(
-                studentId,
-                {
-                  _id: studentId,
-
-                  registerNumber:
-                    student.registerNumber ||
-                    "",
-
-                  name:
-                    student.name ||
-                    "",
-
-                  email:
-                    student.email ||
-                    "",
-
-                  imageUrl:
-                    student.imageUrl ||
-                    student.photoUrl ||
-                    student.profileImage ||
-                    "",
-
-                  batchNumber:
-                    student.batchNumber,
-
-                  subjects: {},
-                }
-              );
-            }
-          }
-        );
-      }
-    );
-
-    // ---------------------------------------------------
-    // Add subject attendance
-    // ---------------------------------------------------
-
-    subjects.forEach(
-      (subject) => {
-        const attendance =
-          attendanceData[
-            String(
-              subject._id
-            )
-          ];
-
-        if (!attendance) {
-          return;
-        }
-
-        const conducted =
-          Number(
-            attendance.classesConducted ||
-              0
+        const studentId =
+          String(
+            student._id || student
           );
 
-        (
-          attendance.students ||
-          []
-        ).forEach(
-          (entry) => {
-            const student =
-              entry.studentId;
+        const target =
+          studentMap.get(studentId);
 
-            if (!student) {
-              return;
-            }
+        if (!target) {
+          return;
+        }
 
-            const studentId =
-              String(
-                student._id ||
-                  student
-              );
+        // ---------------------------------------------
+        // SAFETY CHECK:
+        // Never attach attendance to another batch.
+        // ---------------------------------------------
 
-            const target =
-              studentMap.get(
-                studentId
-              );
+        if (
+          batchSelection !== "both" &&
+          Number(target.batchNumber) !==
+            Number(batchSelection)
+        ) {
+          return;
+        }
 
-            if (!target) {
-              return;
-            }
-target.subjects[
-  String(subject._id)
-] = {
-  attended:
-    Number(
-      entry.classesAttended || 0
-    ),
+        target.subjects[
+          String(subject._id)
+        ] = {
+          attended:
+            Number(
+              entry.classesAttended || 0
+            ),
 
-  conducted:
-    Number(
-      entry.classesEligible ??
-      attendance.classesConducted ??
-      0
-    ),
-};
-          }
-        );
+          conducted:
+            Number(
+              entry.classesEligible ??
+              conducted ??
+              0
+            ),
+        };
       }
     );
+  });
 
-    return Array.from(
+  // ---------------------------------------------------
+  // 3. FILTER BATCH
+  // ---------------------------------------------------
+
+  const filteredRoster =
+    Array.from(
       studentMap.values()
-    ).sort((a, b) =>
+    ).filter((student) => {
+      if (
+        batchSelection === "both"
+      ) {
+        return (
+          Number(student.batchNumber) === 1 ||
+          Number(student.batchNumber) === 2
+        );
+      }
+
+      return (
+        Number(student.batchNumber) ===
+        Number(batchSelection)
+      );
+    });
+
+  // ---------------------------------------------------
+  // 4. SORT STRICTLY BY ROLL NUMBER
+  // ---------------------------------------------------
+
+  filteredRoster.sort((a, b) => {
+    const rollA =
+      Number(a.rollNumber);
+
+    const rollB =
+      Number(b.rollNumber);
+
+    if (
+      Number.isFinite(rollA) &&
+      Number.isFinite(rollB)
+    ) {
+      return rollA - rollB;
+    }
+
+    return String(
+      a.rollNumber || ""
+    ).localeCompare(
       String(
-        a.registerNumber
-      ).localeCompare(
-        String(
-          b.registerNumber
-        )
-      )
+        b.rollNumber || ""
+      ),
+      undefined,
+      {
+        numeric: true,
+        sensitivity: "base",
+      }
     );
-  }, [
-    subjects,
-    attendanceData,
-  ]);
+  });
+
+  return filteredRoster;
+}, [
+  allStudents,
+  subjects,
+  attendanceData,
+  batchSelection,
+]);
 
   // =====================================================
   // FILTER STUDENTS
@@ -1633,12 +1749,33 @@ target.subjects[
         Number(month)
     )?.label || "";
 
+
+  const moveTableHorizontally = (direction) => {
+  const container = tableScrollRef.current;
+
+  if (!container) return;
+
+  const amount = 500;
+
+  if (direction === "left") {
+    container.scrollLeft = Math.max(
+      0,
+      container.scrollLeft - amount
+    );
+  } else {
+    container.scrollLeft = Math.min(
+      container.scrollWidth - container.clientWidth,
+      container.scrollLeft + amount
+    );
+  }
+};
   // =====================================================
   // UI
   // =====================================================
 
   return (
     <div className="min-h-screen bg-[#f6f8fb] px-4 py-5 sm:px-6 lg:px-8">
+      
 
       <div className="mx-auto max-w-[1600px]">
 
@@ -1676,13 +1813,9 @@ target.subjects[
             semester && (
               <button
                 type="button"
-                onClick={() => {
-                  setAttendanceData(
-                    (prev) => ({
-                      ...prev,
-                    })
-                  );
-                }}
+             onClick={() =>
+  setRefreshKey((prev) => prev + 1)
+}
                 disabled={loading}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -1822,69 +1955,18 @@ target.subjects[
 
             {/* Department */}
 
-            <div>
-              <label className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
-                <Building2
-                  size={13}
-                />
-                Department
-              </label>
+           {/* HOD DEPARTMENT - READ ONLY */}
 
-              <div className="relative">
+<div>
+  <label className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+    <Building2 size={13} />
+    Department
+  </label>
 
-                <select
-                  value={
-                    department
-                  }
-                  onChange={(e) => {
-                    setDepartment(
-                      e.target
-                        .value
-                    );
-
-                    setSemester(
-                      ""
-                    );
-
-                    setSubjects(
-                      []
-                    );
-
-                    setAttendanceData(
-                      {}
-                    );
-                  }}
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
-                >
-                  <option value="">
-                    Select department
-                  </option>
-
-                  {departments.map(
-                    (item) => (
-                      <option
-                        key={
-                          item.value
-                        }
-                        value={
-                          item.value
-                        }
-                      >
-                        {
-                          item.label
-                        }
-                      </option>
-                    )
-                  )}
-                </select>
-
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-
-              </div>
-            </div>
+  <div className="flex min-h-[48px] items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+    {departmentLabel || "Loading department..."}
+  </div>
+</div>
 
             {/* Semester */}
 
@@ -2257,14 +2339,39 @@ target.subjects[
                       TABLE
                   ----------------------------------------- */}
 
-                  <div className="relative overflow-x-auto overscroll-x-contain">
-                    <table
-                      className="table-fixed border-collapse"
-                      style={{
-                        minWidth: `${456 + subjects.length * 170}px`,
-                        width: "max-content",
-                      }}
-                    >
+                 <div className="relative">
+  {/* HORIZONTAL TABLE CONTROLS */}
+  <div className="flex items-center justify-end gap-2 border-b border-slate-100 bg-white px-4 py-2">
+    <button
+      type="button"
+      onClick={() => moveTableHorizontally("left")}
+      className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
+      title="Move table left"
+    >
+      ←
+    </button>
+
+    <button
+      type="button"
+      onClick={() => moveTableHorizontally("right")}
+      className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
+      title="Move table right"
+    >
+      →
+    </button>
+  </div>
+
+  <div
+    ref={tableScrollRef}
+      className="w-full max-w-full overflow-x-auto overscroll-x-contain scrollbar-hide"
+  >
+                   <table
+  className="table-fixed border-collapse"
+  style={{
+    width: `${456 + subjects.length * 170}px`,
+    minWidth: `${456 + subjects.length * 170}px`,
+  }}
+>
                       <colgroup>
                         <col style={{ width: "56px" }} />
                         <col style={{ width: "144px" }} />
@@ -2455,7 +2562,7 @@ target.subjects[
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </div></div>
 
                   {/* -----------------------------------------
                       FOOTER
@@ -2534,6 +2641,7 @@ target.subjects[
           ))}
 
       </div>
+
     </div>
   );
 }

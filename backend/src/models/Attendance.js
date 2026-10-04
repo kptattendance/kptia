@@ -27,12 +27,20 @@ const attendanceStudentSchema = new mongoose.Schema(
 
 const attendanceSchema = new mongoose.Schema(
   {
+    // =====================================================
+    // DEPARTMENT
+    // =====================================================
+
     department: {
       type: String,
       required: true,
       trim: true,
       lowercase: true,
     },
+
+    // =====================================================
+    // SEMESTER
+    // =====================================================
 
     semester: {
       type: Number,
@@ -41,11 +49,20 @@ const attendanceSchema = new mongoose.Schema(
       max: 8,
     },
 
+    // =====================================================
+    // SUBJECT
+    // =====================================================
+
     subjectId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Subject",
       required: true,
+      index: true,
     },
+
+    // =====================================================
+    // MONTH / YEAR
+    // =====================================================
 
     month: {
       type: Number,
@@ -59,13 +76,13 @@ const attendanceSchema = new mongoose.Schema(
       required: true,
     },
 
-    // -----------------------------------------
-    // BATCHES INCLUDED IN THIS ATTENDANCE RECORD
+    // =====================================================
+    // BATCHES INCLUDED
     //
     // Batch 1        -> [1]
     // Batch 2        -> [2]
     // Both Batches   -> [1, 2]
-    // -----------------------------------------
+    // =====================================================
 
     batchNumbers: {
       type: [
@@ -77,16 +94,30 @@ const attendanceSchema = new mongoose.Schema(
       required: true,
       validate: {
         validator: function (value) {
+          if (!Array.isArray(value)) {
+            return false;
+          }
+
+          if (value.length < 1 || value.length > 2) {
+            return false;
+          }
+
+          const uniqueBatches = [
+            ...new Set(value.map(Number)),
+          ];
+
           return (
-            Array.isArray(value) &&
-            value.length >= 1 &&
-            value.length <= 2
+            uniqueBatches.length === value.length
           );
         },
         message:
-          "At least one batch must be selected.",
+          "Attendance must contain one or two unique batches.",
       },
     },
+
+    // =====================================================
+    // CLASSES CONDUCTED
+    // =====================================================
 
     classesConducted: {
       type: Number,
@@ -94,10 +125,28 @@ const attendanceSchema = new mongoose.Schema(
       min: 0,
     },
 
+    // =====================================================
+    // STUDENT ATTENDANCE
+    // =====================================================
+
     students: {
       type: [attendanceStudentSchema],
       required: true,
+      validate: {
+        validator: function (value) {
+          return (
+            Array.isArray(value) &&
+            value.length > 0
+          );
+        },
+        message:
+          "At least one student attendance record is required.",
+      },
     },
+
+    // =====================================================
+    // AUDIT
+    // =====================================================
 
     enteredBy: {
       type: String,
@@ -122,16 +171,9 @@ const attendanceSchema = new mongoose.Schema(
   }
 );
 
-// -----------------------------------------
-// NON-UNIQUE INDEX
-// -----------------------------------------
-//
-// Multiple records are allowed for:
-// Batch 1
-// Batch 2
-//
-// Overlap checking is handled in controller.
-// -----------------------------------------
+// =========================================================
+// LOOKUP INDEX
+// =========================================================
 
 attendanceSchema.index({
   department: 1,

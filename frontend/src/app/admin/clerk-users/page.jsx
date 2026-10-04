@@ -84,7 +84,10 @@ const filteredUsers = users.filter((user) => {
     user.email?.toLowerCase().includes(search);
 
   const matchesRole =
-    !roleFilter || user.role === roleFilter;
+    !roleFilter ||
+    (roleFilter === "not_assigned"
+      ? !user.role
+      : user.role === roleFilter);
 
   const matchesDepartment =
     !departmentFilter ||
@@ -183,7 +186,9 @@ const handleDownloadExcel = () => {
   let fileName = "Clerk_Users";
 
   if (roleFilter) {
-    fileName += `_${roleFilter}`;
+    fileName += `_${
+      roleFilter === "not_assigned" ? "Not_Assigned" : roleFilter
+    }`;
   }
 
   if (departmentFilter) {
@@ -206,7 +211,7 @@ const handleDownloadExcel = () => {
 
   const handleDelete = async (clerkId) => {
     const confirmed = window.confirm(
-      "Are you sure you want to delete this Clerk account?"
+      "Are you sure you want to completely delete this user from Clerk, MongoDB and Cloudinary?"
     );
 
     if (!confirmed) return;
@@ -231,7 +236,7 @@ const handleDownloadExcel = () => {
         prev.filter((id) => id !== clerkId)
       );
 
-      alert("Clerk account deleted successfully.");
+   alert("User completely deleted from Clerk, MongoDB and Cloudinary.");
     } catch (error) {
       console.error(
         "Delete Clerk User Error:",
@@ -255,7 +260,8 @@ const handleDownloadExcel = () => {
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete ${selectedUsers.length} selected Clerk account(s)?`
+       `Are you sure you want to completely delete ${selectedUsers.length} selected user(s) from Clerk, MongoDB and Cloudinary?`
+
     );
 
     if (!confirmed) return;
@@ -288,7 +294,7 @@ const handleDownloadExcel = () => {
       setSelectedUsers([]);
 
       alert(
-        "Selected Clerk accounts deleted successfully."
+         "Selected users were completely deleted from Clerk, MongoDB and Cloudinary."
       );
     } catch (error) {
       console.error(
@@ -371,6 +377,7 @@ const handleDownloadExcel = () => {
               <option value="staff">Staff</option>
               <option value="principal">Principal</option>
               <option value="admin">Admin</option>
+              <option value="not_assigned">Not Assigned</option>
             </select>
 
             {/* DEPARTMENT */}

@@ -16,12 +16,30 @@ const departments = [
   { value: "me", label: "Mechanical Engineering" },
   { value: "ps", label: "Polymer Engineering" },
   { value: "sc", label: "Science & English" },
+  { value: "ot", label: "Other" },
 ];
 
 const genders = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
   { value: "other", label: "Other" },
+];
+
+const admissionTypes = [
+  { value: "regular", label: "Regular" },
+  { value: "lateralPUC", label: "Lateral Entry – PUC" },
+  { value: "lateralITI", label: "Lateral Entry – ITI" },
+  { value: "lateralCross", label: "Lateral Entry – Cross" },
+  { value: "workingProfessional", label: "Working Professional" },
+];
+
+const statuses = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "passed", label: "Passed" },
+  { value: "detained", label: "Detained" },
+  { value: "discontinued", label: "Discontinued" },
+  { value: "transferred", label: "Transferred" },
 ];
 
 export default function AddStudent({
@@ -31,16 +49,27 @@ export default function AddStudent({
   const { getToken } = useAuth();
 
   const [form, setForm] = useState({
+    rollNumber: "",
     registerNumber: "",
     name: "",
+    fatherName: "",
+    motherName: "",
+    dob: "",
     gender: "",
     email: "",
     phone: "",
+    parentPhone: "",
+    caste: "",
+    category: "",
+    aadhaarNumber: "",
+    satsNumber: "",
     department: "",
     admissionYear: "",
-    semester: "",
     batch: "",
     batchNumber: "",
+    admissionType: "",
+    semester: "",
+    status: "active",
   });
 
   const [image, setImage] = useState(null);
@@ -92,16 +121,21 @@ export default function AddStudent({
     // ------------------------------------------------------
 
     if (
+      !form.rollNumber.trim() ||
       !form.registerNumber.trim() ||
       !form.name.trim() ||
+      !form.fatherName.trim() ||
+      !form.motherName.trim() ||
+      !form.dob ||
       !form.gender ||
       !form.email.trim() ||
       !form.phone.trim() ||
       !form.department ||
       !form.admissionYear ||
-      !form.semester ||
       !form.batch.trim() ||
-      !form.batchNumber
+      !form.batchNumber ||
+      !form.admissionType ||
+      !form.semester
     ) {
       setError(
         "Please fill in all required fields."
@@ -124,6 +158,79 @@ export default function AddStudent({
       return;
     }
 
+    // ------------------------------------------------------
+    // PHONE VALIDATION
+    // ------------------------------------------------------
+
+    if (!/^\d{10}$/.test(form.phone.trim())) {
+      setError(
+        "Student phone number must contain exactly 10 digits."
+      );
+      return;
+    }
+
+    // ------------------------------------------------------
+    // PARENT PHONE VALIDATION
+    // ------------------------------------------------------
+
+    if (
+      form.parentPhone.trim() &&
+      !/^\d{10}$/.test(
+        form.parentPhone.trim()
+      )
+    ) {
+      setError(
+        "Parent phone number must contain exactly 10 digits."
+      );
+      return;
+    }
+
+    // ------------------------------------------------------
+    // AADHAAR VALIDATION
+    // ------------------------------------------------------
+
+    if (
+      form.aadhaarNumber.trim() &&
+      !/^\d{12}$/.test(
+        form.aadhaarNumber.trim()
+      )
+    ) {
+      setError(
+        "Aadhaar number must contain exactly 12 digits."
+      );
+      return;
+    }
+
+    // ------------------------------------------------------
+    // BATCH NUMBER VALIDATION
+    // ------------------------------------------------------
+
+    if (
+      !["1", "2"].includes(
+        String(form.batchNumber)
+      )
+    ) {
+      setError(
+        "Batch number must be either 1 or 2."
+      );
+      return;
+    }
+
+    // ------------------------------------------------------
+    // SEMESTER VALIDATION
+    // ------------------------------------------------------
+
+    if (
+      ![1, 2, 3, 4, 5, 6].includes(
+        Number(form.semester)
+      )
+    ) {
+      setError(
+        "Semester must be between 1 and 6."
+      );
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -136,6 +243,11 @@ export default function AddStudent({
       // ----------------------------------------------------
 
       formData.append(
+        "rollNumber",
+        form.rollNumber.trim()
+      );
+
+      formData.append(
         "registerNumber",
         form.registerNumber.trim()
       );
@@ -146,9 +258,28 @@ export default function AddStudent({
       );
 
       formData.append(
+        "fatherName",
+        form.fatherName.trim()
+      );
+
+      formData.append(
+        "motherName",
+        form.motherName.trim()
+      );
+
+      formData.append(
+        "dob",
+        form.dob
+      );
+
+      formData.append(
         "gender",
         form.gender
       );
+
+      // ----------------------------------------------------
+      // CONTACT INFORMATION
+      // ----------------------------------------------------
 
       formData.append(
         "email",
@@ -161,8 +292,36 @@ export default function AddStudent({
       );
 
       formData.append(
-        "department",
-        form.department
+        "parentPhone",
+        form.parentPhone.trim()
+      );
+
+      // ----------------------------------------------------
+      // SOCIAL / RESERVATION INFORMATION
+      // ----------------------------------------------------
+
+      formData.append(
+        "caste",
+        form.caste.trim()
+      );
+
+      formData.append(
+        "category",
+        form.category.trim()
+      );
+
+      // ----------------------------------------------------
+      // GOVERNMENT / IDENTIFICATION INFORMATION
+      // ----------------------------------------------------
+
+      formData.append(
+        "aadhaarNumber",
+        form.aadhaarNumber.trim()
+      );
+
+      formData.append(
+        "satsNumber",
+        form.satsNumber.trim()
       );
 
       // ----------------------------------------------------
@@ -170,8 +329,8 @@ export default function AddStudent({
       // ----------------------------------------------------
 
       formData.append(
-        "semester",
-        form.semester
+        "department",
+        form.department
       );
 
       formData.append(
@@ -187,6 +346,25 @@ export default function AddStudent({
       formData.append(
         "batchNumber",
         form.batchNumber
+      );
+
+      formData.append(
+        "admissionType",
+        form.admissionType
+      );
+
+      formData.append(
+        "semester",
+        form.semester
+      );
+
+      // ----------------------------------------------------
+      // STATUS
+      // ----------------------------------------------------
+
+      formData.append(
+        "status",
+        form.status
       );
 
       // ----------------------------------------------------
@@ -205,7 +383,7 @@ export default function AddStudent({
       // ----------------------------------------------------
 
       await axios.post(
-        `${API_URL}/api/students/addstudent`,
+        `${API_URL}/api/students`,
         formData,
         {
           headers: {
@@ -226,6 +404,7 @@ export default function AddStudent({
         err.response?.data?.message ||
           "Failed to add student."
       );
+
     } finally {
       setSaving(false);
     }
@@ -245,7 +424,7 @@ export default function AddStudent({
         </h2>
 
         <p className="mt-1 text-sm text-slate-500">
-          Enter the student's academic and contact details.
+          Enter the student's academic and personal details.
         </p>
       </div>
 
@@ -329,6 +508,7 @@ export default function AddStudent({
           </div>
         </div>
 
+
         {/* BASIC INFORMATION */}
 
         <div>
@@ -338,6 +518,27 @@ export default function AddStudent({
           </h3>
 
           <div className="grid gap-5 md:grid-cols-2">
+
+            {/* ROLL NUMBER */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Roll Number
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <input
+                name="rollNumber"
+                value={form.rollNumber}
+                onChange={handleChange}
+                placeholder="Enter roll number"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
 
             {/* REGISTER NUMBER */}
 
@@ -353,10 +554,12 @@ export default function AddStudent({
                 name="registerNumber"
                 value={form.registerNumber}
                 onChange={handleChange}
-                placeholder="e.g. 1KT23CS001"
+                placeholder="e.g. 103CS26001"
+                required
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
             </div>
+
 
             {/* NAME */}
 
@@ -373,9 +576,74 @@ export default function AddStudent({
                 value={form.name}
                 onChange={handleChange}
                 placeholder="Enter student's full name"
+                required
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
             </div>
+
+
+            {/* FATHER NAME */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Father Name
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <input
+                name="fatherName"
+                value={form.fatherName}
+                onChange={handleChange}
+                placeholder="Enter father's name"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+
+            {/* MOTHER NAME */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Mother Name
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <input
+                name="motherName"
+                value={form.motherName}
+                onChange={handleChange}
+                placeholder="Enter mother's name"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+
+            {/* DOB */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Date of Birth
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <input
+                type="date"
+                name="dob"
+                value={form.dob}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
 
             {/* GENDER */}
 
@@ -409,6 +677,21 @@ export default function AddStudent({
               </select>
             </div>
 
+          </div>
+
+        </div>
+
+
+        {/* CONTACT INFORMATION */}
+
+        <div>
+
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Contact Information
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
             {/* EMAIL */}
 
             <div>
@@ -425,15 +708,17 @@ export default function AddStudent({
                 value={form.email}
                 onChange={handleChange}
                 placeholder="student@example.com"
+                required
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
             </div>
+
 
             {/* PHONE */}
 
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
-                Phone
+                Student Phone
                 <span className="ml-1 text-red-500">
                   *
                 </span>
@@ -444,13 +729,151 @@ export default function AddStudent({
                 name="phone"
                 value={form.phone}
                 onChange={handleChange}
-                placeholder="Enter phone number"
+                placeholder="10 digit mobile number"
+                maxLength="10"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+
+            {/* PARENT PHONE */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Parent / Guardian Phone
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                type="tel"
+                name="parentPhone"
+                value={form.parentPhone}
+                onChange={handleChange}
+                placeholder="10 digit mobile number"
+                maxLength="10"
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
             </div>
 
           </div>
+
         </div>
+
+
+        {/* SOCIAL / RESERVATION INFORMATION */}
+
+        <div>
+
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Social / Reservation Information
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            {/* CASTE */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Caste
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                name="caste"
+                value={form.caste}
+                onChange={handleChange}
+                placeholder="Enter caste"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+
+            {/* CATEGORY */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Category
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                name="category"
+                value={form.category}
+                onChange={handleChange}
+                placeholder="e.g. GM, SC, ST, OBC"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* GOVERNMENT / IDENTIFICATION INFORMATION */}
+
+        <div>
+
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Government / Student Identification
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            {/* AADHAAR */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Aadhaar Number
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                type="text"
+                name="aadhaarNumber"
+                value={form.aadhaarNumber}
+                onChange={handleChange}
+                placeholder="12 digit Aadhaar number"
+                maxLength="12"
+                inputMode="numeric"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+
+            {/* SATS */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                SATS Number
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                type="text"
+                name="satsNumber"
+                value={form.satsNumber}
+                onChange={handleChange}
+                placeholder="Enter SATS number"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+          </div>
+
+        </div>
+
 
         {/* ACADEMIC INFORMATION */}
 
@@ -493,8 +916,10 @@ export default function AddStudent({
                     </option>
                   )
                 )}
+
               </select>
             </div>
+
 
             {/* ADMISSION YEAR */}
 
@@ -523,6 +948,7 @@ export default function AddStudent({
               </p>
             </div>
 
+
             {/* CURRENT SEMESTER */}
 
             <div>
@@ -544,7 +970,7 @@ export default function AddStudent({
                   Select semester
                 </option>
 
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(
+                {[1, 2, 3, 4, 5, 6].map(
                   (semester) => (
                     <option
                       key={semester}
@@ -554,8 +980,10 @@ export default function AddStudent({
                     </option>
                   )
                 )}
+
               </select>
             </div>
+
 
             {/* BATCH */}
 
@@ -580,6 +1008,7 @@ export default function AddStudent({
                 Example: 2025-2028
               </p>
             </div>
+
 
             {/* BATCH NUMBER */}
 
@@ -609,6 +1038,7 @@ export default function AddStudent({
                 <option value="2">
                   Batch 2
                 </option>
+
               </select>
 
               <p className="mt-1.5 text-xs text-slate-400">
@@ -616,8 +1046,87 @@ export default function AddStudent({
               </p>
             </div>
 
+
+            {/* ADMISSION TYPE */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Admission Type
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <select
+                name="admissionType"
+                value={form.admissionType}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select admission type
+                </option>
+
+                {admissionTypes.map(
+                  (type) => (
+                    <option
+                      key={type.value}
+                      value={type.value}
+                    >
+                      {type.label}
+                    </option>
+                  )
+                )}
+
+              </select>
+            </div>
+
           </div>
+
         </div>
+
+
+        {/* STUDENT STATUS */}
+
+        <div>
+
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Student Status
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            {/* STATUS */}
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Status
+              </label>
+
+              <select
+                name="status"
+                value={form.status}
+                onChange={handleChange}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
+              >
+                {statuses.map(
+                  (status) => (
+                    <option
+                      key={status.value}
+                      value={status.value}
+                    >
+                      {status.label}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+          </div>
+
+        </div>
+
 
         {/* ERROR */}
 
@@ -630,6 +1139,7 @@ export default function AddStudent({
         )}
 
       </div>
+
 
       {/* FOOTER */}
 

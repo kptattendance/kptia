@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
-
+import * as XLSX from "xlsx";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const departments = [
@@ -54,6 +54,17 @@ const emptyStudentCO = () => ({
 
 export default function FacultyIAMarksPage() {
   const { getToken } = useAuth();
+    // --------------------------------------------------
+  // HORIZONTAL TABLE DRAG SCROLL
+  // --------------------------------------------------
+
+  const tableScrollRef = useRef(null);
+
+  const dragRef = useRef({
+    active: false,
+    startX: 0,
+    startScroll: 0,
+  });
   const showAlert = (icon, title, text) => {
     Swal.fire({
       icon,
@@ -149,189 +160,405 @@ export default function FacultyIAMarksPage() {
     return result;
   }, [currentYear]);
 
-  // ==================================================
-  // LOAD SUBJECTS
-  // ==================================================
+// ==================================================
+// LOAD SUBJECTS
+// ==================================================
 
-  useEffect(() => {
-    const loadSubjects = async () => {
-      if (!department || !semester) {
-        setSubjects([]);
-        setSubjectId("");
-        return;
-      }
+useEffect(() => {
+  const loadSubjects = async () => {
+    if (!department || !semester) {
+      setSubjects([]);
+      setSubjectId("");
+      return;
+    }
 
-      try {
-        setLoadingSubjects(true);
-        setSubjectId("");
-        setTests([]);
-        setStudents([]);
-        setStudentMarks({});
-        setExistingIA(null);
+    try {
+      setLoadingSubjects(true);
 
-        const token = await getToken();
+      setSubjectId("");
+      setTests([]);
+      setStudents([]);
+      setStudentMarks({});
+      setExistingIA(null);
 
-        const response = await axios.get(
-          `${API_URL}/api/subjects/getsubjects`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            params: {
-              department,
-              semester,
-            },
-          }
-        );
+      const token = await getToken();
 
-        const result = response.data;
+      const response = await axios.get(
+        `${API_URL}/api/subjects/getsubjects`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            department: String(department)
+              .trim()
+              .toLowerCase(),
 
-        const data = Array.isArray(result?.data)
-          ? result.data
-          : Array.isArray(result?.subjects)
-            ? result.subjects
-            : result?.subjects?.data || [];
-
-        setSubjects(data);
-      } catch (error) {
-        console.error(
-          "Failed to load subjects:",
-          error
-        );
-
-        setSubjects([]);
-
-        showAlert(
-          "error",
-          "Unable to Load Subjects",
-          "Unable to load subjects."
-        );
-      } finally {
-        setLoadingSubjects(false);
-      }
-    };
-
-    loadSubjects();
-  }, [department, semester, getToken]);
-
-  // ==================================================
-  // LOAD STUDENTS
-  // ==================================================
-
-  useEffect(() => {
-    const loadStudents = async () => {
-      if (!department || !semester || !subjectId) {
-        setAllStudents([]);
-        setStudents([]);
-        setStudentMarks({});
-        return;
-      }
-
-      try {
-        setLoadingStudents(true);
-
-        // Reset IA/range when subject changes
-        setExistingIA(null);
-        setTests([]);
-        setStudentMarks({});
-
-        const token = await getToken();
-
-        const response = await axios.get(
-          `${API_URL}/api/students/getstudents`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            params: {
-              department,
-              semester,
-            },
-          }
-        );
-
-        const result = response.data;
-
-        const data = Array.isArray(result?.data)
-          ? result.data
-          : Array.isArray(result?.students)
-            ? result.students
-            : result?.students?.data || [];
-
-        // Keep the complete class list.
-        setAllStudents(data);
-        setStudents([]);
-      } catch (error) {
-        console.error(
-          "Failed to load students:",
-          error
-        );
-
-        setAllStudents([]);
-        setStudents([]);
-
-        showAlert(
-          "error",
-          "Unable to Load Students",
-          "Unable to load students."
-        );
-      } finally {
-        setLoadingStudents(false);
-      }
-    };
-
-    loadStudents();
-  }, [
-    department,
-    semester,
-    subjectId,
-    getToken,
-  ]);
-
-  // ==================================================
-  // LOAD SELECTED BATCH
-  // ==================================================
-
-  const loadBatch = async () => {
-    if (!department || !semester || !subjectId) {
-      showAlert(
-        "warning",
-        "Selection Required",
-        "Please select department, semester and subject."
+            semester: Number(semester),
+          },
+        }
       );
-      return;
-    }
 
-    if (!iaNumber) {
-      showAlert("warning", "IA Number Required", "Please select IA number.");
-      return;
-
-    }
-
-    if (!batchNumber) {
-      showAlert(
-        "warning",
-        "Batch Required",
-        "Please select student batch."
+      console.log(
+        "Faculty IA Subjects Response:",
+        response.data
       );
-      return;
-    }
 
-    const selectedStudents =
-      batchNumber === "both"
-        ? allStudents.filter((student) =>
-            [1, 2].includes(Number(student.batchNumber))
+      const result = response.data;
+
+      let data = [];
+
+      if (Array.isArray(result)) {
+        data = result;
+      } else if (Array.isArray(result?.data)) {
+        data = result.data;
+      } else if (Array.isArray(result?.subjects)) {
+        data = result.subjects;
+      } else if (
+        Array.isArray(result?.subjects?.data)
+      ) {
+        data = result.subjects.data;
+      }
+
+      // --------------------------------------------------
+      // NORMALIZE SUBJECT DATA
+      // --------------------------------------------------
+
+      const normalizedSubjects =
+        data.filter(
+          (subject) =>
+            subject &&
+            subject._id
+        );
+
+      // --------------------------------------------------
+      // SORT SUBJECTS BY SEQUENCE
+      // --------------------------------------------------
+
+      normalizedSubjects.sort(
+        (a, b) =>
+          String(a.sequence || "").localeCompare(
+            String(b.sequence || ""),
+            undefined,
+            {
+              numeric: true,
+              sensitivity: "base",
+            }
           )
-        : allStudents.filter(
-            (student) =>
-              Number(student.batchNumber) === Number(batchNumber)
-          );
+      );
 
-    if (selectedStudents.length === 0) {
+      setSubjects(
+        normalizedSubjects
+      );
+    } catch (error) {
+      console.error(
+        "Failed to load subjects:",
+        error
+      );
+
+      setSubjects([]);
+      setSubjectId("");
+
+      showAlert(
+        "error",
+        "Unable to Load Subjects",
+        error.response?.data?.message ||
+          "Unable to load subjects."
+      );
+    } finally {
+      setLoadingSubjects(false);
+    }
+  };
+
+  loadSubjects();
+}, [
+  department,
+  semester,
+  getToken,
+]);
+
+// ==================================================
+// LOAD STUDENTS
+// ==================================================
+
+useEffect(() => {
+  const loadStudents = async () => {
+    if (!department || !semester) {
+      setAllStudents([]);
+      setStudents([]);
+      setStudentMarks({});
+      return;
+    }
+
+    try {
+      setLoadingStudents(true);
+
       setStudents([]);
       setStudentMarks({});
       setExistingIA(null);
       setTests([]);
+
+      const token = await getToken();
+
+      const response = await axios.get(
+        `${API_URL}/api/students`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            department: String(department)
+              .trim()
+              .toLowerCase(),
+
+            semester: Number(semester),
+          },
+        }
+      );
+
+      console.log(
+        "Faculty IA Students Response:",
+        response.data
+      );
+
+      const result = response.data;
+
+      let data = [];
+
+      if (Array.isArray(result)) {
+        data = result;
+      } else if (Array.isArray(result?.data)) {
+        data = result.data;
+      } else if (Array.isArray(result?.students)) {
+        data = result.students;
+      } else if (
+        Array.isArray(result?.students?.data)
+      ) {
+        data = result.students.data;
+      }
+
+      // --------------------------------------------------
+      // SORT COMPLETE STUDENT LIST BY ROLL NUMBER
+      // --------------------------------------------------
+
+      data.sort((a, b) => {
+        const rollA = Number(a.rollNumber);
+        const rollB = Number(b.rollNumber);
+
+        if (
+          Number.isFinite(rollA) &&
+          Number.isFinite(rollB)
+        ) {
+          return rollA - rollB;
+        }
+
+        return String(
+          a.rollNumber || ""
+        ).localeCompare(
+          String(
+            b.rollNumber || ""
+          ),
+          undefined,
+          {
+            numeric: true,
+            sensitivity: "base",
+          }
+        );
+      });
+
+      setAllStudents(data);
+      setStudents([]);
+    } catch (error) {
+      console.error(
+        "Failed to load students:",
+        error
+      );
+
+      setAllStudents([]);
+      setStudents([]);
+
+      showAlert(
+        "error",
+        "Unable to Load Students",
+        error.response?.data?.message ||
+          "Unable to load students."
+      );
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
+  loadStudents();
+}, [
+  department,
+  semester,
+  getToken,
+]);
+ // ==================================================
+// LOAD SELECTED BATCH
+// ==================================================
+
+const loadBatch = async () => {
+  if (
+    !department ||
+    !semester ||
+    !subjectId
+  ) {
+    showAlert(
+      "warning",
+      "Selection Required",
+      "Please select department, semester and subject."
+    );
+    return;
+  }
+
+  if (!iaNumber) {
+    showAlert(
+      "warning",
+      "IA Number Required",
+      "Please select IA number."
+    );
+    return;
+  }
+
+  if (!batchNumber) {
+    showAlert(
+      "warning",
+      "Batch Required",
+      "Please select student batch."
+    );
+    return;
+  }
+
+  // --------------------------------------------------
+  // FIND SELECTED SUBJECT
+  // --------------------------------------------------
+
+  const selectedSubject =
+    subjects.find(
+      (subject) =>
+        String(subject._id) ===
+        String(subjectId)
+    );
+
+  if (!selectedSubject) {
+    showAlert(
+      "error",
+      "Subject Not Found",
+      "Unable to identify the selected subject."
+    );
+    return;
+  }
+
+  const subjectCategory =
+    String(
+      selectedSubject.subjectCategory || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  // --------------------------------------------------
+  // SELECT BATCH
+  // --------------------------------------------------
+
+  let selectedStudents =
+    batchNumber === "both"
+      ? allStudents.filter(
+          (student) =>
+            [1, 2].includes(
+              Number(
+                student.batchNumber
+              )
+            )
+        )
+      : allStudents.filter(
+          (student) =>
+            Number(
+              student.batchNumber
+            ) ===
+            Number(batchNumber)
+        );
+
+  // --------------------------------------------------
+  // BRIDGE SUBJECT
+  //
+  // ONLY LATERAL STUDENTS
+  // --------------------------------------------------
+
+  if (
+    subjectCategory === "BRIDGE"
+  ) {
+    selectedStudents =
+      selectedStudents.filter(
+        (student) =>
+          [
+            "lateralPUC",
+            "lateralITI",
+            "lateralCross",
+          ].includes(
+            String(
+              student.admissionType || ""
+            ).trim()
+          )
+      );
+  }
+
+  // --------------------------------------------------
+  // SORT BY ROLL NUMBER
+  // --------------------------------------------------
+
+  selectedStudents.sort(
+    (a, b) => {
+      const rollA =
+        Number(a.rollNumber);
+
+      const rollB =
+        Number(b.rollNumber);
+
+      if (
+        Number.isFinite(rollA) &&
+        Number.isFinite(rollB)
+      ) {
+        return rollA - rollB;
+      }
+
+      return String(
+        a.rollNumber || ""
+      ).localeCompare(
+        String(
+          b.rollNumber || ""
+        ),
+        undefined,
+        {
+          numeric: true,
+          sensitivity: "base",
+        }
+      );
+    }
+  );
+
+  // --------------------------------------------------
+  // NO STUDENTS
+  // --------------------------------------------------
+
+  if (
+    selectedStudents.length === 0
+  ) {
+    setStudents([]);
+    setStudentMarks({});
+    setExistingIA(null);
+    setTests([]);
+
+    if (
+      subjectCategory ===
+      "BRIDGE"
+    ) {
+      showAlert(
+        "warning",
+        "No Lateral Students",
+        "No lateral students are available for this bridge course."
+      );
+    } else {
       showAlert(
         "warning",
         "No Students Found",
@@ -339,27 +566,47 @@ export default function FacultyIAMarksPage() {
           ? "No students found in Batch 1 or Batch 2."
           : `No students found in Batch ${batchNumber}.`
       );
-      return;
     }
 
-    const initialMarks = {};
-    selectedStudents.forEach((student) => {
-      initialMarks[student._id] = {};
-    });
+    return;
+  }
 
-    setStudents(selectedStudents);
-    setStudentMarks(initialMarks);
+  // --------------------------------------------------
+  // INITIAL MARKS
+  // --------------------------------------------------
 
-    await checkExistingIA(
-      department,
-      semester,
-      subjectId,
-      academicYear,
-      Number(iaNumber),
-      batchNumber,
-      selectedStudents
-    );
-  };
+  const initialMarks = {};
+
+  selectedStudents.forEach(
+    (student) => {
+      initialMarks[
+        student._id
+      ] = {};
+    }
+  );
+
+  setStudents(
+    selectedStudents
+  );
+
+  setStudentMarks(
+    initialMarks
+  );
+
+  // --------------------------------------------------
+  // CHECK EXISTING IA
+  // --------------------------------------------------
+
+  await checkExistingIA(
+    department,
+    semester,
+    subjectId,
+    academicYear,
+    Number(iaNumber),
+    batchNumber,
+    selectedStudents
+  );
+};
 
   // ==================================================
   // CHECK EXISTING IA
@@ -975,11 +1222,215 @@ const addTest = () => {
   };
 
   // ==================================================
+// EXPORT IA MARKS TO EXCEL
+// ==================================================
+
+const exportIAMarksToExcel = () => {
+  if (!students.length) {
+    showAlert(
+      "warning",
+      "No Students",
+      "There are no student marks available to export."
+    );
+    return;
+  }
+
+  if (!tests.length) {
+    showAlert(
+      "warning",
+      "No Tests",
+      "There are no IA tests available to export."
+    );
+    return;
+  }
+
+  const selectedSubject = subjects.find(
+    (subject) =>
+      String(subject._id) === String(subjectId)
+  );
+
+  const subjectCode =
+    selectedSubject?.code || "SUBJECT";
+
+  const subjectName =
+    selectedSubject?.name || "";
+
+  // --------------------------------------------------
+  // CREATE EXCEL ROWS
+  // --------------------------------------------------
+
+  const rows = students.map(
+    (student, studentIndex) => {
+      const row = {
+        "Sl. No.": studentIndex + 1,
+        "Register Number":
+          student.registerNumber || "",
+        "Roll Number":
+          student.rollNumber || "",
+        "Student Name":
+          student.name || "",
+        "Batch":
+          student.batchNumber || "",
+        "Admission Type":
+          student.admissionType || "",
+      };
+
+      tests.forEach(
+        (test, testIndex) => {
+          const record = getStudentTest(
+            student._id,
+            testIndex
+          );
+
+          const absent =
+            record.status === "ABSENT";
+
+          const coMarks =
+            record.coMarks || {};
+
+          CO_NAMES.forEach((co) => {
+            row[
+              `${test.testName} - ${co}`
+            ] = absent
+              ? ""
+              : Number(coMarks[co] || 0);
+          });
+
+          row[
+            `${test.testName} - Total`
+          ] = absent
+            ? "AB"
+            : getStudentTestTotal(
+                student._id,
+                testIndex
+              );
+
+          row[
+            `${test.testName} - Status`
+          ] = absent
+            ? "ABSENT"
+            : "PRESENT";
+        }
+      );
+
+      row["Final IA Total"] =
+        getStudentTotal(student._id);
+
+      return row;
+    }
+  );
+
+  // --------------------------------------------------
+  // CREATE WORKSHEET
+  // --------------------------------------------------
+
+  const worksheet =
+    XLSX.utils.json_to_sheet(rows);
+
+  // --------------------------------------------------
+  // COLUMN WIDTHS
+  // --------------------------------------------------
+
+  const columnWidths = [
+    { wch: 8 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 30 },
+    { wch: 10 },
+    { wch: 20 },
+  ];
+
+  tests.forEach(() => {
+    CO_NAMES.forEach(() => {
+      columnWidths.push({ wch: 12 });
+    });
+
+    columnWidths.push({ wch: 14 });
+    columnWidths.push({ wch: 14 });
+  });
+
+  columnWidths.push({ wch: 16 });
+
+  worksheet["!cols"] = columnWidths;
+
+  // --------------------------------------------------
+  // FREEZE HEADER ROW
+  // --------------------------------------------------
+
+  worksheet["!freeze"] = {
+    xSplit: 0,
+    ySplit: 1,
+  };
+
+  // --------------------------------------------------
+  // CREATE WORKBOOK
+  // --------------------------------------------------
+
+  const workbook =
+    XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "IA Marks"
+  );
+
+  // --------------------------------------------------
+  // FILE NAME
+  // --------------------------------------------------
+
+  const safeSubjectCode =
+    String(subjectCode)
+      .replace(/[^a-zA-Z0-9_-]/g, "_");
+
+  const safeDepartment =
+    String(department || "department")
+      .toUpperCase();
+
+  const safeSemester =
+    String(semester || "");
+
+  const safeIA =
+    String(iaNumber || "");
+
+  const safeBatch =
+    batchNumber === "both"
+      ? "BOTH"
+      : String(batchNumber || "");
+
+  const fileName =
+    `IA_${safeDepartment}_SEM${safeSemester}_${safeSubjectCode}_IA${safeIA}_BATCH${safeBatch}.xlsx`;
+
+  // --------------------------------------------------
+  // DOWNLOAD
+  // --------------------------------------------------
+
+  XLSX.writeFile(
+    workbook,
+    fileName
+  );
+};
+  // ==================================================
   // SAVE
   // ==================================================
 
-  const handleSave = async () => {
-    if (existingIA) {
+const handleSave = async () => {
+  // --------------------------------------------------
+  // GET SELECTED SUBJECT CATEGORY
+  // --------------------------------------------------
+
+  const selectedSubject = subjects.find(
+    (subject) =>
+      String(subject._id) === String(subjectId)
+  );
+
+  const subjectCategory = String(
+    selectedSubject?.subjectCategory || ""
+  )
+    .trim()
+    .toUpperCase();
+
+  if (existingIA) {
       showAlert(
         "warning",
         "IA Already Frozen",
@@ -1200,16 +1651,17 @@ const addTest = () => {
         ),
       };
 
-    const batchesToSave =
+
+
+const batchesToSave =
   batchNumber === "both"
     ? [1, 2]
     : [Number(batchNumber)];
 
 for (const batch of batchesToSave) {
+
   // --------------------------------------------------
-  // IMPORTANT:
-  // When "Both Batches" is selected, send only the
-  // students belonging to the current batch.
+  // GET STUDENTS FOR THIS BATCH
   // --------------------------------------------------
 
   const studentsForBatch = students
@@ -1217,17 +1669,47 @@ for (const batch of batchesToSave) {
       (student) =>
         Number(student.batchNumber) === Number(batch)
     )
+    .filter((student) => {
+
+      // ------------------------------------------------
+      // BRIDGE COURSE
+      // ONLY LATERAL STUDENTS
+      // ------------------------------------------------
+
+      if (subjectCategory === "BRIDGE") {
+        return [
+          "lateralPUC",
+          "lateralITI",
+          "lateralCross",
+        ].includes(
+          String(
+            student.admissionType || ""
+          ).trim()
+        );
+      }
+
+      // ------------------------------------------------
+      // REGULAR / ELECTIVE
+      // ALL STUDENTS
+      // ------------------------------------------------
+
+      return true;
+    })
     .map((student) => ({
       studentId: student._id,
 
       tests: tests.map(
         (_, testIndex) => {
-          const record = getStudentTest(
-            student._id,
-            testIndex
-          );
 
-          if (record.status === "ABSENT") {
+          const record =
+            getStudentTest(
+              student._id,
+              testIndex
+            );
+
+          if (
+            record.status === "ABSENT"
+          ) {
             return {
               marks: null,
               status: "ABSENT",
@@ -1252,17 +1734,39 @@ for (const batch of batchesToSave) {
             marks: obtained,
             status: "PRESENT",
             coMarks: {
-              CO1: Number(coMarks.CO1 || 0),
-              CO2: Number(coMarks.CO2 || 0),
-              CO3: Number(coMarks.CO3 || 0),
-              CO4: Number(coMarks.CO4 || 0),
-              CO5: Number(coMarks.CO5 || 0),
-              CO6: Number(coMarks.CO6 || 0),
+              CO1: Number(
+                coMarks.CO1 || 0
+              ),
+              CO2: Number(
+                coMarks.CO2 || 0
+              ),
+              CO3: Number(
+                coMarks.CO3 || 0
+              ),
+              CO4: Number(
+                coMarks.CO4 || 0
+              ),
+              CO5: Number(
+                coMarks.CO5 || 0
+              ),
+              CO6: Number(
+                coMarks.CO6 || 0
+              ),
             },
           };
         }
       ),
     }));
+
+  // --------------------------------------------------
+  // DO NOT CREATE AN EMPTY IA RECORD
+  // --------------------------------------------------
+
+  if (
+    studentsForBatch.length === 0
+  ) {
+    continue;
+  }
 
   await axios.post(
     `${API_URL}/api/ia/save`,
@@ -1273,7 +1777,8 @@ for (const batch of batchesToSave) {
     },
     {
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization:
+          `Bearer ${token}`,
       },
     }
   );
@@ -1326,14 +1831,68 @@ for (const batch of batchesToSave) {
     (_, index) => index + 1
   );
 
+    // ==================================================
+  // MOUSE DRAG HORIZONTAL SCROLL
+  // ==================================================
+
+  const startDrag = (e) => {
+    // Do not start dragging when interacting with form controls
+    const tagName = e.target?.tagName;
+
+    if (
+      ["INPUT", "BUTTON", "SELECT", "TEXTAREA", "A", "OPTION"].includes(
+        tagName
+      )
+    ) {
+      return;
+    }
+
+    if (e.button !== 0) return;
+
+    const el = tableScrollRef.current;
+
+    if (!el) return;
+
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startScroll: el.scrollLeft,
+    };
+
+    el.style.cursor = "grabbing";
+    el.style.userSelect = "none";
+  };
+
+  const dragTable = (e) => {
+    if (!dragRef.current.active) return;
+
+    const el = tableScrollRef.current;
+
+    if (!el) return;
+
+    const distance = e.clientX - dragRef.current.startX;
+
+    el.scrollLeft =
+      dragRef.current.startScroll - distance;
+  };
+
+  const stopDrag = () => {
+    const el = tableScrollRef.current;
+
+    dragRef.current.active = false;
+
+    if (el) {
+      el.style.cursor = "grab";
+      el.style.userSelect = "auto";
+    }
+  };
   // ==================================================
   // RENDER
   // ==================================================
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
-
-      <div className="mx-auto max-w-[1600px]">
+<div className="mx-auto w-full max-w-[1600px] min-w-0">
 
         {/* ================================================= */}
         {/* HEADER */}
@@ -1936,34 +2495,67 @@ for (const batch of batchesToSave) {
 
         {subjectId &&
           tests.length > 0 && (
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="mt-5 min-w-0 max-w-full rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-              <div className="flex flex-col gap-2 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-bold text-slate-900">
-                    Student Marks
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Enter CO-wise marks directly in the table. Use AB for an absent student.
-                  </p>
-                </div>
+             <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+  <div>
+    <h2 className="text-lg font-bold text-slate-900">
+      Student Marks
+    </h2>
 
-                <div className="text-xs font-medium text-slate-400">
-                  {students.length} Students · {tests.length} Tests
-                </div>
-              </div>
+    <p className="text-xs text-slate-500">
+      Enter CO-wise marks directly in the table. Use AB for an absent student.
+    </p>
+  </div>
 
-              <div className="overflow-x-auto">
-                {checkingExisting || loadingStudents ? (
-                  <div className="p-12 text-center text-sm text-slate-500">
-                    Loading...
-                  </div>
-                ) : students.length === 0 ? (
-                  <div className="p-12 text-center text-sm text-slate-500">
-                    No students found.
-                  </div>
-                ) : (
-                  <table className="w-full min-w-[1250px] border-collapse">
+  <div className="flex flex-wrap items-center gap-3">
+    <div className="text-xs font-medium text-slate-400">
+      {students.length} Students · {tests.length} Tests
+    </div>
+
+    <button
+      type="button"
+      onClick={exportIAMarksToExcel}
+      disabled={
+        students.length === 0 ||
+        tests.length === 0
+      }
+      className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <span className="text-sm">📊</span>
+      Export Excel
+    </button>
+  </div>
+</div>
+
+<div
+  ref={tableScrollRef}
+  onMouseDown={startDrag}
+  onMouseMove={dragTable}
+  onMouseUp={stopDrag}
+  onMouseLeave={stopDrag}
+  className="relative w-full min-w-0 cursor-grab overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+  style={{
+    WebkitOverflowScrolling: "touch",
+    touchAction: "pan-x",
+  }}
+>
+  {checkingExisting || loadingStudents ? (
+    <div className="p-12 text-center text-sm text-slate-500">
+      Loading...
+    </div>
+  ) : students.length === 0 ? (
+    <div className="p-12 text-center text-sm text-slate-500">
+      No students found.
+    </div>
+  ) : (
+    <table
+      className="border-collapse"
+      style={{
+        width: "max-content",
+        minWidth: "1250px",
+      }}
+    >
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50">
                         <th className="sticky left-0 z-20 w-12 border-r border-slate-200 bg-slate-50 px-3 py-3 text-center text-[10px] font-bold uppercase tracking-wide text-slate-500">

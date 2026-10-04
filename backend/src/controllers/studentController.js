@@ -1,26 +1,21 @@
 import Student from "../models/Student.js";
-import StudentSemester from "../models/StudentSemester.js";
 import User from "../models/User.js";
-import cloudinary from "../config/cloudinary.js";
 import { clerkClient } from "@clerk/express";
-import mongoose from "mongoose";
-import axios from "axios";
-import XLSX from "xlsx";
+import cloudinary from "../config/cloudinary.js";
 
-// ==========================================================
-// GET GOOGLE DRIVE FILE ID
-// ==========================================================
+import XLSX from "xlsx";
+import axios from "axios";
+
+// =====================================================
+// GOOGLE DRIVE FILE ID
+// =====================================================
 
 const getGoogleDriveFileId = (url) => {
   if (!url) return null;
 
   const value = String(url).trim();
 
-  // --------------------------------------------------------
-  // Format:
   // https://drive.google.com/file/d/FILE_ID/view
-  // --------------------------------------------------------
-
   const fileMatch = value.match(
     /\/file\/d\/([a-zA-Z0-9_-]+)/
   );
@@ -29,12 +24,8 @@ const getGoogleDriveFileId = (url) => {
     return fileMatch[1];
   }
 
-  // --------------------------------------------------------
-  // Format:
   // https://drive.google.com/open?id=FILE_ID
   // https://drive.google.com/uc?id=FILE_ID
-  // --------------------------------------------------------
-
   const idMatch = value.match(
     /[?&]id=([a-zA-Z0-9_-]+)/
   );
@@ -46,11 +37,10 @@ const getGoogleDriveFileId = (url) => {
   return null;
 };
 
-
-// ==========================================================
-// DOWNLOAD GOOGLE DRIVE PHOTO
+// =====================================================
+// DOWNLOAD GOOGLE DRIVE IMAGE
 // AND UPLOAD TO CLOUDINARY
-// ==========================================================
+// =====================================================
 
 const uploadGoogleDrivePhoto = async (driveUrl) => {
   if (!driveUrl) {
@@ -60,8 +50,7 @@ const uploadGoogleDrivePhoto = async (driveUrl) => {
     };
   }
 
-  const fileId =
-    getGoogleDriveFileId(driveUrl);
+  const fileId = getGoogleDriveFileId(driveUrl);
 
   if (!fileId) {
     throw new Error(
@@ -69,35 +58,18 @@ const uploadGoogleDrivePhoto = async (driveUrl) => {
     );
   }
 
-  // --------------------------------------------------------
-  // GOOGLE DRIVE DOWNLOAD URL
-  // --------------------------------------------------------
-
   const downloadUrl =
     `https://drive.google.com/uc?export=download&id=${fileId}`;
-
-  // --------------------------------------------------------
-  // DOWNLOAD FILE
-  // --------------------------------------------------------
 
   const response = await axios.get(
     downloadUrl,
     {
       responseType: "arraybuffer",
-
       timeout: 30000,
-
-      maxContentLength:
-        10 * 1024 * 1024,
-
-      maxBodyLength:
-        10 * 1024 * 1024,
+      maxContentLength: 10 * 1024 * 1024,
+      maxBodyLength: 10 * 1024 * 1024,
     }
   );
-
-  // --------------------------------------------------------
-  // CHECK CONTENT TYPE
-  // --------------------------------------------------------
 
   const contentType =
     response.headers["content-type"] || "";
@@ -108,261 +80,936 @@ const uploadGoogleDrivePhoto = async (driveUrl) => {
     );
   }
 
-  // --------------------------------------------------------
-  // CONVERT TO BASE64
-  // --------------------------------------------------------
-
   const base64 =
-    Buffer.from(response.data)
-      .toString("base64");
+    Buffer.from(response.data).toString("base64");
 
   const dataUri =
     `data:${contentType};base64,${base64}`;
-
-  // --------------------------------------------------------
-  // UPLOAD TO CLOUDINARY
-  // --------------------------------------------------------
 
   const result =
     await cloudinary.uploader.upload(
       dataUri,
       {
-        folder:
-          "kpt-examination/students",
-
+        folder: "kpt-examination/students",
         resource_type: "image",
       }
     );
 
   return {
-    secure_url:
-      result.secure_url,
-
-    public_id:
-      result.public_id,
+    secure_url: result.secure_url,
+    public_id: result.public_id,
   };
 };
 
-// ==========================================================
-// BULK ADD STUDENTS FROM CSV
-// ==========================================================
+// =====================================================
+// COMMON CONSTANTS
+// =====================================================
 
-export const bulkAddStudents = async (req, res) => {
+const VALID_DEPARTMENTS = [
+  "at",
+  "ch",
+  "ce",
+  "cs",
+  "ec",
+  "ee",
+  "me",
+  "ps",
+  "sc",
+  "ot",
+];
+
+const VALID_STATUSES = [
+  "active",
+  "inactive",
+  "passed",
+  "detained",
+  "discontinued",
+  "transferred",
+];
+
+const VALID_ADMISSION_TYPES = [
+  "regular",
+  "lateralPUC",
+  "lateralITI",
+  "lateralCross",
+  "workingProfessional",
+];
+
+const STUDENT_MANAGEMENT_ROLES = [
+  "admin",
+  "principal",
+  "coe",
+  "exam_officer",
+  "hod",
+];
+
+const BULK_UPLOAD_ROLES = [
+  "admin",
+  "principal",
+  "coe",
+  "exam_officer",
+];
+
+// =====================================================
+// RESOURCE HELPERS
+// =====================================================
+
+const isNotFoundError = (error) =>
+  error?.status === 404 ||
+  error?.statusCode === 404;
+
+// =====================================================
+// DELETE CLERK SAFELY
+// =====================================================
+
+const deleteClerkSafely = async (clerkId) => {
+  if (!clerkId) {
+    return false;
+  }
+
   try {
-    const { role, department: hodDept } = req.user;
+    await clerkClient.users.deleteUser(
+      clerkId
+    );
+
+    return true;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return true;
+    }
+
+    throw error;
+  }
+};
+
+// =====================================================
+// DELETE CLOUDINARY SAFELY
+// =====================================================
+
+const deleteCloudinarySafely = async (
+  publicId
+) => {
+  if (!publicId) {
+    return false;
+  }
+
+  try {
+    await cloudinary.uploader.destroy(
+      publicId
+    );
+
+    return true;
+  } catch (error) {
+    console.error(
+      "Cloudinary cleanup warning:",
+      error
+    );
+
+    return false;
+  }
+};
+
+// =====================================================
+// DELETE MONGODB USER SAFELY
+// =====================================================
+// First tries Student.userId.
+// Falls back to Clerk ID for old records.
+// =====================================================
+
+const deleteMongoUserSafely = async ({
+  userId,
+  clerkId,
+}) => {
+  let deletedUser = null;
+
+  if (userId) {
+    deletedUser =
+      await User.findByIdAndDelete(
+        userId
+      );
+  }
+
+  if (!deletedUser && clerkId) {
+    deletedUser =
+      await User.findOneAndDelete({
+        clerkId,
+      });
+  }
+
+  return deletedUser;
+};
+
+// =====================================================
+// CREATE / FIND MONGODB USER FOR STUDENT
+// =====================================================
+
+const createMongoUserForStudent = async ({
+  clerkUser,
+  name,
+  email,
+  phone,
+  department,
+  imageUrl,
+  imagePublicId,
+}) => {
+  const normalizedEmail =
+    String(email)
+      .trim()
+      .toLowerCase();
+
+  const normalizedDepartment =
+    String(department || "")
+      .trim()
+      .toLowerCase();
+
+  // ---------------------------------------------------
+  // First search by Clerk ID
+  // ---------------------------------------------------
+
+  let user =
+    await User.findOne({
+      clerkId: clerkUser.id,
+    });
+
+  // ---------------------------------------------------
+  // If not found, search by email.
+  // This protects against an already existing
+  // MongoDB User record.
+  // ---------------------------------------------------
+
+  if (!user) {
+    user =
+      await User.findOne({
+        email: normalizedEmail,
+      });
+  }
+
+  // ---------------------------------------------------
+  // Existing MongoDB User
+  // ---------------------------------------------------
+
+  if (user) {
+    if (
+      user.clerkId &&
+      user.clerkId !== clerkUser.id
+    ) {
+      throw new Error(
+        "A MongoDB User already exists with this email."
+      );
+    }
+
+    user.clerkId =
+      clerkUser.id;
+
+    user.name =
+      String(name).trim();
+
+    user.phone =
+      String(phone || "").trim();
+
+    user.department =
+      normalizedDepartment;
+
+    user.role = "student";
+
+    if (imageUrl) {
+      user.imageUrl =
+        imageUrl;
+    }
+
+    if (imagePublicId) {
+      user.imagePublicId =
+        imagePublicId;
+    }
+
+    await user.save();
+
+    return user;
+  }
+
+  // ---------------------------------------------------
+  // Create new MongoDB User
+  // ---------------------------------------------------
+
+  user = new User({
+    name:
+      String(name).trim(),
+
+    email:
+      normalizedEmail,
+
+    phone:
+      String(phone || "").trim(),
+
+    department:
+      normalizedDepartment,
+
+    role: "student",
+
+    clerkId:
+      clerkUser.id,
+
+    imageUrl:
+      imageUrl || "",
+
+    imagePublicId:
+      imagePublicId || "",
+  });
+
+  await user.save();
+
+  return user;
+};
+
+// =====================================================
+// SYNC OLD STUDENT TO MONGODB USER
+// =====================================================
+// This is important for students created BEFORE
+// userId was introduced.
+// =====================================================
+
+const syncStudentUser = async (
+  student
+) => {
+  // ---------------------------------------------------
+  // Already linked
+  // ---------------------------------------------------
+
+  if (student.userId) {
+    const linkedUser =
+      await User.findById(
+        student.userId
+      );
+
+    if (linkedUser) {
+      return linkedUser;
+    }
+  }
+
+  // ---------------------------------------------------
+  // Find by Clerk ID
+  // ---------------------------------------------------
+
+  if (student.clerkId) {
+    const byClerk =
+      await User.findOne({
+        clerkId:
+          student.clerkId,
+      });
+
+    if (byClerk) {
+      student.userId =
+        byClerk._id;
+
+      await student.save();
+
+      return byClerk;
+    }
+  }
+
+  // ---------------------------------------------------
+  // Find by email
+  // ---------------------------------------------------
+
+  if (student.email) {
+    const byEmail =
+      await User.findOne({
+        email:
+          student.email,
+      });
+
+    if (byEmail) {
+      if (
+        student.clerkId &&
+        byEmail.clerkId &&
+        byEmail.clerkId !==
+          student.clerkId
+      ) {
+        throw new Error(
+          "Student email is linked to a different MongoDB User."
+        );
+      }
+
+      if (
+        !byEmail.clerkId &&
+        student.clerkId
+      ) {
+        byEmail.clerkId =
+          student.clerkId;
+
+        await byEmail.save();
+      }
+
+      student.userId =
+        byEmail._id;
+
+      await student.save();
+
+      return byEmail;
+    }
+  }
+
+  return null;
+};
+
+// =====================================================
+// BULK UPLOAD STUDENTS
+// =====================================================
+//
+// Excel columns:
+//
+// RollNumber
+// RegisterNumber
+// Name
+// FatherName
+// MotherName
+// DOB
+// Gender
+// Email
+// Phone
+// ParentPhone
+// Caste
+// Category
+// AadhaarNumber
+// SATSNumber
+// Department
+// AdmissionYear
+// Batch
+// BatchNumber
+// AdmissionType
+// Semester
+// Status
+// Photo
+//
+// Photo = Google Drive sharing link
+// =====================================================
+
+export const bulkUploadStudents = async (
+  req,
+  res
+) => {
+  try {
+    // =================================================
+    // PERMISSION
+    // =================================================
+
+    const requesterRole =
+      (
+        req.user?.role || ""
+      ).toLowerCase();
+
+    if (
+      !BULK_UPLOAD_ROLES.includes(
+        requesterRole
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You do not have permission to bulk upload students.",
+      });
+    }
+
+    // =================================================
+    // FILE CHECK
+    // =================================================
 
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "CSV file is required",
+        message:
+          "Please upload an Excel or CSV file.",
       });
     }
 
-    if (role !== "admin" && role !== "hod") {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized to add students",
-      });
-    }
+    // =================================================
+    // READ EXCEL
+    // =================================================
 
-    const { parse } = await import("csv-parse/sync");
+    const workbook =
+      XLSX.read(
+        req.file.buffer,
+        {
+          type: "buffer",
+          cellDates: true,
+        }
+      );
 
-    const students = parse(
-      req.file.buffer.toString("utf-8"),
-      {
-        columns: true,
-        skip_empty_lines: true,
-        trim: true,
-      }
-    );
+    const sheetName =
+      workbook.SheetNames[0];
 
-    if (!students.length) {
+    if (!sheetName) {
       return res.status(400).json({
         success: false,
-        message: "CSV file contains no student records",
+        message:
+          "The uploaded file contains no worksheet.",
       });
     }
 
-    const results = [];
-
-    for (const s of students) {
-      let {
-        registerNumber,
-        name,
-        gender,
-        email,
-        phone,
-        department,
-        admissionYear,
-        semester,
-        batch,
-        batchNumber,
-      } = s;
-
-      // ------------------------------------------------------
-      // NORMALIZE
-      // ------------------------------------------------------
-
-      registerNumber =
-        registerNumber?.trim().toUpperCase();
-
-      name =
-        name?.trim().toUpperCase();
-
-      gender =
-        gender?.trim().toLowerCase();
-
-      email =
-        email?.trim().toLowerCase();
-
-      phone =
-        phone?.trim();
-
-      department =
-        department?.trim().toLowerCase();
-
-      admissionYear =
-        admissionYear?.trim();
-
-      semester =
-        semester?.trim();
-
-      batch =
-        batch?.trim();
-
-      batchNumber =
-        batchNumber?.trim();
-
-      // ------------------------------------------------------
-      // REQUIRED FIELDS
-      // ------------------------------------------------------
-
-      if (
-        !registerNumber ||
-        !name ||
-        !gender ||
-        !email ||
-        !phone ||
-        !department ||
-        !admissionYear ||
-        !semester ||
-        !batch ||
-        !batchNumber
-      ) {
-        results.push({
-          registerNumber: registerNumber || "",
-          success: false,
-          message: "Missing required fields",
-        });
-
-        continue;
-      }
-
-      // ------------------------------------------------------
-      // VALIDATE GENDER
-      // ------------------------------------------------------
-
-      const validGenders = [
-        "male",
-        "female",
-        "other",
+    const worksheet =
+      workbook.Sheets[
+        sheetName
       ];
 
-      if (!validGenders.includes(gender)) {
-        results.push({
-          registerNumber,
-          success: false,
-          message:
-            "Invalid gender. Gender must be male, female or other",
-        });
+    const rows =
+      XLSX.utils.sheet_to_json(
+        worksheet,
+        {
+          defval: "",
+        }
+      );
 
-        continue;
-      }
+    if (!rows.length) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "The uploaded file contains no student data.",
+      });
+    }
 
-      // ------------------------------------------------------
-      // VALIDATE ADMISSION YEAR
-      // ------------------------------------------------------
+    // =================================================
+    // LIMIT
+    // =================================================
 
-      const parsedAdmissionYear =
-        Number(admissionYear);
+    if (rows.length > 5000) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Maximum 5000 students can be uploaded at once.",
+      });
+    }
+
+    // =================================================
+    // RESULT
+    // =================================================
+
+    const results = {
+      total: rows.length,
+      created: 0,
+      failed: 0,
+      errors: [],
+      createdStudents: [],
+    };
+
+    // =================================================
+    // DUPLICATES INSIDE EXCEL
+    // =================================================
+
+    const excelRegisterNumbers =
+      new Set();
+
+    const excelEmails =
+      new Set();
+
+    // =================================================
+    // PROCESS EACH ROW
+    // =================================================
+
+    for (
+      let i = 0;
+      i < rows.length;
+      i++
+    ) {
+      const row = rows[i];
+
+      const excelRow =
+        i + 2;
+
+      // =================================================
+      // READ VALUES
+      // =================================================
+
+      const rollNumber =
+        String(
+          row.RollNumber ||
+            row.rollNumber ||
+            ""
+        ).trim();
+
+      const registerNumber =
+        String(
+          row.RegisterNumber ||
+            row.registerNumber ||
+            ""
+        )
+          .trim()
+          .toUpperCase();
+
+      const name =
+        String(
+          row.Name ||
+            row.name ||
+            ""
+        ).trim();
+
+      const fatherName =
+        String(
+          row.FatherName ||
+            row.fatherName ||
+            ""
+        ).trim();
+
+      const motherName =
+        String(
+          row.MotherName ||
+            row.motherName ||
+            ""
+        ).trim();
+
+      const email =
+        String(
+          row.Email ||
+            row.email ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const phone =
+        String(
+          row.Phone ||
+            row.phone ||
+            ""
+        ).trim();
+
+      const parentPhone =
+        String(
+          row.ParentPhone ||
+            row.parentPhone ||
+            ""
+        ).trim();
+
+      const caste =
+        String(
+          row.Caste ||
+            row.caste ||
+            ""
+        ).trim();
+
+      const category =
+        String(
+          row.Category ||
+            row.category ||
+            ""
+        ).trim();
+
+      const aadhaarNumber =
+        String(
+          row.AadhaarNumber ||
+            row.aadhaarNumber ||
+            ""
+        ).trim();
+
+      const satsNumber =
+        String(
+          row.SATSNumber ||
+            row.satsNumber ||
+            ""
+        ).trim();
+
+      const department =
+        String(
+          row.Department ||
+            row.department ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const batch =
+        String(
+          row.Batch ||
+            row.batch ||
+            ""
+        ).trim();
+
+      const gender =
+        String(
+          row.Gender ||
+            row.gender ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const admissionType =
+        String(
+          row.AdmissionType ||
+            row.admissionType ||
+            ""
+        ).trim();
+
+      const status =
+        String(
+          row.Status ||
+            row.status ||
+            "active"
+        )
+          .trim()
+          .toLowerCase();
+
+      const photo =
+        String(
+          row.Photo ||
+            row.photo ||
+            ""
+        ).trim();
+
+      // =================================================
+      // NUMERIC VALUES
+      // =================================================
+
+      const admissionYear =
+        Number(
+          row.AdmissionYear ??
+            row.admissionYear
+        );
+
+      const batchNumber =
+        Number(
+          row.BatchNumber ??
+            row.batchNumber
+        );
+
+      const semester =
+        Number(
+          row.Semester ??
+            row.semester
+        );
+
+      // =================================================
+      // DATE
+      // =================================================
+
+      const dobValue =
+        row.DOB ??
+        row.dob;
+
+      let dobDate;
 
       if (
-        !Number.isInteger(parsedAdmissionYear) ||
-        parsedAdmissionYear < 2000 ||
-        parsedAdmissionYear > 2100
+        dobValue instanceof Date
       ) {
-        results.push({
-          registerNumber,
-          success: false,
-          message: "Invalid admission year",
+        dobDate =
+          dobValue;
+      } else {
+        dobDate =
+          new Date(
+            String(
+              dobValue || ""
+            ).trim()
+          );
+      }
+
+      // =================================================
+      // VALIDATION
+      // =================================================
+
+      if (!rollNumber) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          message:
+            "Roll number is required.",
         });
 
         continue;
       }
 
-      // ------------------------------------------------------
-      // VALIDATE SEMESTER
-      // ------------------------------------------------------
+      if (!registerNumber) {
+        results.failed++;
 
-      const parsedSemester =
-        Number(semester);
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          message:
+            "Register number is required.",
+        });
+
+        continue;
+      }
+
+      if (!name) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          message:
+            "Name is required.",
+        });
+
+        continue;
+      }
+
+      if (!fatherName) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Father name is required.",
+        });
+
+        continue;
+      }
+
+      if (!motherName) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Mother name is required.",
+        });
+
+        continue;
+      }
 
       if (
-        !Number.isInteger(parsedSemester) ||
-        parsedSemester < 1 ||
-        parsedSemester > 8
+        !dobValue ||
+        Number.isNaN(
+          dobDate.getTime()
+        )
       ) {
-        results.push({
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
           registerNumber,
-          success: false,
+          name,
           message:
-            "Invalid semester. Semester must be between 1 and 8",
+            "Valid date of birth is required.",
         });
 
         continue;
       }
-
-      // ------------------------------------------------------
-      // VALIDATE BATCH NUMBER
-      // ------------------------------------------------------
-
-      const parsedBatchNumber =
-        Number(batchNumber);
 
       if (
-        !Number.isInteger(parsedBatchNumber) ||
-        ![1, 2].includes(parsedBatchNumber)
+        ![
+          "male",
+          "female",
+          "other",
+        ].includes(gender)
       ) {
-        results.push({
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
           registerNumber,
-          success: false,
+          name,
           message:
-            "Invalid batch number. Batch number must be 1 or 2",
+            "Gender must be male, female or other.",
         });
 
         continue;
       }
 
-      // ------------------------------------------------------
-      // VALIDATE DEPARTMENT
-      // ------------------------------------------------------
+      if (!email) {
+        results.failed++;
 
-      const validDepartments = [
-        "at",
-        "ch",
-        "ce",
-        "cs",
-        "ec",
-        "ee",
-        "me",
-        "ps",
-        "sc",
-      ];
-
-      if (!validDepartments.includes(department)) {
-        results.push({
+        results.errors.push({
+          row: excelRow,
           registerNumber,
-          success: false,
+          name,
+          message:
+            "Email is required.",
+        });
+
+        continue;
+      }
+
+      if (
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+          email
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          email,
+          message:
+            "Invalid email address.",
+        });
+
+        continue;
+      }
+
+      if (
+        !/^\d{10}$/.test(
+          phone
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Student phone number must contain exactly 10 digits.",
+        });
+
+        continue;
+      }
+
+      if (
+        parentPhone &&
+        !/^\d{10}$/.test(
+          parentPhone
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Parent phone number must contain exactly 10 digits.",
+        });
+
+        continue;
+      }
+
+      if (
+        aadhaarNumber &&
+        !/^\d{12}$/.test(
+          aadhaarNumber
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Aadhaar number must contain exactly 12 digits.",
+        });
+
+        continue;
+      }
+
+      if (
+        !VALID_DEPARTMENTS.includes(
+          department
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
           message:
             `Invalid department: ${department}`,
         });
@@ -370,925 +1017,432 @@ export const bulkAddStudents = async (req, res) => {
         continue;
       }
 
-      // ------------------------------------------------------
-      // HOD RESTRICTIONS
-      // ------------------------------------------------------
+      if (
+        !Number.isInteger(
+          admissionYear
+        )
+      ) {
+        results.failed++;
 
-      if (role === "hod") {
-        if (hodDept === "sc") {
-          results.push({
-            registerNumber,
-            success: false,
-            message:
-              "Science HOD cannot add students",
-          });
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Admission year is required.",
+        });
 
-          continue;
-        }
-
-        if (
-          department !== hodDept.toLowerCase()
-        ) {
-          results.push({
-            registerNumber,
-            success: false,
-            message:
-              "HOD can only add students from their department",
-          });
-
-          continue;
-        }
+        continue;
       }
 
+      if (!batch) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Batch is required.",
+        });
+
+        continue;
+      }
+
+      if (
+        ![1, 2].includes(
+          batchNumber
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Batch number must be 1 or 2.",
+        });
+
+        continue;
+      }
+
+      if (
+        !VALID_ADMISSION_TYPES.includes(
+          admissionType
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            `Invalid admission type: ${admissionType}`,
+        });
+
+        continue;
+      }
+
+      if (
+        !Number.isInteger(
+          semester
+        ) ||
+        semester < 1 ||
+        semester > 6
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Semester must be between 1 and 6.",
+        });
+
+        continue;
+      }
+
+      if (
+        !VALID_STATUSES.includes(
+          status
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            `Invalid status: ${status}`,
+        });
+
+        continue;
+      }
+
+      // =================================================
+      // DUPLICATE INSIDE EXCEL
+      // =================================================
+
+      if (
+        excelRegisterNumbers.has(
+          registerNumber
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "Duplicate register number found inside Excel file.",
+        });
+
+        continue;
+      }
+
+      if (
+        excelEmails.has(
+          email
+        )
+      ) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          email,
+          message:
+            "Duplicate email found inside Excel file.",
+        });
+
+        continue;
+      }
+
+      excelRegisterNumbers.add(
+        registerNumber
+      );
+
+      excelEmails.add(
+        email
+      );
+
+      // =================================================
+      // CHECK EXISTING MONGODB STUDENT
+      // =================================================
+
+      const existingRegister =
+        await Student.findOne({
+          registerNumber,
+        });
+
+      if (existingRegister) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          message:
+            "A student with this register number already exists.",
+        });
+
+        continue;
+      }
+
+      const existingEmail =
+        await Student.findOne({
+          email,
+        });
+
+      if (existingEmail) {
+        results.failed++;
+
+        results.errors.push({
+          row: excelRow,
+          registerNumber,
+          name,
+          email,
+          message:
+            "A student with this email already exists.",
+        });
+
+        continue;
+      }
+
+      // =================================================
+      // CREATE RESOURCES
+      // =================================================
+
+      let clerkUser = null;
+      let mongoUser = null;
+      let cloudinaryResult = null;
+
       try {
-        // ----------------------------------------------------
-        // DUPLICATE REGISTER NUMBER
-        // ----------------------------------------------------
+        // ---------------------------------------------
+        // PHOTO
+        // ---------------------------------------------
 
-        const existingRegister =
-          await Student.findOne({
-            registerNumber,
-          });
-
-        if (existingRegister) {
-          results.push({
-            registerNumber,
-            success: false,
-            message:
-              "Register number already exists",
-          });
-
-          continue;
+        if (photo) {
+          cloudinaryResult =
+            await uploadGoogleDrivePhoto(
+              photo
+            );
         }
 
-        // ----------------------------------------------------
-        // DUPLICATE EMAIL
-        // ----------------------------------------------------
+        // ---------------------------------------------
+        // CLERK
+        // ---------------------------------------------
 
-        const existingEmail =
-          await Student.findOne({
-            email,
-          });
-
-        if (existingEmail) {
-          results.push({
-            registerNumber,
-            success: false,
-            message:
-              "Email already exists",
-          });
-
-          continue;
-        }
-
-        // ----------------------------------------------------
-        // CHECK CLERK
-        // ----------------------------------------------------
-
-        const existingUsers =
-          await clerkClient.users.getUserList({
-            emailAddress: [email],
-            includeDeleted: true,
-          });
-
-        if (existingUsers.length > 0) {
-          results.push({
-            registerNumber,
-            success: false,
-            message:
-              "Email already exists in Clerk",
-          });
-
-          continue;
-        }
-
-        // ----------------------------------------------------
-        // CREATE CLERK USER
-        // ----------------------------------------------------
-
-        const clerkUser =
+        clerkUser =
           await clerkClient.users.createUser({
-            emailAddress: [email],
-            firstName: name,
+            emailAddress: [
+              email,
+            ],
+
+            firstName:
+              name,
 
             publicMetadata: {
               role: "student",
               department,
-              gender,
-              admissionYear:
-                parsedAdmissionYear,
-              semester:
-                parsedSemester,
-              batch,
-              batchNumber:
-                parsedBatchNumber,
+              registerNumber,
             },
           });
 
-        try {
-          // --------------------------------------------------
-          // CREATE USER DOCUMENT
-          // --------------------------------------------------
+        // ---------------------------------------------
+        // MONGODB USER
+        // ---------------------------------------------
 
-          const user = new User({
-            clerkId: clerkUser.id,
+        mongoUser =
+          await createMongoUserForStudent({
+            clerkUser,
             name,
             email,
             phone,
-            role: "student",
             department,
+            imageUrl:
+              cloudinaryResult
+                ?.secure_url || "",
+            imagePublicId:
+              cloudinaryResult
+                ?.public_id || "",
           });
 
-          await user.save();
+        // ---------------------------------------------
+        // MONGODB STUDENT
+        // ---------------------------------------------
 
-          // --------------------------------------------------
-          // CREATE STUDENT DOCUMENT
-          // --------------------------------------------------
+        const student =
+          new Student({
+            userId:
+              mongoUser._id,
 
-          const student = new Student({
-            clerkId: clerkUser.id,
+            clerkId:
+              clerkUser.id,
+
+            rollNumber,
+
             registerNumber,
+
             name,
+
+            fatherName,
+
+            motherName,
+
+            dob:
+              dobDate,
+
             gender,
+
             email,
+
             phone,
-            department,
-            admissionYear:
-              parsedAdmissionYear,
-            batch,
-            batchNumber:
-              parsedBatchNumber,
-            role: "student",
-            imageUrl: req.cloudinaryResult?.secure_url || "",
-imagePublicId: req.cloudinaryResult?.public_id || "",
-          });
 
-          await student.save();
+            parentPhone,
 
-          // --------------------------------------------------
-          // CREATE INITIAL SEMESTER RECORD
-          // --------------------------------------------------
+            caste,
 
-          const academicYear =
-            `${parsedAdmissionYear}-${String(
-              parsedAdmissionYear + 1
-            ).slice(-2)}`;
+            category,
 
-          await StudentSemester.create({
-            studentId: student._id,
-            academicYear,
-            semester: parsedSemester,
-            status: "CURRENT",
-          });
+            aadhaarNumber,
 
-          results.push({
-            registerNumber,
-            success: true,
-            message:
-              "Student added successfully",
-            student,
-          });
-        } catch (mongoError) {
-          // --------------------------------------------------
-          // ROLLBACK USER DOCUMENT
-          // --------------------------------------------------
-
-          try {
-            await User.deleteOne({
-              clerkId: clerkUser.id,
-            });
-          } catch (userDeleteError) {
-            console.error(
-              "Failed to rollback User document:",
-              userDeleteError.message
-            );
-          }
-
-          // --------------------------------------------------
-          // ROLLBACK CLERK USER
-          // --------------------------------------------------
-
-          try {
-            await clerkClient.users.deleteUser(
-              clerkUser.id
-            );
-          } catch (deleteError) {
-            console.error(
-              "Failed to rollback Clerk user:",
-              deleteError.message
-            );
-          }
-
-          throw mongoError;
-        }
-      } catch (err) {
-        console.error(
-          `Error adding student ${registerNumber}:`,
-          err
-        );
-
-        results.push({
-          registerNumber,
-          success: false,
-          message:
-            err.message ||
-            "Failed to add student",
-        });
-      }
-    }
-
-    const added =
-      results.filter(
-        (r) => r.success
-      ).length;
-
-    const skipped =
-      results.filter(
-        (r) => !r.success
-      ).length;
-
-    const errors =
-      results
-        .filter(
-          (r) => !r.success
-        )
-        .map((r) => ({
-          registerNumber:
-            r.registerNumber,
-          message:
-            r.message,
-        }));
-
-    return res.status(201).json({
-      success: skipped === 0,
-
-      message:
-        skipped === 0
-          ? "All students added successfully"
-          : "Bulk upload completed with some errors",
-
-      summary: {
-        total: results.length,
-        added,
-        skipped,
-        errors: errors.length,
-      },
-
-      results,
-      errors,
-    });
-  } catch (err) {
-    console.error(
-      "BulkAdd Error:",
-      err
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        err.message ||
-        "Failed to process bulk student upload",
-    });
-  }
-};
-
-export const bulkUploadStudents = async (req, res) => {
-  const createdStudents = [];
-  const errors = [];
-
-  // ============================================================
-  // 1. CHECK EXCEL FILE
-  // ============================================================
-
-  if (!req.file) {
-    return res.status(400).json({
-      success: false,
-      message: "Please upload an Excel file.",
-    });
-  }
-
-  try {
-    // ============================================================
-    // 2. READ EXCEL FILE
-    // ============================================================
-
-    const workbook = XLSX.read(req.file.buffer, {
-      type: "buffer",
-      cellDates: true,
-    });
-
-    const sheetName = workbook.SheetNames[0];
-
-    if (!sheetName) {
-      return res.status(400).json({
-        success: false,
-        message: "Excel file does not contain any worksheet.",
-      });
-    }
-
-    const worksheet = workbook.Sheets[sheetName];
-
-    const students = XLSX.utils.sheet_to_json(worksheet, {
-      defval: "",
-      raw: true,
-    });
-
-    if (!students.length) {
-      return res.status(400).json({
-        success: false,
-        message: "Excel file is empty.",
-      });
-    }
-
-    // ============================================================
-    // 3. CURRENT USER
-    // ============================================================
-
-    const currentUser =
-      req.auth?.userId ||
-      req.auth?.user?.id ||
-      req.user?.id ||
-      req.user?.clerkId;
-
-    if (!currentUser) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required.",
-      });
-    }
-
-    const currentUserDoc = await User.findOne({
-      clerkId: currentUser,
-    });
-
-    if (!currentUserDoc) {
-      return res.status(404).json({
-        success: false,
-        message: "Current user record not found.",
-      });
-    }
-
-    const currentRole = currentUserDoc.role;
-
-    // ============================================================
-    // 4. PROCESS EACH EXCEL ROW
-    // ============================================================
-
-    for (let i = 0; i < students.length; i++) {
-      const row = students[i];
-
-      const excelRowNumber = i + 2;
-
-      let clerkUserId = null;
-      let createdUser = null;
-      let createdStudent = null;
-      let createdSemester = null;
-
-      let cloudinaryResult = {
-        secure_url: "",
-        public_id: "",
-      };
-
-      try {
-        // ========================================================
-        // 5. READ VALUES FROM EXCEL
-        // ========================================================
-
-        const name = String(
-          row.name ||
-            row.Name ||
-            row["Student Name"] ||
-            row.studentName ||
-            ""
-        ).trim();
-
-        const registerNumber = String(
-          row.registerNumber ||
-            row.RegisterNumber ||
-            row["Register Number"] ||
-            row.regno ||
-            row.RegNo ||
-            ""
-        )
-          .trim()
-          .toUpperCase();
-
-        const email = String(
-          row.email ||
-            row.Email ||
-            row["Email ID"] ||
-            row.emailId ||
-            ""
-        )
-          .trim()
-          .toLowerCase();
-
-        const phone = String(
-          row.phone ||
-            row.Phone ||
-            row["Phone Number"] ||
-            row.mobile ||
-            row.Mobile ||
-            ""
-        ).trim();
-
-        const fatherName = String(
-          row.fatherName ||
-            row.FatherName ||
-            row["Father Name"] ||
-            ""
-        ).trim();
-
-        const motherName = String(
-          row.motherName ||
-            row.MotherName ||
-            row["Mother Name"] ||
-            ""
-        ).trim();
-
-        const gender = String(
-          row.gender ||
-            row.Gender ||
-            ""
-        )
-          .trim()
-          .toLowerCase();
-
-        const department = String(
-          row.department ||
-            row.Department ||
-            ""
-        ).trim();
-
-        const admissionYear = String(
-          row.admissionYear ||
-            row["Admission Year"] ||
-            row.AdmissionYear ||
-            ""
-        ).trim();
-
-        const academicYear = String(
-          row.academicYear ||
-            row["Academic Year"] ||
-            row.AcademicYear ||
-            ""
-        ).trim();
-
-        const batch = String(
-          row.batch ||
-            row.Batch ||
-            ""
-        ).trim();
-
-        const batchNumberRaw = String(
-          row.batchNumber ||
-            row["Batch Number"] ||
-            row.BatchNumber ||
-            ""
-        ).trim();
-
-        const semesterRaw = String(
-          row.semester ||
-            row.Semester ||
-            row.sem ||
-            row.Sem ||
-            ""
-        ).trim();
-
-        const dobRaw =
-          row.dob ||
-          row.DOB ||
-          row["Date of Birth"] ||
-          "";
-
-        // ========================================================
-        // PHOTO
-        // ========================================================
-
-        const photo = String(
-          row.Photo ||
-            row.photo ||
-            row["Photo URL"] ||
-            row["Photo"] ||
-            ""
-        ).trim();
-
-        // ========================================================
-        // 6. VALIDATION
-        // ========================================================
-
-        if (!name) {
-          throw new Error("Student name is missing.");
-        }
-
-        if (!registerNumber) {
-          throw new Error("Register number is missing.");
-        }
-
-        if (!email) {
-          throw new Error("Email is missing.");
-        }
-
-        if (!department) {
-          throw new Error("Department is missing.");
-        }
-
-        if (!gender) {
-          throw new Error("Gender is missing.");
-        }
-
-        if (
-          !["male", "female", "other"].includes(gender)
-        ) {
-          throw new Error(
-            `Invalid gender "${gender}". Allowed: male, female, other.`
-          );
-        }
-
-        if (!admissionYear) {
-          throw new Error("Admission year is missing.");
-        }
-
-        if (!semesterRaw) {
-          throw new Error("Semester is missing.");
-        }
-
-        const semester = Number(semesterRaw);
-
-        if (
-          !Number.isInteger(semester) ||
-          semester < 1 ||
-          semester > 6
-        ) {
-          throw new Error(
-            `Invalid semester "${semesterRaw}". Semester must be 1 to 6.`
-          );
-        }
-
-        if (!batch) {
-          throw new Error("Academic batch is missing.");
-        }
-
-        // ========================================================
-        // BATCH NUMBER
-        // ========================================================
-
-        let batchNumber = Number(batchNumberRaw);
-
-        if (!batchNumberRaw) {
-          batchNumber = 1;
-        }
-
-        if (![1, 2].includes(batchNumber)) {
-          throw new Error(
-            `Invalid batch number "${batchNumberRaw}". Use 1 or 2.`
-          );
-        }
-
-        // ========================================================
-        // 7. DATE OF BIRTH
-        // ========================================================
-
-        let dob = null;
-
-        if (dobRaw) {
-          if (dobRaw instanceof Date) {
-            dob = dobRaw;
-          } else if (typeof dobRaw === "number") {
-            const excelEpoch = new Date(
-              Date.UTC(1899, 11, 30)
-            );
-
-            dob = new Date(
-              excelEpoch.getTime() +
-                dobRaw * 24 * 60 * 60 * 1000
-            );
-          } else {
-            const parsedDate = new Date(dobRaw);
-
-            if (!isNaN(parsedDate.getTime())) {
-              dob = parsedDate;
-            }
-          }
-        }
-
-        // ========================================================
-        // 8. CHECK DUPLICATE REGISTER NUMBER
-        // ========================================================
-
-        const existingStudent = await Student.findOne({
-          registerNumber,
-        });
-
-        if (existingStudent) {
-          throw new Error(
-            `Register number ${registerNumber} already exists.`
-          );
-        }
-
-        // ========================================================
-        // 9. CHECK DUPLICATE EMAIL
-        // ========================================================
-
-        const existingUser = await User.findOne({
-          email,
-        });
-
-        if (existingUser) {
-          throw new Error(
-            `Email ${email} already exists.`
-          );
-        }
-
-        // ========================================================
-        // 10. HOD RESTRICTION
-        // ========================================================
-
-        if (currentRole === "hod") {
-          if (
-            currentUserDoc.department &&
-            currentUserDoc.department !== department
-          ) {
-            throw new Error(
-              "HOD can only add students from the assigned department."
-            );
-          }
-        }
-
-        // ========================================================
-        // 11. GOOGLE DRIVE PHOTO → CLOUDINARY
-        // ========================================================
-
-        if (photo) {
-          cloudinaryResult =
-            await uploadGoogleDrivePhoto(photo);
-        }
-
-        // ========================================================
-        // 12. CREATE CLERK USER
-        // ========================================================
-
-        let clerkUser;
-
-        try {
-          // No password is supplied.
-          // Student authentication will use the
-          // authentication methods configured in Clerk.
-
-          clerkUser =
-            await clerkClient.users.createUser({
-              emailAddress: [email],
-              firstName: name,
-            });
-
-          clerkUserId = clerkUser.id;
-        } catch (clerkError) {
-          throw new Error(
-            `Clerk user creation failed: ${
-              clerkError?.errors?.[0]?.message ||
-              clerkError?.message ||
-              "Unknown Clerk error"
-            }`
-          );
-        }
-
-        // ========================================================
-        // 13. CREATE USER DOCUMENT
-        // ========================================================
-
-        createdUser = await User.create({
-          clerkId: clerkUserId,
-          name,
-          email,
-          phone,
-          role: "student",
-          department,
-        });
-
-        // ========================================================
-        // 14. CREATE STUDENT DOCUMENT
-        // ========================================================
-
-        createdStudent = await Student.create({
-          clerkId: clerkUserId,
-
-          registerNumber,
-
-          name,
-
-          fatherName,
-
-          motherName,
-
-          dob,
-
-          gender,
-
-          email,
-
-          phone,
-
-          department,
-
-          admissionYear,
-
-          academicYear,
-
-          batch,
-
-          batchNumber,
-
-          semester,
-
-          imageUrl:
-            cloudinaryResult?.secure_url || "",
-
-          imagePublicId:
-            cloudinaryResult?.public_id || "",
-        });
-
-        // ========================================================
-        // 15. CREATE STUDENT SEMESTER DOCUMENT
-        // ========================================================
-
-        createdSemester =
-          await StudentSemester.create({
-            studentId: createdStudent._id,
-
-            clerkId: clerkUserId,
-
-            registerNumber,
-
-            semester,
-
-            academicYear,
+            satsNumber,
 
             department,
+
+            admissionYear,
 
             batch,
 
             batchNumber,
+
+            admissionType,
+
+            semester,
+
+            status,
+
+            role:
+              "student",
+
+            imageUrl:
+              cloudinaryResult
+                ?.secure_url || "",
+
+            imagePublicId:
+              cloudinaryResult
+                ?.public_id || "",
           });
 
-        // ========================================================
-        // 16. SUCCESS
-        // ========================================================
+        await student.save();
 
-        createdStudents.push({
-          row: excelRowNumber,
+        // ---------------------------------------------
+        // SUCCESS
+        // ---------------------------------------------
 
+        results.created++;
+
+        results.createdStudents.push({
+          row: excelRow,
+          rollNumber,
           registerNumber,
-
           name,
-
           email,
-
           department,
-
-          semester,
-
-          batch,
-
-          batchNumber,
-
-          photoUploaded:
-            !!cloudinaryResult?.secure_url,
-
-          studentId: createdStudent._id,
+          clerkId:
+            clerkUser.id,
+          userId:
+            mongoUser._id,
         });
+
       } catch (error) {
-        // ========================================================
-        // ROW ERROR
-        // ========================================================
+        console.error(
+          `Bulk student row ${excelRow} error:`,
+          error
+        );
 
-        const failedRegisterNumber =
-          String(
-            row.registerNumber ||
-              row.RegisterNumber ||
-              row["Register Number"] ||
-              row.regno ||
-              row.RegNo ||
-              ""
-          )
-            .trim()
-            .toUpperCase();
+        // ---------------------------------------------
+        // CLEANUP MONGODB USER
+        // ---------------------------------------------
 
-        const failedStudentName =
-          String(
-            row.name ||
-              row.Name ||
-              row["Student Name"] ||
-              row.studentName ||
-              ""
-          ).trim();
-
-        // ========================================================
-        // ROLLBACK STUDENT SEMESTER
-        // ========================================================
-
-        try {
-          if (createdSemester?._id) {
-            await StudentSemester.findByIdAndDelete(
-              createdSemester._id
-            );
-          }
-        } catch (rollbackError) {
-          console.error(
-            "StudentSemester rollback failed:",
-            rollbackError.message
-          );
-        }
-
-        // ========================================================
-        // ROLLBACK STUDENT
-        // ========================================================
-
-        try {
-          if (createdStudent?._id) {
-            await Student.findByIdAndDelete(
-              createdStudent._id
-            );
-          }
-        } catch (rollbackError) {
-          console.error(
-            "Student rollback failed:",
-            rollbackError.message
-          );
-        }
-
-        // ========================================================
-        // ROLLBACK USER
-        // ========================================================
-
-        try {
-          if (createdUser?._id) {
+        if (
+          mongoUser?._id
+        ) {
+          try {
             await User.findByIdAndDelete(
-              createdUser._id
+              mongoUser._id
+            );
+          } catch (
+            cleanupError
+          ) {
+            console.error(
+              "Mongo User cleanup error:",
+              cleanupError
             );
           }
-        } catch (rollbackError) {
-          console.error(
-            "User rollback failed:",
-            rollbackError.message
+        }
+
+        // ---------------------------------------------
+        // CLEANUP CLERK
+        // ---------------------------------------------
+
+        if (
+          clerkUser?.id
+        ) {
+          try {
+            await deleteClerkSafely(
+              clerkUser.id
+            );
+          } catch (
+            cleanupError
+          ) {
+            console.error(
+              "Clerk cleanup error:",
+              cleanupError
+            );
+          }
+        }
+
+        // ---------------------------------------------
+        // CLEANUP CLOUDINARY
+        // ---------------------------------------------
+
+        if (
+          cloudinaryResult
+            ?.public_id
+        ) {
+          await deleteCloudinarySafely(
+            cloudinaryResult.public_id
           );
         }
 
-        // ========================================================
-        // ROLLBACK CLERK USER
-        // ========================================================
+        results.failed++;
 
-        try {
-          if (clerkUserId) {
-            await clerkClient.users.deleteUser(
-              clerkUserId
-            );
-          }
-        } catch (rollbackError) {
-          console.error(
-            "Clerk rollback failed:",
-            rollbackError.message
-          );
-        }
-
-        // ========================================================
-        // ROLLBACK CLOUDINARY PHOTO
-        // ========================================================
-
-        try {
-          if (cloudinaryResult?.public_id) {
-            await cloudinary.uploader.destroy(
-              cloudinaryResult.public_id
-            );
-          }
-        } catch (rollbackError) {
-          console.error(
-            "Cloudinary rollback failed:",
-            rollbackError.message
-          );
-        }
-
-        // ========================================================
-        // STORE ERROR
-        // ========================================================
-
-        errors.push({
-          row: excelRowNumber,
-
-          registerNumber:
-            failedRegisterNumber,
-
-          name:
-            failedStudentName,
-
-          error:
-            error.message,
+        results.errors.push({
+          row: excelRow,
+          rollNumber,
+          registerNumber,
+          name,
+          email,
+          message:
+            error?.errors?.[0]
+              ?.message ||
+            error?.message ||
+            "Failed to create student.",
         });
       }
     }
 
-    // ============================================================
-    // 17. FINAL RESPONSE
-    // ============================================================
+    // =================================================
+    // RESPONSE
+    // =================================================
 
     return res.status(200).json({
       success: true,
@@ -1296,24 +1450,13 @@ export const bulkUploadStudents = async (req, res) => {
       message:
         "Bulk student upload completed.",
 
-      summary: {
-        totalRows:
-          students.length,
-
-        successful:
-          createdStudents.length,
-
-        failed:
-          errors.length,
-      },
-
-      createdStudents,
-
-      errors,
+      data:
+        results,
     });
+
   } catch (error) {
     console.error(
-      "❌ Bulk Excel upload error:",
+      "Bulk Student Upload Error:",
       error
     );
 
@@ -1321,247 +1464,494 @@ export const bulkUploadStudents = async (req, res) => {
       success: false,
 
       message:
-        error.message ||
-        "Failed to process Excel file.",
-
-      summary: {
-        totalRows: 0,
-        successful: 0,
-        failed: 0,
-      },
+        error?.message ||
+        "Failed to process bulk student upload.",
     });
   }
 };
 
-// ==========================================================
+// =====================================================
 // CREATE STUDENT
-// ==========================================================
+// =====================================================
 
-export const createStudent = async (req, res) => {
+export const createStudent = async (
+  req,
+  res
+) => {
+  let clerkUser = null;
+  let mongoUser = null;
+
   try {
-    const {
-      role,
-      department: hodDept,
-    } = req.user;
+    const requesterRole =
+      (
+        req.user?.role || ""
+      ).toLowerCase();
 
-    const {
-      registerNumber,
-      name,
-      gender,
-      email,
-      phone,
-      department,
-      admissionYear,
-      semester,
-      batch,
-      batchNumber,
-    } = req.body;
-
-    // ------------------------------------------------------
-    // AUTHORIZATION
-    // ------------------------------------------------------
+    // -------------------------------------------------
+    // PERMISSION
+    // -------------------------------------------------
 
     if (
-      role !== "admin" &&
-      role !== "hod"
+      !STUDENT_MANAGEMENT_ROLES.includes(
+        requesterRole
+      )
     ) {
       return res.status(403).json({
         success: false,
         message:
-          "Not authorized to add students",
+          "You do not have permission to create students.",
       });
     }
 
-    // ------------------------------------------------------
-    // HOD RESTRICTION
-    // ------------------------------------------------------
+    // -------------------------------------------------
+    // GET FORM DATA
+    // -------------------------------------------------
 
-    if (role === "hod") {
-      if (hodDept === "sc") {
-        return res.status(403).json({
-          success: false,
-          message:
-            "Science HOD cannot add students",
-        });
-      }
+    const {
+      rollNumber,
+      registerNumber,
+      name,
+      fatherName,
+      motherName,
+      dob,
+      gender,
 
-      if (
-        department?.toLowerCase() !==
-        hodDept?.toLowerCase()
-      ) {
-        return res.status(403).json({
-          success: false,
-          message:
-            "You can only add students from your department",
-        });
-      }
-    }
+      email,
+      phone,
+      parentPhone,
 
-    // ------------------------------------------------------
+      caste,
+      category,
+
+      aadhaarNumber,
+      satsNumber,
+
+      department,
+      admissionYear,
+      batch,
+      batchNumber,
+      admissionType,
+      semester,
+
+      status,
+    } = req.body;
+
+    // -------------------------------------------------
     // REQUIRED FIELDS
-    // ------------------------------------------------------
+    // -------------------------------------------------
 
-    if (
-      !registerNumber ||
-      !name ||
-      !gender ||
-      !email ||
-      !phone ||
-      !department ||
-      !admissionYear ||
-      !semester ||
-      !batch ||
-      batchNumber === undefined ||
-      batchNumber === null ||
-      batchNumber === ""
+    const requiredFields = [
+      [
+        "rollNumber",
+        rollNumber,
+      ],
+      [
+        "registerNumber",
+        registerNumber,
+      ],
+      [
+        "name",
+        name,
+      ],
+      [
+        "fatherName",
+        fatherName,
+      ],
+      [
+        "motherName",
+        motherName,
+      ],
+      [
+        "dob",
+        dob,
+      ],
+      [
+        "gender",
+        gender,
+      ],
+      [
+        "email",
+        email,
+      ],
+      [
+        "phone",
+        phone,
+      ],
+      [
+        "department",
+        department,
+      ],
+      [
+        "admissionYear",
+        admissionYear,
+      ],
+      [
+        "batch",
+        batch,
+      ],
+      [
+        "batchNumber",
+        batchNumber,
+      ],
+      [
+        "admissionType",
+        admissionType,
+      ],
+      [
+        "semester",
+        semester,
+      ],
+    ];
+
+    for (
+      const [
+        field,
+        value,
+      ] of requiredFields
     ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "All required fields including gender must be provided",
-      });
+      if (
+        value ===
+          undefined ||
+        value === null ||
+        String(value).trim() ===
+          ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `${field} is required.`,
+        });
+      }
     }
 
-    // ------------------------------------------------------
-    // VALIDATE GENDER
-    // ------------------------------------------------------
+    // -------------------------------------------------
+    // NORMALIZE
+    // -------------------------------------------------
 
-    const normalizedGender =
-      gender
+    const normalizedRollNumber =
+      String(
+        rollNumber
+      ).trim();
+
+    const normalizedRegisterNumber =
+      String(
+        registerNumber
+      )
+        .trim()
+        .toUpperCase();
+
+    const normalizedName =
+      String(
+        name
+      ).trim();
+
+    const normalizedFatherName =
+      String(
+        fatherName
+      ).trim();
+
+    const normalizedMotherName =
+      String(
+        motherName
+      ).trim();
+
+    const normalizedEmail =
+      String(
+        email
+      )
         .trim()
         .toLowerCase();
 
-    const validGenders = [
-      "male",
-      "female",
-      "other",
-    ];
+    const normalizedPhone =
+      String(
+        phone
+      ).trim();
+
+    const normalizedParentPhone =
+      String(
+        parentPhone || ""
+      ).trim();
+
+    const normalizedDepartment =
+      String(
+        department
+      )
+        .trim()
+        .toLowerCase();
+
+    const normalizedGender =
+      String(
+        gender
+      )
+        .trim()
+        .toLowerCase();
+
+    const normalizedStatus =
+      String(
+        status ||
+          "active"
+      )
+        .trim()
+        .toLowerCase();
+
+    const normalizedSemester =
+      Number(
+        semester
+      );
+
+    const normalizedBatchNumber =
+      Number(
+        batchNumber
+      );
+
+    const normalizedAdmissionType =
+      String(
+        admissionType
+      ).trim();
+
+    const normalizedAdmissionYear =
+      Number(
+        admissionYear
+      );
+
+    // -------------------------------------------------
+    // GENDER
+    // -------------------------------------------------
 
     if (
-      !validGenders.includes(
+      ![
+        "male",
+        "female",
+        "other",
+      ].includes(
         normalizedGender
       )
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Invalid gender. Gender must be male, female or other",
+          "Invalid gender.",
       });
     }
 
-    // ------------------------------------------------------
-    // VALIDATE SEMESTER
-    // ------------------------------------------------------
-
-    const parsedSemester =
-      Number(semester);
+    // -------------------------------------------------
+    // DEPARTMENT
+    // -------------------------------------------------
 
     if (
-      !Number.isInteger(parsedSemester) ||
-      parsedSemester < 1 ||
-      parsedSemester > 8
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid semester. Semester must be between 1 and 8",
-      });
-    }
-
-    // ------------------------------------------------------
-    // VALIDATE ADMISSION YEAR
-    // ------------------------------------------------------
-
-    const parsedAdmissionYear =
-      Number(admissionYear);
-
-    if (
-      !Number.isInteger(
-        parsedAdmissionYear
-      ) ||
-      parsedAdmissionYear < 2000 ||
-      parsedAdmissionYear > 2100
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid admission year",
-      });
-    }
-
-    // ------------------------------------------------------
-    // VALIDATE BATCH NUMBER
-    // ------------------------------------------------------
-
-    const parsedBatchNumber =
-      Number(batchNumber);
-
-    if (
-      !Number.isInteger(
-        parsedBatchNumber
-      ) ||
-      ![1, 2].includes(
-        parsedBatchNumber
+      !VALID_DEPARTMENTS.includes(
+        normalizedDepartment
       )
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Invalid batch number. Batch number must be 1 or 2",
+          `Invalid department: ${normalizedDepartment}`,
       });
     }
 
-    // ------------------------------------------------------
-    // NORMALIZE VALUES
-    // ------------------------------------------------------
+    // -------------------------------------------------
+    // SEMESTER
+    // -------------------------------------------------
 
-    const normalizedRegisterNumber =
-      registerNumber
-        .trim()
-        .toUpperCase();
+    if (
+      !Number.isInteger(
+        normalizedSemester
+      ) ||
+      normalizedSemester < 1 ||
+      normalizedSemester > 6
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Semester must be between 1 and 6.",
+      });
+    }
 
-    const normalizedName =
-      name
-        .trim()
-        .toUpperCase();
+    // -------------------------------------------------
+    // BATCH NUMBER
+    // -------------------------------------------------
 
-    const normalizedEmail =
-      email
-        .trim()
-        .toLowerCase();
+    if (
+      ![
+        1,
+        2,
+      ].includes(
+        normalizedBatchNumber
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Batch number must be either 1 or 2.",
+      });
+    }
 
-    const normalizedPhone =
-      phone.trim();
+    // -------------------------------------------------
+    // ADMISSION TYPE
+    // -------------------------------------------------
 
-    const normalizedDepartment =
-      department
-        .trim()
-        .toLowerCase();
+    if (
+      !VALID_ADMISSION_TYPES.includes(
+        normalizedAdmissionType
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid admission type.",
+      });
+    }
 
-    const normalizedBatch =
-      batch.trim();
+    // -------------------------------------------------
+    // STATUS
+    // -------------------------------------------------
 
-    // ------------------------------------------------------
-    // CHECK DUPLICATE REGISTER NUMBER
-    // ------------------------------------------------------
+    if (
+      !VALID_STATUSES.includes(
+        normalizedStatus
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid student status.",
+      });
+    }
 
-    const existingRegister =
+    // -------------------------------------------------
+    // ADMISSION YEAR
+    // -------------------------------------------------
+
+    if (
+      !Number.isInteger(
+        normalizedAdmissionYear
+      ) ||
+      normalizedAdmissionYear <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid admission year.",
+      });
+    }
+
+    // -------------------------------------------------
+    // DATE
+    // -------------------------------------------------
+
+    const dobDate =
+      new Date(
+        dob
+      );
+
+    if (
+      Number.isNaN(
+        dobDate.getTime()
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid date of birth.",
+      });
+    }
+
+    // -------------------------------------------------
+    // EMAIL
+    // -------------------------------------------------
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        normalizedEmail
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid email address.",
+      });
+    }
+
+    // -------------------------------------------------
+    // PHONE
+    // -------------------------------------------------
+
+    if (
+      !/^\d{10}$/.test(
+        normalizedPhone
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Student phone number must contain exactly 10 digits.",
+      });
+    }
+
+    // -------------------------------------------------
+    // PARENT PHONE
+    // -------------------------------------------------
+
+    if (
+      normalizedParentPhone &&
+      !/^\d{10}$/.test(
+        normalizedParentPhone
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Parent phone number must contain exactly 10 digits.",
+      });
+    }
+
+    // -------------------------------------------------
+    // AADHAAR
+    // -------------------------------------------------
+
+    const normalizedAadhaar =
+      String(
+        aadhaarNumber ||
+          ""
+      ).trim();
+
+    if (
+      normalizedAadhaar &&
+      !/^\d{12}$/.test(
+        normalizedAadhaar
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Aadhaar number must contain exactly 12 digits.",
+      });
+    }
+
+    // -------------------------------------------------
+    // DUPLICATE REGISTER NUMBER
+    // -------------------------------------------------
+
+    const existingRegisterNumber =
       await Student.findOne({
         registerNumber:
           normalizedRegisterNumber,
       });
 
-    if (existingRegister) {
-      return res.status(400).json({
+    if (
+      existingRegisterNumber
+    ) {
+      return res.status(409).json({
         success: false,
         message:
-          "Register number already exists",
+          "A student with this register number already exists.",
       });
     }
 
-    // ------------------------------------------------------
-    // CHECK DUPLICATE EMAIL
-    // ------------------------------------------------------
+    // -------------------------------------------------
+    // DUPLICATE EMAIL IN STUDENT
+    // -------------------------------------------------
 
     const existingEmail =
       await Student.findOne({
@@ -1569,39 +1959,41 @@ export const createStudent = async (req, res) => {
           normalizedEmail,
       });
 
-    if (existingEmail) {
-      return res.status(400).json({
+    if (
+      existingEmail
+    ) {
+      return res.status(409).json({
         success: false,
         message:
-          "Email already exists",
+          "A student with this email already exists.",
       });
     }
 
-    // ------------------------------------------------------
-    // CHECK CLERK
-    // ------------------------------------------------------
+    // -------------------------------------------------
+    // CHECK USER EMAIL TOO
+    // -------------------------------------------------
 
-    const existingUsers =
-      await clerkClient.users.getUserList({
-        emailAddress: [
+    const existingUser =
+      await User.findOne({
+        email:
           normalizedEmail,
-        ],
-        includeDeleted: true,
       });
 
-    if (existingUsers.length > 0) {
-      return res.status(400).json({
+    if (
+      existingUser
+    ) {
+      return res.status(409).json({
         success: false,
         message:
-          "Email already exists in Clerk",
+          "A MongoDB User already exists with this email.",
       });
     }
 
-    // ------------------------------------------------------
-    // CREATE CLERK USER
-    // ------------------------------------------------------
+    // =================================================
+    // CREATE CLERK
+    // =================================================
 
-    const clerkUser =
+    clerkUser =
       await clerkClient.users.createUser({
         emailAddress: [
           normalizedEmail,
@@ -1611,1211 +2003,1591 @@ export const createStudent = async (req, res) => {
           normalizedName,
 
         publicMetadata: {
-          role: "student",
+          role:
+            "student",
 
           department:
             normalizedDepartment,
 
-          gender:
-            normalizedGender,
-
-          admissionYear:
-            parsedAdmissionYear,
-
-          semester:
-            parsedSemester,
-
-          batch:
-            normalizedBatch,
-
-          batchNumber:
-            parsedBatchNumber,
+          registerNumber:
+            normalizedRegisterNumber,
         },
       });
 
-    try {
-      // ----------------------------------------------------
-      // CREATE USER DOCUMENT
-      // ----------------------------------------------------
+    // =================================================
+    // CREATE MONGODB USER
+    // =================================================
 
-      const user = new User({
-        clerkId: clerkUser.id,
-        name: normalizedName,
-        email: normalizedEmail,
-        phone: normalizedPhone,
-        role: "student",
-        department:
-          normalizedDepartment,
-      });
+    mongoUser =
+      await createMongoUserForStudent({
+        clerkUser,
 
-      await user.save();
-
-      // ----------------------------------------------------
-      // CREATE STUDENT DOCUMENT
-      // ----------------------------------------------------
-
-      const student = new Student({
-        clerkId: clerkUser.id,
-        registerNumber:
-          normalizedRegisterNumber,
         name:
           normalizedName,
-        gender:
-          normalizedGender,
+
         email:
           normalizedEmail,
+
         phone:
           normalizedPhone,
+
         department:
           normalizedDepartment,
-        admissionYear:
-          parsedAdmissionYear,
-        batch:
-          normalizedBatch,
-        batchNumber:
-          parsedBatchNumber,
-        role: "student",
-          imageUrl: req.cloudinaryResult?.secure_url || "",
-  imagePublicId: req.cloudinaryResult?.public_id || "",
+
+        imageUrl:
+          req.cloudinaryResult
+            ?.secure_url ||
+          "",
+
+        imagePublicId:
+          req.cloudinaryResult
+            ?.public_id ||
+          "",
       });
 
-      await student.save();
-
-      // ----------------------------------------------------
-      // INITIAL SEMESTER
-      // ----------------------------------------------------
-
-      const academicYear =
-        `${parsedAdmissionYear}-${String(
-          parsedAdmissionYear + 1
-        ).slice(-2)}`;
-
-      await StudentSemester.create({
-        studentId:
-          student._id,
-
-        academicYear,
-
-        semester:
-          parsedSemester,
-
-        status:
-          "CURRENT",
-      });
-
-      return res.status(201).json({
-        success: true,
-
-        message:
-          "Student added successfully",
-
-        data:
-          student,
-      });
-    } catch (mongoError) {
-      // ----------------------------------------------------
-      // ROLLBACK USER DOCUMENT
-      // ----------------------------------------------------
-
-      try {
-        await User.deleteOne({
-          clerkId:
-            clerkUser.id,
-        });
-      } catch (userDeleteError) {
-        console.error(
-          "Failed to rollback User document:",
-          userDeleteError.message
-        );
-      }
-
-      // ----------------------------------------------------
-      // ROLLBACK CLERK USER
-      // ----------------------------------------------------
-
-      try {
-        await clerkClient.users.deleteUser(
-          clerkUser.id
-        );
-      } catch (deleteError) {
-        console.error(
-          "Failed to rollback Clerk user:",
-          deleteError.message
-        );
-      }
-
-      throw mongoError;
-    }
-  } catch (err) {
-    console.error(
-      "CreateStudent Error:",
-      err
-    );
-
-    if (err.code === 11000) {
-      const field =
-        Object.keys(
-          err.keyPattern || {}
-        )[0];
-
-      return res.status(400).json({
-        success: false,
-        message:
-          `${field || "Field"} already exists.`,
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message:
-        err.message ||
-        "Failed to add student.",
-    });
-  }
-};
-// ==========================================================
-// GET STUDENTS
-// ==========================================================
-
-export const getStudents = async (req, res) => {
-  try {
-    const {
-      role,
-      department: userDepartment,
-    } = req.user;
-
-    const {
-      department,
-      semester,
-      academicYear,
-      batch,
-      batchNumber,
-    } = req.query;
-
-    let filter = {};
-
-    // ------------------------------------------------------
-    // ADMIN
-    // ------------------------------------------------------
-
-    if (role === "admin") {
-      if (department) {
-        filter.department =
-          department.toLowerCase();
-      }
-    }
-
-    // ------------------------------------------------------
-    // HOD / STAFF
-    // ------------------------------------------------------
-
-    else if (
-      role === "hod" ||
-      role === "staff"
-    ) {
-      if (userDepartment === "sc") {
-        if (department) {
-          filter.department =
-            department.toLowerCase();
-        }
-      } else {
-        filter.department =
-          userDepartment;
-      }
-    }
-
-    // ------------------------------------------------------
-    // OTHER ROLES
-    // ------------------------------------------------------
-
-    else {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Not authorized to view students",
-      });
-    }
-
-    // ------------------------------------------------------
-    // BATCH FILTER
-    // ------------------------------------------------------
-
-    if (batch) {
-      filter.batch =
-        batch.trim();
-    }
-
-    // ------------------------------------------------------
-    // BATCH NUMBER FILTER
-    // ------------------------------------------------------
-
-    if (
-      batchNumber !== undefined &&
-      batchNumber !== null &&
-      batchNumber !== ""
-    ) {
-      const parsedBatchNumber =
-        Number(batchNumber);
-
-      if (
-        !Number.isInteger(parsedBatchNumber) ||
-        ![1, 2].includes(
-          parsedBatchNumber
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid batch number. Batch number must be 1 or 2",
-        });
-      }
-
-      filter.batchNumber =
-        parsedBatchNumber;
-    }
-
-    // ------------------------------------------------------
-    // SEMESTER FILTER
-    //
-    // Semester information is stored in
-    // StudentSemester collection.
-    // ------------------------------------------------------
-
-    let students;
-
-    if (
-      semester ||
-      academicYear
-    ) {
-      const semesterFilter = {};
-
-      if (semester) {
-        semesterFilter.semester =
-          Number(semester);
-      }
-
-      if (academicYear) {
-        semesterFilter.academicYear =
-          academicYear;
-      }
-
-      semesterFilter.status =
-        "CURRENT";
-
-      const semesterRecords =
-        await StudentSemester.find(
-          semesterFilter
-        ).select("studentId");
-
-      const studentIds =
-        semesterRecords.map(
-          (record) =>
-            record.studentId
-        );
-
-      filter._id = {
-        $in: studentIds,
-      };
-    }
-
-    // ------------------------------------------------------
-    // FETCH STUDENTS
-    // ------------------------------------------------------
-
-    students =
-      await Student.find(filter)
-        .sort({
-          registerNumber: 1,
-        })
-        .lean();
-
-    // ------------------------------------------------------
-    // GET CURRENT SEMESTER
-    // ------------------------------------------------------
-
-    const studentIds =
-      students.map(
-        (student) =>
-          student._id
-      );
-
-    const semesterRecords =
-      await StudentSemester.find({
-        studentId: {
-          $in: studentIds,
-        },
-
-        status: "CURRENT",
-      }).lean();
-
-    const semesterMap =
-      new Map(
-        semesterRecords.map(
-          (record) => [
-            String(
-              record.studentId
-            ),
-            record.semester,
-          ]
-        )
-      );
-
-    // ------------------------------------------------------
-    // ADD SEMESTER TO RESPONSE
-    // ------------------------------------------------------
-
-    students =
-      students.map(
-        (student) => ({
-          ...student,
-
-          semester:
-            semesterMap.get(
-              String(student._id)
-            ) || "",
-        })
-      );
-
-    return res.json({
-      success: true,
-      data: students,
-    });
-
-  } catch (err) {
-
-    console.error(
-      "GetStudents Error:",
-      err
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        err.message ||
-        "Failed to fetch students.",
-    });
-  }
-};
-
-
-// ==========================================================
-// UPDATE STUDENT
-// ==========================================================
-
-export const updateStudent = async (req, res) => {
-  try {
-    const {
-      role,
-      department,
-    } = req.user;
+    // =================================================
+    // CREATE STUDENT PROFILE
+    // =================================================
 
     const student =
-      await Student.findById(
-        req.params.id
-      );
+      new Student({
+        // IMPORTANT:
+        // Same MongoDB User ID
+        userId:
+          mongoUser._id,
 
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Student not found",
+        // Clerk authentication ID
+        clerkId:
+          clerkUser.id,
+
+        rollNumber:
+          normalizedRollNumber,
+
+        registerNumber:
+          normalizedRegisterNumber,
+
+        name:
+          normalizedName,
+
+        fatherName:
+          normalizedFatherName,
+
+        motherName:
+          normalizedMotherName,
+
+        dob:
+          dobDate,
+
+        gender:
+          normalizedGender,
+
+        email:
+          normalizedEmail,
+
+        phone:
+          normalizedPhone,
+
+        parentPhone:
+          normalizedParentPhone,
+
+        caste:
+          String(
+            caste || ""
+          ).trim(),
+
+        category:
+          String(
+            category || ""
+          ).trim(),
+
+        aadhaarNumber:
+          normalizedAadhaar,
+
+        satsNumber:
+          String(
+            satsNumber || ""
+          ).trim(),
+
+        department:
+          normalizedDepartment,
+
+        admissionYear:
+          normalizedAdmissionYear,
+
+        batch:
+          String(
+            batch
+          ).trim(),
+
+        batchNumber:
+          normalizedBatchNumber,
+
+        admissionType:
+          normalizedAdmissionType,
+
+        semester:
+          normalizedSemester,
+
+        status:
+          normalizedStatus,
+
+        role:
+          "student",
+
+        imageUrl:
+          req.cloudinaryResult
+            ?.secure_url ||
+          "",
+
+        imagePublicId:
+          req.cloudinaryResult
+            ?.public_id ||
+          "",
       });
-    }
 
-    // ------------------------------------------------------
-    // HOD ACCESS
-    // ------------------------------------------------------
+    await student.save();
 
-    if (
-      role === "hod" &&
-      department !== "sc" &&
-      student.department !== department
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Cannot edit student outside your department",
-      });
-    }
+    // =================================================
+    // SUCCESS
+    // =================================================
 
-    if (
-      role === "hod" &&
-      department === "sc"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Science HOD cannot modify students",
-      });
-    }
-
-    // ------------------------------------------------------
-    // GET SEMESTER FROM REQUEST
-    // ------------------------------------------------------
-
-    const semester =
-      req.body.semester;
-
-    let parsedSemester = null;
-
-    if (
-      semester !== undefined &&
-      semester !== null &&
-      semester !== ""
-    ) {
-      parsedSemester =
-        Number(semester);
-
-      if (
-        !Number.isInteger(
-          parsedSemester
-        ) ||
-        parsedSemester < 1 ||
-        parsedSemester > 8
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid semester. Semester must be between 1 and 8.",
-        });
-      }
-    }
-
-    // ------------------------------------------------------
-    // OLD PHOTO
-    // ------------------------------------------------------
-
-    const oldImagePublicId =
-      student.imagePublicId;
-
-    // ------------------------------------------------------
-    // UPDATE STUDENT DETAILS
-    // ------------------------------------------------------
-
-    const updateData = {
-      ...req.body,
-    };
-
-    // Never allow these fields
-    delete updateData.clerkId;
-    delete updateData.role;
-
-    // Semester belongs to StudentSemester
-    delete updateData.semester;
-
-    // ------------------------------------------------------
-    // NORMALIZE
-    // ------------------------------------------------------
-
-    if (
-      updateData.registerNumber
-    ) {
-      updateData.registerNumber =
-        updateData.registerNumber
-          .trim()
-          .toUpperCase();
-    }
-
-    if (updateData.name) {
-      updateData.name =
-        updateData.name
-          .trim()
-          .toUpperCase();
-    }
-
-    if (updateData.email) {
-      updateData.email =
-        updateData.email
-          .trim()
-          .toLowerCase();
-    }
-
-  if (updateData.phone) {
-  updateData.phone =
-    updateData.phone.trim();
-}
-
-if (updateData.gender) {
-  updateData.gender =
-    updateData.gender
-      .trim()
-      .toLowerCase();
-
-  const validGenders = [
-    "male",
-    "female",
-    "other",
-  ];
-
-  if (
-    !validGenders.includes(
-      updateData.gender
-    )
-  ) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Invalid gender. Gender must be male, female or other",
-    });
-  }
-}
-
-if (updateData.department) {
-  updateData.department =
-    updateData.department
-      .trim()
-      .toLowerCase();
-}
-
-    if (updateData.department) {
-      updateData.department =
-        updateData.department
-          .trim()
-          .toLowerCase();
-    }
-
-    if (updateData.batch) {
-      updateData.batch =
-        updateData.batch.trim();
-    }
-
-    // ------------------------------------------------------
-    // BATCH NUMBER
-    // ------------------------------------------------------
-
-    if (
-      updateData.batchNumber !==
-        undefined &&
-      updateData.batchNumber !==
-        null &&
-      updateData.batchNumber !== ""
-    ) {
-      const parsedBatchNumber =
-        Number(
-          updateData.batchNumber
-        );
-
-      if (
-        !Number.isInteger(
-          parsedBatchNumber
-        ) ||
-        ![1, 2].includes(
-          parsedBatchNumber
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid batch number. Batch number must be 1 or 2",
-        });
-      }
-
-      updateData.batchNumber =
-        parsedBatchNumber;
-    }
-
-    if (
-      updateData.admissionYear
-    ) {
-      updateData.admissionYear =
-        Number(
-          updateData.admissionYear
-        );
-
-      if (
-        !Number.isInteger(
-          updateData.admissionYear
-        ) ||
-        updateData.admissionYear <
-          2000 ||
-        updateData.admissionYear >
-          2100
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Invalid admission year",
-        });
-      }
-    }
-
-    // ------------------------------------------------------
-    // PHOTO
-    // ------------------------------------------------------
-
-    let newImagePublicId = null;
-
-    if (req.cloudinaryResult) {
-      updateData.imageUrl =
-        req.cloudinaryResult.secure_url;
-
-      updateData.imagePublicId =
-        req.cloudinaryResult.public_id;
-
-      newImagePublicId =
-        req.cloudinaryResult.public_id;
-    }
-
-    // ------------------------------------------------------
-    // UPDATE STUDENT
-    // ------------------------------------------------------
-
-    let updated;
-
-    try {
-      updated =
-        await Student.findByIdAndUpdate(
-          req.params.id,
-          updateData,
-          {
-            new: true,
-            runValidators: true,
-          }
-        );
-
-    } catch (dbError) {
-
-      if (newImagePublicId) {
-        try {
-          await cloudinary.uploader.destroy(
-            newImagePublicId
-          );
-        } catch (rollbackError) {
-          console.error(
-            "Failed to rollback image:",
-            rollbackError.message
-          );
-        }
-      }
-
-      throw dbError;
-    }
-
-    // ------------------------------------------------------
-    // UPDATE CURRENT SEMESTER
-    // ------------------------------------------------------
-
-    if (parsedSemester !== null) {
-      const currentSemester =
-        await StudentSemester.findOne({
-          studentId:
-            student._id,
-          status:
-            "CURRENT",
-        });
-
-      if (currentSemester) {
-
-        currentSemester.semester =
-          parsedSemester;
-
-        await currentSemester.save();
-
-      } else {
-
-        const academicYear =
-          `${student.admissionYear}-${String(
-            student.admissionYear + 1
-          ).slice(-2)}`;
-
-        await StudentSemester.create({
-          studentId:
-            student._id,
-
-          academicYear,
-
-          semester:
-            parsedSemester,
-
-          status:
-            "CURRENT",
-        });
-      }
-    }
-
-    // ------------------------------------------------------
-    // DELETE OLD PHOTO
-    // ------------------------------------------------------
-
-    if (
-      newImagePublicId &&
-      oldImagePublicId &&
-      oldImagePublicId !==
-        newImagePublicId
-    ) {
-      try {
-        await cloudinary.uploader.destroy(
-          oldImagePublicId
-        );
-      } catch (imageError) {
-        console.warn(
-          "Old image deletion failed:",
-          imageError.message
-        );
-      }
-    }
-
-    // ------------------------------------------------------
-    // RESPONSE
-    // ------------------------------------------------------
-
-    return res.status(200).json({
+    return res.status(201).json({
       success: true,
 
       message:
-        newImagePublicId
-          ? "Student details, semester and photo updated successfully"
-          : "Student details and semester updated successfully",
+        "Student created successfully.",
 
       data:
-        updated,
+        student,
     });
 
-  } catch (err) {
-
+  } catch (error) {
     console.error(
-      "UpdateStudent Error:",
-      err
+      "Create Student Error:",
+      error
     );
 
-    if (err.code === 11000) {
+    // =================================================
+    // CLEANUP MONGODB USER
+    // =================================================
+
+    if (
+      mongoUser?._id
+    ) {
+      try {
+        await User.findByIdAndDelete(
+          mongoUser._id
+        );
+      } catch (
+        cleanupError
+      ) {
+        console.error(
+          "Mongo User cleanup error:",
+          cleanupError
+        );
+      }
+    }
+
+    // =================================================
+    // CLEANUP CLERK
+    // =================================================
+
+    if (
+      clerkUser?.id
+    ) {
+      try {
+        await deleteClerkSafely(
+          clerkUser.id
+        );
+      } catch (
+        cleanupError
+      ) {
+        console.error(
+          "Clerk cleanup error:",
+          cleanupError
+        );
+      }
+    }
+
+    // =================================================
+    // CLEANUP CLOUDINARY
+    // =================================================
+
+    if (
+      req.cloudinaryResult
+        ?.public_id
+    ) {
+      await deleteCloudinarySafely(
+        req.cloudinaryResult.public_id
+      );
+    }
+
+    // =================================================
+    // DUPLICATE KEY
+    // =================================================
+
+    if (
+      error?.code ===
+      11000
+    ) {
       const duplicateField =
         Object.keys(
-          err.keyPattern || {}
+          error.keyPattern ||
+            {}
         )[0];
 
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message:
-          `${duplicateField || "Field"} already exists.`,
+          `A student with this ${duplicateField} already exists.`,
       });
     }
 
     return res.status(500).json({
       success: false,
+
       message:
-        err.message ||
-        "Failed to update student.",
+        error?.message ||
+        "Failed to create student.",
     });
   }
 };
-// ==========================================================
-// DELETE STUDENT
-// ==========================================================
+// =====================================================
+// GET STUDENTS
+// GET /api/students
+// =====================================================
 
-// ==========================================================
-// DELETE STUDENT
-// ==========================================================
-
-export const deleteStudent = async (req, res) => {
-  try {
-    const {
-      role,
-      department,
-    } = req.user;
-
-    // ------------------------------------------------------
-    // FIND STUDENT
-    // ------------------------------------------------------
-
-    const student = await Student.findById(req.params.id);
-
-    if (!student) {
-      return res.status(404).json({
-        success: false,
-        message: "Student not found",
-      });
-    }
-
-    // ------------------------------------------------------
-    // HOD ACCESS
-    // ------------------------------------------------------
-
-    if (
-      role === "hod" &&
-      student.department !== department
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "HOD cannot delete student from another department.",
-      });
-    }
-
-    if (
-      role === "hod" &&
-      department === "sc"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Science HOD cannot modify students",
-      });
-    }
-
-    // ------------------------------------------------------
-    // DELETE CLERK USER
-    // ------------------------------------------------------
-
-    if (student.clerkId) {
-      try {
-        await clerkClient.users.deleteUser(
-          student.clerkId
-        );
-
-        console.log(
-          `Clerk user deleted: ${student.clerkId}`
-        );
-
-      } catch (clerkErr) {
-
-        if (clerkErr?.status === 404) {
-          console.warn(
-            `Clerk user ${student.clerkId} already deleted`
-          );
-        } else {
-          console.error(
-            "Clerk deletion failed:",
-            clerkErr
-          );
-        }
-      }
-    }
-
-    // ------------------------------------------------------
-    // DELETE USER DOCUMENT
-    // ------------------------------------------------------
-
-    if (student.clerkId) {
-      try {
-        const userDeleteResult =
-          await User.deleteOne({
-            clerkId: student.clerkId,
-          });
-
-        console.log(
-          `User collection deletion result:`,
-          userDeleteResult
-        );
-
-      } catch (userErr) {
-        console.error(
-          "User collection deletion failed:",
-          userErr
-        );
-      }
-    }
-
-    // ------------------------------------------------------
-    // DELETE CLOUDINARY PHOTO
-    // ------------------------------------------------------
-
-    if (student.imagePublicId) {
-      try {
-        await cloudinary.uploader.destroy(
-          student.imagePublicId
-        );
-
-      } catch (imgErr) {
-        console.warn(
-          "Cloudinary deletion failed:",
-          imgErr.message
-        );
-      }
-    }
-
-    // ------------------------------------------------------
-    // DELETE ACADEMIC RECORDS
-    // ------------------------------------------------------
-
-    await StudentSemester.deleteMany({
-      studentId: student._id,
-    });
-
-    // ------------------------------------------------------
-    // DELETE STUDENT
-    // ------------------------------------------------------
-
-    await student.deleteOne();
-
-    // ------------------------------------------------------
-    // RESPONSE
-    // ------------------------------------------------------
-
-    return res.json({
-      success: true,
-      message:
-        "Student, User and Clerk account deleted successfully",
-    });
-
-  } catch (err) {
-
-    console.error(
-      "DeleteStudent Error:",
-      err
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        err.message ||
-        "Failed to delete student.",
-    });
-  }
-};
-
-
-// ==========================================================
-// GET STUDENT BY ID
-// ==========================================================
-
-export const getStudentById = async (
+export const getStudents = async (
   req,
   res
 ) => {
   try {
     const {
-      role,
+      search,
       department,
-    } = req.user;
+      semester,
+      batch,
+      admissionYear,
+      admissionType,
+      status,
+    } = req.query;
 
-    let studentId =
-      req.params.id;
+    const requesterRole =
+      (
+        req.user?.role || ""
+      ).toLowerCase();
 
-    // Resolve Clerk ID
+    const filter = {};
+
+    // -------------------------------------------------
+    // SEARCH
+    // -------------------------------------------------
+
     if (
-      !mongoose.Types.ObjectId.isValid(
-        studentId
-      )
+      search?.trim()
     ) {
-      const student =
-        await Student.findOne({
-          clerkId: studentId,
+      const regex =
+        new RegExp(
+          search.trim(),
+          "i"
+        );
+
+      filter.$or = [
+        {
+          name: regex,
+        },
+        {
+          registerNumber:
+            regex,
+        },
+        {
+          email: regex,
+        },
+        {
+          phone: regex,
+        },
+        {
+          satsNumber:
+            regex,
+        },
+      ];
+    }
+
+    // -------------------------------------------------
+    // HOD RESTRICTION
+    // -------------------------------------------------
+
+    if (
+      requesterRole ===
+      "hod"
+    ) {
+      const hodDepartment =
+        String(
+          req.user?.department ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
+
+      if (!hodDepartment) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "HOD department is not assigned.",
         });
+      }
+
+      // HOD cannot override department
+      // through query parameters.
+
+      filter.department =
+        hodDepartment;
+    }
+
+    // -------------------------------------------------
+    // OTHER ROLES
+    // -------------------------------------------------
+
+    else if (
+      department?.trim()
+    ) {
+      filter.department =
+        department
+          .trim()
+          .toLowerCase();
+    }
+
+    // -------------------------------------------------
+    // SEMESTER
+    // -------------------------------------------------
+
+    if (semester) {
+      filter.semester =
+        Number(
+          semester
+        );
+    }
+
+    // -------------------------------------------------
+    // BATCH
+    // -------------------------------------------------
+
+    if (batch) {
+      filter.batch =
+        batch;
+    }
+
+    // -------------------------------------------------
+    // ADMISSION YEAR
+    // -------------------------------------------------
+
+    if (admissionYear) {
+      filter.admissionYear =
+        Number(
+          admissionYear
+        );
+    }
+
+    // -------------------------------------------------
+    // ADMISSION TYPE
+    // -------------------------------------------------
+
+    if (
+      admissionType?.trim()
+    ) {
+      filter.admissionType =
+        admissionType.trim();
+    }
+
+    // -------------------------------------------------
+    // STATUS
+    // -------------------------------------------------
+
+    if (status) {
+      filter.status =
+        status;
+    }
+
+    // -------------------------------------------------
+    // FETCH
+    // -------------------------------------------------
+
+   const students = await Student.aggregate([
+  { $match: filter },
+  {
+    $addFields: {
+      rollNumberSort: {
+        $convert: {
+          input: "$rollNumber",
+          to: "int",
+          onError: 999999999,
+          onNull: 999999999,
+        },
+      },
+    },
+  },
+  {
+    $sort: {
+      rollNumberSort: 1,
+      registerNumber: 1,
+      name: 1,
+    },
+  },
+  {
+    $project: {
+      rollNumberSort: 0,
+    },
+  },
+]);
+
+    return res.status(200).json({
+      success: true,
+      count:
+        students.length,
+      data:
+        students,
+    });
+
+  } catch (error) {
+    console.error(
+      "Get students error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Server error while fetching students.",
+      error:
+        error.message,
+    });
+  }
+};
+
+// =====================================================
+// GET ONE STUDENT
+// GET /api/students/:id
+// =====================================================
+
+export const getStudentById =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      const {
+        id,
+      } = req.params;
+
+      const student =
+        await Student.findById(
+          id
+        ).lean();
 
       if (!student) {
         return res.status(404).json({
           success: false,
           message:
-            "Student not found",
+            "Student not found.",
         });
       }
 
-      studentId =
-        student._id;
-    }
+      return res.status(200).json({
+        success: true,
+        data:
+          student,
+      });
 
-    const student =
-      await Student.findById(
-        studentId
+    } catch (error) {
+      console.error(
+        "Get student by ID error:",
+        error
       );
 
-    if (!student) {
-      return res.status(404).json({
+      return res.status(500).json({
         success: false,
         message:
-          "Student not found",
+          "Server error while fetching student.",
+        error:
+          error.message,
       });
     }
+  };
 
-    if (
-      role === "hod" &&
-      department !== "sc" &&
-      student.department !== department
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "You can only view students from your own department",
-      });
-    }
+// =====================================================
+// UPDATE STUDENT
+// PUT /api/students/:id
+//
+// registerNumber and email CANNOT be changed.
+// =====================================================
 
-    if (
-      role !== "admin" &&
-      role !== "hod"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Not authorized to view student",
-      });
-    }
+export const updateStudent =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      const {
+        id,
+      } = req.params;
 
- const currentSemester =
-  await StudentSemester.findOne({
-    studentId: student._id,
-    status: "CURRENT",
-  });
+      // -------------------------------------------------
+      // FIND STUDENT
+      // -------------------------------------------------
 
-return res.json({
-  success: true,
-  data: {
-    ...student.toObject(),
-    semester: currentSemester?.semester || "",
-  },
-});
-  } catch (err) {
-    console.error(
-      "GetStudentById Error:",
-      err
-    );
+      const student =
+        await Student.findById(
+          id
+        );
 
-    return res.status(500).json({
-      success: false,
-      message:
-        err.message ||
-        "Failed to fetch student details.",
-    });
-  }
-};
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Student not found.",
+        });
+      }
 
+      // -------------------------------------------------
+      // KEEP OLD PHOTO ID
+      // -------------------------------------------------
 
-// ==========================================================
-// SEARCH STUDENTS
-// ==========================================================
+      const oldImagePublicId =
+        student.imagePublicId;
 
-export const searchStudents = async (
-  req,
-  res
-) => {
-  try {
-    const {
-      department,
-      semester,
-      academicYear,
-      registerNumber,
-      batch,
-      batchNumber,
-    } = req.query;
+      // -------------------------------------------------
+      // LINK OLD RECORD IF NECESSARY
+      // -------------------------------------------------
 
-    const filter = {};
+      const linkedUser =
+        await syncStudentUser(
+          student
+        );
 
-    // ------------------------------------------------------
-    // DEPARTMENT
-    // ------------------------------------------------------
+      // -------------------------------------------------
+      // ONLY THESE FIELDS CAN CHANGE
+      // -------------------------------------------------
 
-    if (department) {
-      filter.department =
-        department.toLowerCase();
-    }
+      const allowedFields = [
+        "rollNumber",
+  "registerNumber",
+        "name",
+        "fatherName",
+        "motherName",
+        "dob",
+        "gender",
+        "phone",
+        "parentPhone",
+        "caste",
+        "category",
+        "aadhaarNumber",
+        "satsNumber",
+        "department",
+        "admissionYear",
+        "batch",
+        "batchNumber",
+        "admissionType",
+        "semester",
+        "status",
+      ];
 
-    // ------------------------------------------------------
-    // REGISTER NUMBER
-    // ------------------------------------------------------
+      for (
+        const field of allowedFields
+      ) {
+        if (
+          req.body[field] !==
+          undefined
+        ) {
+          student[field] =
+            req.body[field];
+        }
+      }
 
-    if (registerNumber) {
-      filter.registerNumber =
-        registerNumber
+      // -------------------------------------------------
+      // NORMALIZE
+      // -------------------------------------------------
+
+      student.name =
+        String(
+          student.name || ""
+        ).trim();
+
+      student.fatherName =
+        String(
+          student.fatherName ||
+            ""
+        ).trim();
+
+      student.motherName =
+        String(
+          student.motherName ||
+            ""
+        ).trim();
+
+      student.phone =
+        String(
+          student.phone || ""
+        ).trim();
+
+      student.parentPhone =
+        String(
+          student.parentPhone ||
+            ""
+        ).trim();
+
+      student.department =
+        String(
+          student.department ||
+            ""
+        )
           .trim()
-          .toUpperCase();
-    }
+          .toLowerCase();
 
-    // ------------------------------------------------------
-    // ACADEMIC BATCH
-    // ------------------------------------------------------
+      student.gender =
+        String(
+          student.gender ||
+            ""
+        )
+          .trim()
+          .toLowerCase();
 
-    if (batch) {
-      filter.batch =
-        batch.trim();
-    }
+      student.rollNumber =
+        String(
+          student.rollNumber ||
+            ""
+        ).trim();
 
-    // ------------------------------------------------------
-    // BATCH NUMBER
-    // ------------------------------------------------------
+      student.batch =
+        String(
+          student.batch ||
+            ""
+        ).trim();
 
-    if (
-      batchNumber !== undefined &&
-      batchNumber !== null &&
-      batchNumber !== ""
-    ) {
-      const parsedBatchNumber =
-        Number(batchNumber);
+      student.admissionYear =
+        Number(
+          student.admissionYear
+        );
+
+      student.batchNumber =
+        Number(
+          student.batchNumber
+        );
+
+      student.semester =
+        Number(
+          student.semester
+        );
+
+      student.admissionType =
+        String(
+          student.admissionType ||
+            ""
+        ).trim();
+
+      student.status =
+        String(
+          student.status ||
+            "active"
+        )
+          .trim()
+          .toLowerCase();
+
+      // -------------------------------------------------
+      // DATE
+      // -------------------------------------------------
 
       if (
-        !Number.isInteger(
-          parsedBatchNumber
-        ) ||
-        ![1, 2].includes(
-          parsedBatchNumber
+        req.body.dob !==
+        undefined
+      ) {
+        const newDob =
+          new Date(
+            req.body.dob
+          );
+
+        if (
+          Number.isNaN(
+            newDob.getTime()
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Invalid date of birth.",
+          });
+        }
+
+        student.dob =
+          newDob;
+      }
+
+      // -------------------------------------------------
+      // GENDER
+      // -------------------------------------------------
+
+      if (
+        ![
+          "male",
+          "female",
+          "other",
+        ].includes(
+          student.gender
         )
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "Invalid batch number. Batch number must be 1 or 2",
+            "Invalid gender.",
         });
       }
 
-      filter.batchNumber =
-        parsedBatchNumber;
-    }
+      // -------------------------------------------------
+      // DEPARTMENT
+      // -------------------------------------------------
 
-    // ------------------------------------------------------
-    // SEMESTER FILTER
-    // ------------------------------------------------------
-
-    if (
-      semester ||
-      academicYear
-    ) {
-      const semesterFilter = {
-        status: "CURRENT",
-      };
-
-      if (semester) {
-        semesterFilter.semester =
-          Number(semester);
-      }
-
-      if (academicYear) {
-        semesterFilter.academicYear =
-          academicYear;
-      }
-
-      const records =
-        await StudentSemester.find(
-          semesterFilter
-        ).select("studentId");
-
-      filter._id = {
-        $in: records.map(
-          (record) =>
-            record.studentId
-        ),
-      };
-    }
-
-    // ------------------------------------------------------
-    // FETCH STUDENTS
-    // ------------------------------------------------------
-
-    const students =
-      await Student.find(filter)
-        .select(
-          "name registerNumber department admissionYear batch batchNumber _id clerkId imageUrl"
+      if (
+        !VALID_DEPARTMENTS.includes(
+          student.department
         )
-        .sort({
-          registerNumber: 1,
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Invalid department: ${student.department}`,
         });
+      }
 
-    return res.json({
-      success: true,
-      data: students,
-    });
+      // -------------------------------------------------
+      // ADMISSION YEAR
+      // -------------------------------------------------
 
-  } catch (err) {
+      if (
+        !Number.isInteger(
+          student.admissionYear
+        ) ||
+        student.admissionYear <=
+          0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid admission year.",
+        });
+      }
 
-    console.error(
-      "SearchStudents Error:",
-      err
-    );
+      // -------------------------------------------------
+      // BATCH NUMBER
+      // -------------------------------------------------
 
-    return res.status(500).json({
+      if (
+        ![
+          1,
+          2,
+        ].includes(
+          student.batchNumber
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Batch number must be either 1 or 2.",
+        });
+      }
+
+      // -------------------------------------------------
+      // SEMESTER
+      // -------------------------------------------------
+
+      if (
+        !Number.isInteger(
+          student.semester
+        ) ||
+        student.semester <
+          1 ||
+        student.semester >
+          6
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Semester must be between 1 and 6.",
+        });
+      }
+
+
+      // -----------------------------------------
+// REGISTER NUMBER
+// -----------------------------------------
+// Register number can be changed, but it must
+// remain unique.
+if (req.body.registerNumber !== undefined) {
+  const newRegisterNumber = String(
+    req.body.registerNumber
+  )
+    .trim()
+    .toUpperCase();
+
+  if (!newRegisterNumber) {
+    return res.status(400).json({
       success: false,
-      message:
-        "Failed to search students",
-      error:
-        err.message,
+      message: "Register number is required.",
     });
   }
-};
+
+  const existingStudent =
+    await Student.findOne({
+      registerNumber: newRegisterNumber,
+      _id: { $ne: id },
+    });
+
+  if (existingStudent) {
+    return res.status(409).json({
+      success: false,
+      message:
+        "This register number is already assigned to another student.",
+    });
+  }
+
+  student.registerNumber = newRegisterNumber;
+}
+
+      // -------------------------------------------------
+      // ADMISSION TYPE
+      // -------------------------------------------------
+
+      if (
+        !VALID_ADMISSION_TYPES.includes(
+          student.admissionType
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid admission type.",
+        });
+      }
+
+      // -------------------------------------------------
+      // STATUS
+      // -------------------------------------------------
+
+      if (
+        !VALID_STATUSES.includes(
+          student.status
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid student status.",
+        });
+      }
+
+      // -------------------------------------------------
+      // PHONE
+      // -------------------------------------------------
+
+      if (
+        !/^\d{10}$/.test(
+          student.phone
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Student phone number must contain exactly 10 digits.",
+        });
+      }
+
+      // -------------------------------------------------
+      // PARENT PHONE
+      // -------------------------------------------------
+
+      if (
+        student.parentPhone &&
+        !/^\d{10}$/.test(
+          student.parentPhone
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Parent phone number must contain exactly 10 digits.",
+        });
+      }
+
+      // -------------------------------------------------
+      // AADHAAR
+      // -------------------------------------------------
+
+      student.aadhaarNumber =
+        String(
+          student.aadhaarNumber ||
+            ""
+        ).trim();
+
+      if (
+        student.aadhaarNumber &&
+        !/^\d{12}$/.test(
+          student.aadhaarNumber
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Aadhaar number must contain exactly 12 digits.",
+        });
+      }
+
+      // -------------------------------------------------
+      // PHOTO
+      // -------------------------------------------------
+
+      if (
+        req.cloudinaryResult
+      ) {
+        student.imageUrl =
+          req.cloudinaryResult
+            .secure_url;
+
+        student.imagePublicId =
+          req.cloudinaryResult
+            .public_id;
+      }
+
+      // -------------------------------------------------
+      // SAVE STUDENT
+      // -------------------------------------------------
+
+      await student.save();
+
+      // -------------------------------------------------
+      // UPDATE MONGODB USER
+      // -------------------------------------------------
+
+      if (linkedUser) {
+        linkedUser.name =
+          student.name;
+
+        linkedUser.phone =
+          student.phone;
+
+        linkedUser.department =
+          student.department;
+
+        linkedUser.role =
+          "student";
+
+        if (
+          req.cloudinaryResult
+        ) {
+          linkedUser.imageUrl =
+            student.imageUrl;
+
+          linkedUser.imagePublicId =
+            student.imagePublicId;
+        }
+
+        await linkedUser.save();
+      }
+
+      // -------------------------------------------------
+      // DELETE OLD PHOTO
+      // -------------------------------------------------
+
+      if (
+        req.cloudinaryResult
+          ?.public_id &&
+        oldImagePublicId &&
+        oldImagePublicId !==
+          req.cloudinaryResult
+            .public_id
+      ) {
+        await deleteCloudinarySafely(
+          oldImagePublicId
+        );
+      }
+
+      // -------------------------------------------------
+      // UPDATE CLERK
+      // -------------------------------------------------
+
+      if (
+        student.clerkId
+      ) {
+        try {
+          await clerkClient.users.updateUser(
+            student.clerkId,
+            {
+              firstName:
+                student.name,
+
+              publicMetadata: {
+                role:
+                  "student",
+
+                department:
+                  student.department,
+
+                registerNumber:
+                  student.registerNumber,
+              },
+            }
+          );
+        } catch (
+          clerkError
+        ) {
+          console.error(
+            "Clerk update warning:",
+            clerkError
+          );
+        }
+      }
+
+      // -------------------------------------------------
+      // SUCCESS
+      // -------------------------------------------------
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Student updated successfully.",
+        data:
+          student,
+      });
+
+    } catch (error) {
+      console.error(
+        "Update student error:",
+        error
+      );
+
+      if (
+        error?.code ===
+        11000
+      ) {
+        const duplicateField =
+          Object.keys(
+            error.keyPattern ||
+              {}
+          )[0];
+
+        return res.status(409).json({
+          success: false,
+          message:
+            `A student with this ${duplicateField} already exists.`,
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Server error while updating student.",
+        error:
+          error.message,
+      });
+    }
+  };
+
+// =====================================================
+// DELETE STUDENT
+// DELETE /api/students/:id
+//
+// Deletes:
+// 1. Student MongoDB document
+// 2. MongoDB User document
+// 3. Clerk account
+// 4. Cloudinary image
+// =====================================================
+
+export const deleteStudent =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      const {
+        id,
+      } = req.params;
+
+      // -------------------------------------------------
+      // FIND STUDENT
+      // -------------------------------------------------
+
+      const student =
+        await Student.findById(
+          id
+        );
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Student not found.",
+        });
+      }
+
+      const clerkId =
+        student.clerkId;
+
+      const userId =
+        student.userId;
+
+      const imagePublicId =
+        student.imagePublicId;
+
+      console.log(
+        "=========================================="
+      );
+
+      console.log(
+        "DELETE STUDENT"
+      );
+
+      console.log(
+        "Student Mongo ID:",
+        student._id
+      );
+
+      console.log(
+        "User Mongo ID:",
+        userId || "N/A"
+      );
+
+      console.log(
+        "Clerk ID:",
+        clerkId || "N/A"
+      );
+
+      console.log(
+        "Image Public ID:",
+        imagePublicId || "N/A"
+      );
+
+      console.log(
+        "=========================================="
+      );
+
+      // -------------------------------------------------
+      // DELETE CLERK FIRST
+      // -------------------------------------------------
+
+      if (clerkId) {
+        try {
+          await deleteClerkSafely(
+            clerkId
+          );
+        } catch (
+          clerkError
+        ) {
+          console.error(
+            "Clerk deletion failed:",
+            clerkError
+          );
+
+          return res.status(500).json({
+            success: false,
+            message:
+              "Failed to delete Clerk account. Student was not removed from MongoDB.",
+            error:
+              clerkError?.message ||
+              "Clerk deletion failed.",
+          });
+        }
+      }
+
+      // -------------------------------------------------
+      // DELETE CLOUDINARY
+      // -------------------------------------------------
+
+      if (
+        imagePublicId
+      ) {
+        await deleteCloudinarySafely(
+          imagePublicId
+        );
+      }
+
+      // -------------------------------------------------
+      // DELETE STUDENT
+      // -------------------------------------------------
+
+      await Student.findByIdAndDelete(
+        id
+      );
+
+      // -------------------------------------------------
+      // DELETE MONGODB USER
+      // -------------------------------------------------
+
+      const deletedUser =
+        await deleteMongoUserSafely({
+          userId,
+          clerkId,
+        });
+
+      // -------------------------------------------------
+      // SUCCESS
+      // -------------------------------------------------
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          "Student, User, Clerk account and associated image cleanup completed successfully.",
+
+        data: {
+          studentMongoId:
+            id,
+
+          userMongoId:
+            userId || null,
+
+          clerkId:
+            clerkId || null,
+
+          studentDeleted:
+            true,
+
+          userDeleted:
+            !!deletedUser,
+
+          cloudinaryDeleted:
+            !!imagePublicId,
+
+          clerkDeleted:
+            !!clerkId,
+        },
+      });
+
+    } catch (error) {
+      console.error(
+        "Delete student error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Server error while deleting student.",
+        error:
+          error.message,
+      });
+    }
+  };
+
+// =====================================================
+// UPDATE STUDENT STATUS
+// PATCH /api/students/:id/status
+// =====================================================
+
+export const updateStudentStatus =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      const {
+        id,
+      } = req.params;
+
+      const {
+        status,
+      } = req.body;
+
+      // -------------------------------------------------
+      // VALIDATE STATUS
+      // -------------------------------------------------
+
+      if (
+        !VALID_STATUSES.includes(
+          status
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid student status.",
+        });
+      }
+
+      // -------------------------------------------------
+      // FIND STUDENT
+      // -------------------------------------------------
+
+      const student =
+        await Student.findById(
+          id
+        );
+
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Student not found.",
+        });
+      }
+
+      // -------------------------------------------------
+      // LINK OLD USER IF NECESSARY
+      // -------------------------------------------------
+
+      await syncStudentUser(
+        student
+      );
+
+      // -------------------------------------------------
+      // UPDATE STATUS
+      // -------------------------------------------------
+
+      student.status =
+        status;
+
+      await student.save();
+
+      return res.status(200).json({
+        success: true,
+        message:
+          "Student status updated successfully.",
+        data:
+          student,
+      });
+
+    } catch (error) {
+      console.error(
+        "Update status error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Server error while updating status.",
+        error:
+          error.message,
+      });
+    }
+  };
+
+// =====================================================
+// DELETE MULTIPLE STUDENTS
+// DELETE /api/students/bulk-delete
+//
+// Deletes:
+// 1. Student MongoDB records
+// 2. User MongoDB records
+// 3. Clerk accounts
+// 4. Cloudinary images
+// =====================================================
+
+export const deleteMultipleStudents =
+  async (
+    req,
+    res
+  ) => {
+    try {
+      const {
+        ids,
+      } = req.body;
+
+      // -------------------------------------------------
+      // VALIDATION
+      // -------------------------------------------------
+
+      if (
+        !Array.isArray(
+          ids
+        ) ||
+        ids.length ===
+          0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No students selected.",
+        });
+      }
+
+      // -------------------------------------------------
+      // FIND STUDENTS
+      // -------------------------------------------------
+
+      const students =
+        await Student.find({
+          _id: {
+            $in: ids,
+          },
+        });
+
+      if (
+        !students.length
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "No students found.",
+        });
+      }
+
+      let clerkDeletedCount =
+        0;
+
+      let userDeletedCount =
+        0;
+
+      let cloudinaryDeletedCount =
+        0;
+
+      let studentDeletedCount =
+        0;
+
+      // -------------------------------------------------
+      // PROCESS EACH STUDENT
+      // -------------------------------------------------
+
+      for (
+        const student of students
+      ) {
+        // =============================================
+        // CLERK
+        // =============================================
+
+        if (
+          student.clerkId
+        ) {
+          try {
+            await deleteClerkSafely(
+              student.clerkId
+            );
+
+            clerkDeletedCount++;
+
+          } catch (
+            error
+          ) {
+            console.error(
+              `Failed to delete Clerk user ${student.clerkId}:`,
+              error
+            );
+          }
+        }
+
+        // =============================================
+        // CLOUDINARY
+        // =============================================
+
+        if (
+          student.imagePublicId
+        ) {
+          const deleted =
+            await deleteCloudinarySafely(
+              student.imagePublicId
+            );
+
+          if (deleted) {
+            cloudinaryDeletedCount++;
+          }
+        }
+
+        // =============================================
+        // MONGODB USER
+        // =============================================
+
+        if (
+          student.userId ||
+          student.clerkId
+        ) {
+          try {
+            const deletedUser =
+              await deleteMongoUserSafely({
+                userId:
+                  student.userId,
+
+                clerkId:
+                  student.clerkId,
+              });
+
+            if (
+              deletedUser
+            ) {
+              userDeletedCount++;
+
+              console.log(
+                `User MongoDB record deleted: ${deletedUser._id}`
+              );
+            }
+
+          } catch (
+            error
+          ) {
+            console.error(
+              `Failed to delete User MongoDB record for ${student.clerkId}:`,
+              error
+            );
+          }
+        }
+
+        // =============================================
+        // STUDENT MONGODB
+        // =============================================
+
+        try {
+          await Student.findByIdAndDelete(
+            student._id
+          );
+
+          studentDeletedCount++;
+
+        } catch (
+          error
+        ) {
+          console.error(
+            `Failed to delete Student ${student._id}:`,
+            error
+          );
+        }
+      }
+
+      // -------------------------------------------------
+      // RESPONSE
+      // -------------------------------------------------
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          `${studentDeletedCount} student(s) deleted successfully.`,
+
+        deletedCount:
+          studentDeletedCount,
+
+        details: {
+          studentsDeleted:
+            studentDeletedCount,
+
+          usersDeleted:
+            userDeletedCount,
+
+          clerkUsersDeleted:
+            clerkDeletedCount,
+
+          cloudinaryImagesDeleted:
+            cloudinaryDeletedCount,
+        },
+      });
+
+    } catch (error) {
+      console.error(
+        "Bulk delete students error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to delete selected students.",
+        error:
+          error.message,
+      });
+    }
+  };
