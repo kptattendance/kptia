@@ -1,3 +1,4 @@
+import RoleGuard from "../components/RoleGuard";
 import HODSidebar from "./components/HODSidebar";
 
 export default function HODLayout({ children }) {
@@ -6,7 +7,9 @@ export default function HODLayout({ children }) {
       <HODSidebar />
 
       <main className="min-h-screen pt-16 lg:ml-72 lg:pt-0">
-        {children}
+        <RoleGuard allowedRoles={["hod"]}>
+          {children}
+        </RoleGuard>
       </main>
     </div>
   );

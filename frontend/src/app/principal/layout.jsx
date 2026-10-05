@@ -1,3 +1,4 @@
+import RoleGuard from "../components/RoleGuard";
 import PrincipalSidebar from "./components/PrincipalSidebar";
 
 export default function PrincipalLayout({ children }) {
@@ -6,7 +7,10 @@ export default function PrincipalLayout({ children }) {
       <PrincipalSidebar />
 
       <main className="ml-72 min-h-screen">
+            <RoleGuard allowedRoles={["principal"]}>
+
         {children}
+            </RoleGuard>
       </main>
     </div>
   );

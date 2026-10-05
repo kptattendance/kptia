@@ -1,3 +1,4 @@
+import RoleGuard from "../components/RoleGuard";
 import StudentSidebar from "./components/StudentSidebar";
 
 export default function StudentLayout({ children }) {
@@ -6,7 +7,10 @@ export default function StudentLayout({ children }) {
       <StudentSidebar />
 
       <main className="ml-72 min-h-screen">
+            <RoleGuard allowedRoles={["student"]}>
+
         {children}
+            </RoleGuard>
       </main>
     </div>
   );

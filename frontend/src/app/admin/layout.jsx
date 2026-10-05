@@ -30,7 +30,7 @@ export default function AdminLayout({ children }) {
         const user = response.data?.data;
 
         if (user?.role !== "admin") {
-          router.replace("/");
+          router.replace("/access-denied");
           return;
         }
 

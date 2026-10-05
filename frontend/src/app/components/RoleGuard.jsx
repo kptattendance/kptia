@@ -5,26 +5,21 @@ import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export default function RoleGuard({
-  allowedRoles = [],
-  children,
-}) {
+export default function RoleGuard({ allowedRoles, children }) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const router = useRouter();
 
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    if (!isLoaded) {
-      return;
-    }
+    if (!isLoaded) return;
 
     if (!isSignedIn) {
       router.replace("/");
       return;
     }
 
-    const verifyRole = async () => {
+    const checkRole = async () => {
       try {
         const token = await getToken();
 
@@ -45,41 +40,32 @@ export default function RoleGuard({
         const user = response.data?.data;
 
         if (!user) {
-          router.replace("/access-denied");
+          router.replace("/");
           return;
         }
 
-        const userRole = String(user.role || "")
+        const role = String(user.role || "")
           .trim()
           .toLowerCase();
 
-        const permittedRoles = allowedRoles.map((role) =>
-          String(role).trim().toLowerCase()
+        const roles = allowedRoles.map((item) =>
+          String(item).trim().toLowerCase()
         );
 
-        // ==========================================
-        // ROLE CHECK
-        // ==========================================
-        if (!permittedRoles.includes(userRole)) {
-          router.replace("/access-denied");
+        if (!roles.includes(role)) {
+          // User is logged in but does not have permission
+          router.replace("/auth-check");
           return;
         }
 
-        // ==========================================
-        // ACCESS ALLOWED
-        // ==========================================
         setChecking(false);
       } catch (error) {
-        console.error(
-          "Role verification failed:",
-          error
-        );
-
-        router.replace("/access-denied");
+        console.error("Role verification failed:", error);
+        router.replace("/");
       }
     };
 
-    verifyRole();
+    checkRole();
   }, [
     isLoaded,
     isSignedIn,
@@ -88,16 +74,13 @@ export default function RoleGuard({
     allowedRoles,
   ]);
 
-  // ==========================================
-  // WHILE CHECKING
-  // ==========================================
   if (!isLoaded || checking) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-black" />
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-black" />
 
-          <p className="mt-4 text-sm text-gray-500">
+          <p className="text-sm text-gray-600">
             Verifying access...
           </p>
         </div>

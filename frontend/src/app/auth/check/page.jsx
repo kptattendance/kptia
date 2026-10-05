@@ -84,7 +84,7 @@ switch (user.role) {
   default:
     setMessage("Your account has an invalid role.");
     await signOut();
-    setTimeout(() => router.replace("/"), 1500);
+    setTimeout(() => router.replace("/access-denied"), 1500);
 }
       } catch (error) {
         console.error(
@@ -109,7 +109,7 @@ switch (user.role) {
         await signOut();
 
         setTimeout(() => {
-          router.replace("/");
+          router.replace("/access-denied");
         }, 2000);
       }
     };
