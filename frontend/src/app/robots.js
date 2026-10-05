@@ -7,8 +7,8 @@ export default function robots() {
         userAgent: "*",
         allow: "/",
         disallow: [
-          "/dashboard/",
           "/admin/",
+          "/dashboard/",
           "/hod/",
           "/principal/",
           "/coe/",
@@ -17,7 +17,6 @@ export default function robots() {
         ],
       },
     ],
-
     sitemap: `${baseUrl}/sitemap.xml`,
   };
 }

@@ -1132,6 +1132,7 @@ useEffect(() => {
 
   const [searchText, setSearchText] =
     useState("");
+    const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
 
   // =====================================================
   // YEARS
@@ -2466,17 +2467,25 @@ const students = useMemo(() => {
                               style={{ width: "256px", minWidth: "256px" }}
                             >
                               <div className="flex items-center gap-3">
-                                {student.imageUrl ? (
-                                  <img
-                                    src={student.imageUrl}
-                                    alt=""
-                                    className="h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-white shadow-sm"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = "none";
-                                      e.currentTarget.nextElementSibling?.classList.remove("hidden");
-                                    }}
-                                  />
-                                ) : null}
+                              
+                                  {student.imageUrl ? (
+  <img
+    src={student.imageUrl}
+    alt={student.name || "Student"}
+    className="h-10 w-10 shrink-0 cursor-pointer rounded-full object-cover ring-2 ring-white shadow-sm transition hover:scale-110 hover:ring-2 hover:ring-blue-400"
+    onClick={() => {
+      setSelectedStudentPhoto({
+        imageUrl: student.imageUrl,
+        name: student.name || "Student",
+        registerNumber: student.registerNumber || "",
+      });
+    }}
+    onError={(e) => {
+      e.currentTarget.style.display = "none";
+      e.currentTarget.nextElementSibling?.classList.remove("hidden");
+    }}
+  />
+) : null}
 
                                 <div
                                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 ${
@@ -2641,7 +2650,52 @@ const students = useMemo(() => {
           ))}
 
       </div>
+{/* =====================================================
+    STUDENT PHOTO PREVIEW
+===================================================== */}
+{selectedStudentPhoto && (
+  <div
+    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+    onClick={() => setSelectedStudentPhoto(null)}
+  >
+    <div
+      className="relative flex max-h-[95vh] max-w-[95vw] flex-col items-center"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* CLOSE BUTTON */}
+      <button
+        type="button"
+        onClick={() => setSelectedStudentPhoto(null)}
+        className="absolute right-2 top-2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-2xl font-bold text-slate-700 shadow-lg transition hover:bg-slate-100 hover:text-red-600"
+        aria-label="Close photo"
+      >
+        ×
+      </button>
 
+      {/* LARGE PHOTO */}
+      <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
+        <img
+          src={selectedStudentPhoto.imageUrl}
+          alt={selectedStudentPhoto.name}
+          className="max-h-[75vh] max-w-[90vw] rounded-xl object-contain"
+        />
+      </div>
+
+      {/* STUDENT DETAILS */}
+      <div className="mt-3 rounded-xl bg-white px-5 py-3 text-center shadow-lg">
+        <p className="text-sm font-bold text-slate-900">
+          {selectedStudentPhoto.name}
+        </p>
+
+        {selectedStudentPhoto.registerNumber && (
+          <p className="mt-1 text-xs font-medium text-slate-500">
+            {selectedStudentPhoto.registerNumber}
+          </p>
+        )}
+      </div>
+    </div>
+  </div>
+)}
     </div>
   );
 }

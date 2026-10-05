@@ -1776,6 +1776,8 @@ setStudents(departmentStudents);
 
 /* =========================================================
    HOD ADD STUDENT
+   Same logic and fields as ADMIN ADD STUDENT
+   Department is locked to HOD's department
 ========================================================= */
 
 function HODAddStudent({
@@ -1786,22 +1788,36 @@ function HODAddStudent({
   const { getToken } = useAuth();
 
   const [form, setForm] = useState({
+    rollNumber: "",
     registerNumber: "",
     name: "",
+    fatherName: "",
+    motherName: "",
+    dob: "",
     gender: "",
     email: "",
     phone: "",
+    parentPhone: "",
+    caste: "",
+    category: "",
+    aadhaarNumber: "",
+    satsNumber: "",
     admissionYear: "",
-    semester: "",
     batch: "",
     batchNumber: "",
+    admissionType: "",
+    semester: "",
+    status: "active",
   });
 
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState("");
-
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  /* =========================================================
+     HANDLE CHANGE
+  ========================================================= */
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -1811,6 +1827,10 @@ function HODAddStudent({
       [name]: value,
     }));
   };
+
+  /* =========================================================
+     IMAGE
+  ========================================================= */
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -1823,9 +1843,7 @@ function HODAddStudent({
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setError(
-        "Image size must be less than 5 MB."
-      );
+      setError("Image size must be less than 5 MB.");
       return;
     }
 
@@ -1839,47 +1857,113 @@ function HODAddStudent({
     setPreview("");
   };
 
+  /* =========================================================
+     SUBMIT
+  ========================================================= */
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     setError("");
 
-    // ==========================================
-    // REQUIRED FIELD VALIDATION
-    // ==========================================
+    /* =======================================================
+       REQUIRED FIELD VALIDATION
+    ======================================================= */
 
     if (
+      !form.rollNumber.trim() ||
       !form.registerNumber.trim() ||
       !form.name.trim() ||
+      !form.fatherName.trim() ||
+      !form.motherName.trim() ||
+      !form.dob ||
       !form.gender ||
       !form.email.trim() ||
       !form.phone.trim() ||
       !department ||
       !form.admissionYear ||
-      !form.semester ||
       !form.batch.trim() ||
-      !form.batchNumber
+      !form.batchNumber ||
+      !form.admissionType ||
+      !form.semester
     ) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+
+    /* =======================================================
+       GENDER VALIDATION
+    ======================================================= */
+
+    if (
+      !["male", "female", "other"].includes(form.gender)
+    ) {
+      setError("Please select a valid gender.");
+      return;
+    }
+
+    /* =======================================================
+       PHONE VALIDATION
+    ======================================================= */
+
+    if (!/^\d{10}$/.test(form.phone.trim())) {
       setError(
-        "Please fill in all required fields."
+        "Student phone number must contain exactly 10 digits."
       );
       return;
     }
 
-    // ==========================================
-    // GENDER VALIDATION
-    // ==========================================
+    /* =======================================================
+       PARENT PHONE VALIDATION
+    ======================================================= */
 
-    const validGenders = [
-      "male",
-      "female",
-      "other",
-    ];
-
-    if (!validGenders.includes(form.gender)) {
+    if (
+      form.parentPhone.trim() &&
+      !/^\d{10}$/.test(form.parentPhone.trim())
+    ) {
       setError(
-        "Please select a valid gender."
+        "Parent phone number must contain exactly 10 digits."
       );
+      return;
+    }
+
+    /* =======================================================
+       AADHAAR VALIDATION
+    ======================================================= */
+
+    if (
+      form.aadhaarNumber.trim() &&
+      !/^\d{12}$/.test(form.aadhaarNumber.trim())
+    ) {
+      setError(
+        "Aadhaar number must contain exactly 12 digits."
+      );
+      return;
+    }
+
+    /* =======================================================
+       BATCH NUMBER VALIDATION
+    ======================================================= */
+
+    if (
+      !["1", "2"].includes(
+        String(form.batchNumber)
+      )
+    ) {
+      setError("Batch number must be either 1 or 2.");
+      return;
+    }
+
+    /* =======================================================
+       SEMESTER VALIDATION
+    ======================================================= */
+
+    if (
+      ![1, 2, 3, 4, 5, 6].includes(
+        Number(form.semester)
+      )
+    ) {
+      setError("Semester must be between 1 and 6.");
       return;
     }
 
@@ -1890,34 +1974,100 @@ function HODAddStudent({
 
       const formData = new FormData();
 
+      /* =====================================================
+         BASIC INFORMATION
+      ===================================================== */
+
+      formData.append(
+        "rollNumber",
+        form.rollNumber.trim()
+      );
+
       formData.append(
         "registerNumber",
-        form.registerNumber
-          .trim()
-          .toUpperCase()
+        form.registerNumber.trim()
       );
 
       formData.append(
         "name",
-        form.name.trim().toUpperCase()
+        form.name.trim()
       );
 
-      // IMPORTANT:
-      // Gender is required by backend.
+      formData.append(
+        "fatherName",
+        form.fatherName.trim()
+      );
+
+      formData.append(
+        "motherName",
+        form.motherName.trim()
+      );
+
+      formData.append(
+        "dob",
+        form.dob
+      );
+
       formData.append(
         "gender",
-        form.gender.trim().toLowerCase()
+        form.gender
       );
 
-     
+      /* =====================================================
+         CONTACT INFORMATION
+      ===================================================== */
+
+      formData.append(
+        "email",
+        form.email.trim().toLowerCase()
+      );
 
       formData.append(
         "phone",
         form.phone.trim()
       );
 
-      // IMPORTANT:
-      // HOD's department only.
+      formData.append(
+        "parentPhone",
+        form.parentPhone.trim()
+      );
+
+      /* =====================================================
+         SOCIAL / RESERVATION INFORMATION
+      ===================================================== */
+
+      formData.append(
+        "caste",
+        form.caste.trim()
+      );
+
+      formData.append(
+        "category",
+        form.category.trim()
+      );
+
+      /* =====================================================
+         GOVERNMENT / IDENTIFICATION
+      ===================================================== */
+
+      formData.append(
+        "aadhaarNumber",
+        form.aadhaarNumber.trim()
+      );
+
+      formData.append(
+        "satsNumber",
+        form.satsNumber.trim()
+      );
+
+      /* =====================================================
+         ACADEMIC INFORMATION
+
+         IMPORTANT:
+         HOD cannot select/change department.
+         The logged-in HOD's department is always submitted.
+      ===================================================== */
+
       formData.append(
         "department",
         department
@@ -1926,11 +2076,6 @@ function HODAddStudent({
       formData.append(
         "admissionYear",
         form.admissionYear
-      );
-
-      formData.append(
-        "semester",
-        form.semester
       );
 
       formData.append(
@@ -1943,13 +2088,39 @@ function HODAddStudent({
         form.batchNumber
       );
 
-      // Batch number is not currently present
-      // in this HOD form, so backend should
-      // handle it according to existing logic.
+      formData.append(
+        "admissionType",
+        form.admissionType
+      );
+
+      formData.append(
+        "semester",
+        form.semester
+      );
+
+      /* =====================================================
+         STATUS
+      ===================================================== */
+
+      formData.append(
+        "status",
+        form.status
+      );
+
+      /* =====================================================
+         PHOTO
+      ===================================================== */
 
       if (image) {
-        formData.append("image", image);
+        formData.append(
+          "image",
+          image
+        );
       }
+
+      /* =====================================================
+         SUBMIT
+      ===================================================== */
 
       await axios.post(
         `${API_URL}/api/students`,
@@ -1973,41 +2144,46 @@ function HODAddStudent({
         err.response?.data?.message ||
           "Failed to add student."
       );
+
     } finally {
       setSaving(false);
     }
   };
 
+  /* =========================================================
+     UI
+  ========================================================= */
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+      className="rounded-2xl border border-slate-200 bg-white shadow-sm"
     >
-
-      {/* HEADER */}
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
       <div className="border-b border-slate-100 px-6 py-5">
-
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-          Department Students
-        </p>
-
-        <h2 className="mt-1 text-lg font-semibold text-slate-900">
-          Add Student
+        <h2 className="text-base font-semibold text-slate-900">
+          Student Information
         </h2>
 
         <p className="mt-1 text-sm text-slate-500">
-          Enter the student's academic and contact details.
+          Enter the student's academic and personal details.
         </p>
-
       </div>
+
+      {/* =====================================================
+          FORM
+      ===================================================== */}
 
       <div className="space-y-7 p-6">
 
-        {/* PHOTO */}
+        {/* ===================================================
+            PHOTO
+        =================================================== */}
 
         <div>
-
           <label className="text-sm font-medium text-slate-700">
             Student Photo
             <span className="ml-1 text-xs font-normal text-slate-400">
@@ -2017,25 +2193,34 @@ function HODAddStudent({
 
           <div className="mt-3 flex items-center gap-5">
 
-            {preview ? (
-
-              <img
-                src={preview}
-                alt="Student preview"
-                className="h-20 w-20 rounded-2xl object-cover ring-1 ring-slate-200"
-              />
-
-            ) : (
-
-              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-                👤
-              </div>
-
-            )}
+            <div className="relative">
+              {preview ? (
+                <img
+                  src={preview}
+                  alt="Student preview"
+                  className="h-24 w-24 rounded-2xl object-cover ring-1 ring-slate-200"
+                />
+              ) : (
+                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-slate-100 ring-1 ring-slate-200">
+                  <svg
+                    className="h-9 w-9 text-slate-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                      d="M15 19a4 4 0 0 0-6 0m3-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 8v-2a4 4 0 0 0-3-3.87M18 3.13a3 3 0 0 1 0 5.74"
+                    />
+                  </svg>
+                </div>
+              )}
+            </div>
 
             <div>
-
-              <label className="inline-flex cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <label className="inline-flex cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
                 Choose Photo
 
                 <input
@@ -2050,7 +2235,7 @@ function HODAddStudent({
                 <button
                   type="button"
                   onClick={removeImage}
-                  className="ml-3 text-sm text-red-600 hover:text-red-700"
+                  className="ml-2 text-sm text-red-600 hover:text-red-700"
                 >
                   Remove
                 </button>
@@ -2059,25 +2244,41 @@ function HODAddStudent({
               <p className="mt-2 text-xs text-slate-400">
                 JPG, PNG or WebP. Maximum 5 MB.
               </p>
-
             </div>
-
           </div>
-
         </div>
 
-        {/* BASIC INFORMATION */}
+        {/* ===================================================
+            BASIC INFORMATION
+        =================================================== */}
 
         <div>
-
           <h3 className="mb-4 text-sm font-semibold text-slate-900">
             Basic Information
           </h3>
 
           <div className="grid gap-5 md:grid-cols-2">
 
-            {/* REGISTER NUMBER */}
+            {/* ROLL NUMBER */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Roll Number
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
 
+              <input
+                name="rollNumber"
+                value={form.rollNumber}
+                onChange={handleChange}
+                placeholder="Enter roll number"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+            {/* REGISTER NUMBER */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Register Number
@@ -2090,14 +2291,13 @@ function HODAddStudent({
                 name="registerNumber"
                 value={form.registerNumber}
                 onChange={handleChange}
-                placeholder="e.g. 1KT23CS001"
+                placeholder="e.g. 103CS26001"
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
             </div>
 
-            {/* FULL NAME */}
-
+            {/* NAME */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Full Name
@@ -2112,12 +2312,113 @@ function HODAddStudent({
                 onChange={handleChange}
                 placeholder="Enter student's full name"
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
             </div>
 
-            {/* EMAIL */}
+            {/* FATHER NAME */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Father Name
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
 
+              <input
+                name="fatherName"
+                value={form.fatherName}
+                onChange={handleChange}
+                placeholder="Enter father's name"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+            {/* MOTHER NAME */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Mother Name
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <input
+                name="motherName"
+                value={form.motherName}
+                onChange={handleChange}
+                placeholder="Enter mother's name"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+            {/* DOB */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Date of Birth
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <input
+                type="date"
+                name="dob"
+                value={form.dob}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+            {/* GENDER */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Gender
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <select
+                name="gender"
+                value={form.gender}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select gender
+                </option>
+
+                {genders.map((gender) => (
+                  <option
+                    key={gender.value}
+                    value={gender.value}
+                  >
+                    {gender.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ===================================================
+            CONTACT INFORMATION
+        =================================================== */}
+
+        <div>
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Contact Information
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            {/* EMAIL */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Email
@@ -2133,15 +2434,14 @@ function HODAddStudent({
                 onChange={handleChange}
                 placeholder="student@example.com"
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
             </div>
 
             {/* PHONE */}
-
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
-                Phone
+                Student Phone
                 <span className="ml-1 text-red-500">
                   *
                 </span>
@@ -2152,69 +2452,164 @@ function HODAddStudent({
                 name="phone"
                 value={form.phone}
                 onChange={handleChange}
-                placeholder="Enter phone number"
+                placeholder="10 digit mobile number"
+                maxLength="10"
+                inputMode="numeric"
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
             </div>
 
-            {/* GENDER */}
-
+            {/* PARENT PHONE */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
-                Gender
+                Parent / Guardian Phone
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                type="tel"
+                name="parentPhone"
+                value={form.parentPhone}
+                onChange={handleChange}
+                placeholder="10 digit mobile number"
+                maxLength="10"
+                inputMode="numeric"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+          </div>
+        </div>
+
+        {/* ===================================================
+            SOCIAL / RESERVATION INFORMATION
+        =================================================== */}
+
+        <div>
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Social / Reservation Information
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            {/* CASTE */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Caste
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                name="caste"
+                value={form.caste}
+                onChange={handleChange}
+                placeholder="Enter caste"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+            {/* CATEGORY */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Category
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                name="category"
+                value={form.category}
+                onChange={handleChange}
+                placeholder="e.g. GM, SC, ST, OBC"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+          </div>
+        </div>
+
+        {/* ===================================================
+            GOVERNMENT / IDENTIFICATION
+        =================================================== */}
+
+        <div>
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Government / Student Identification
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            {/* AADHAAR */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Aadhaar Number
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                type="text"
+                name="aadhaarNumber"
+                value={form.aadhaarNumber}
+                onChange={handleChange}
+                placeholder="12 digit Aadhaar number"
+                maxLength="12"
+                inputMode="numeric"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+            {/* SATS */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                SATS Number
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (Optional)
+                </span>
+              </label>
+
+              <input
+                type="text"
+                name="satsNumber"
+                value={form.satsNumber}
+                onChange={handleChange}
+                placeholder="Enter SATS number"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
+              />
+            </div>
+
+          </div>
+        </div>
+
+        {/* ===================================================
+            ACADEMIC INFORMATION
+        =================================================== */}
+
+        <div>
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Academic Information
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-3">
+
+            {/* DEPARTMENT - LOCKED */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Department
                 <span className="ml-1 text-red-500">
                   *
                 </span>
               </label>
 
-              <select
-                name="gender"
-                value={form.gender}
-                onChange={handleChange}
-                required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
-              >
-                <option value="">
-                  Select Gender
-                </option>
-
-                {genders.map((gender) => (
-                  <option
-                    key={gender.value}
-                    value={gender.value}
-                  >
-                    {gender.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* ACADEMIC */}
-
-        <div>
-
-          <h3 className="mb-4 text-sm font-semibold text-slate-900">
-            Academic Information
-          </h3>
-
-          <div className="grid gap-5 md:grid-cols-2">
-
-            {/* DEPARTMENT */}
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Department
-              </label>
-
               <div className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-medium text-slate-600">
-                {getDepartmentName(
-                  department
-                )}
+                {getDepartmentName(department)}
               </div>
 
               <p className="mt-1.5 text-xs text-slate-400">
@@ -2222,42 +2617,7 @@ function HODAddStudent({
               </p>
             </div>
 
-            {/* SEMESTER */}
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                Current Semester
-                <span className="ml-1 text-red-500">
-                  *
-                </span>
-              </label>
-
-              <select
-                name="semester"
-                value={form.semester}
-                onChange={handleChange}
-                required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
-              >
-                <option value="">
-                  Select semester
-                </option>
-
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(
-                  (semester) => (
-                    <option
-                      key={semester}
-                      value={semester}
-                    >
-                      Semester {semester}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-
             {/* ADMISSION YEAR */}
-
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Admission Year
@@ -2275,43 +2635,48 @@ function HODAddStudent({
                 min="2000"
                 max="2100"
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
               />
+
+              <p className="mt-1.5 text-xs text-slate-400">
+                Example: 2025
+              </p>
             </div>
 
-            {/* BATCH NUMBER */}
-
+            {/* CURRENT SEMESTER */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
-                Batch Number
+                Current Semester
                 <span className="ml-1 text-red-500">
                   *
                 </span>
               </label>
 
               <select
-                name="batchNumber"
-                value={form.batchNumber}
+                name="semester"
+                value={form.semester}
                 onChange={handleChange}
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
               >
                 <option value="">
-                  Select Batch Number
+                  Select semester
                 </option>
 
-                <option value="1">
-                  Batch 1
-                </option>
-
-                <option value="2">
-                  Batch 2
-                </option>
+                {[1, 2, 3, 4, 5, 6].map(
+                  (semester) => (
+                    <option
+                      key={semester}
+                      value={semester}
+                    >
+                      Semester {semester}
+                    </option>
+                  )
+                )}
               </select>
             </div>
 
             {/* BATCH */}
-
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Batch
@@ -2326,15 +2691,147 @@ function HODAddStudent({
                 onChange={handleChange}
                 placeholder="e.g. 2025-2028"
                 required
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-slate-400 focus:bg-white"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:bg-white"
               />
+
+              <p className="mt-1.5 text-xs text-slate-400">
+                Example: 2025-2028
+              </p>
+            </div>
+
+            {/* BATCH NUMBER */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Batch Number
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <select
+                name="batchNumber"
+                value={form.batchNumber}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select batch
+                </option>
+
+                <option value="1">
+                  Batch 1
+                </option>
+
+                <option value="2">
+                  Batch 2
+                </option>
+              </select>
+
+              <p className="mt-1.5 text-xs text-slate-400">
+                Select Batch 1 or Batch 2
+              </p>
+            </div>
+
+            {/* ADMISSION TYPE */}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Admission Type
+                <span className="ml-1 text-red-500">
+                  *
+                </span>
+              </label>
+
+              <select
+                name="admissionType"
+                value={form.admissionType}
+                onChange={handleChange}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
+              >
+                <option value="">
+                  Select admission type
+                </option>
+
+                <option value="regular">
+                  Regular
+                </option>
+
+                <option value="lateralPUC">
+                  Lateral Entry – PUC
+                </option>
+
+                <option value="lateralITI">
+                  Lateral Entry – ITI
+                </option>
+
+                <option value="lateralCross">
+                  Lateral Entry – Cross
+                </option>
+
+                <option value="workingProfessional">
+                  Working Professional
+                </option>
+              </select>
             </div>
 
           </div>
-
         </div>
 
-        {/* ERROR */}
+        {/* ===================================================
+            STUDENT STATUS
+        =================================================== */}
+
+        <div>
+          <h3 className="mb-4 text-sm font-semibold text-slate-900">
+            Student Status
+          </h3>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">
+                Status
+              </label>
+
+              <select
+                name="status"
+                value={form.status}
+                onChange={handleChange}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-slate-400 focus:bg-white"
+              >
+                <option value="active">
+                  Active
+                </option>
+
+                <option value="inactive">
+                  Inactive
+                </option>
+
+                <option value="passed">
+                  Passed
+                </option>
+
+                <option value="detained">
+                  Detained
+                </option>
+
+                <option value="discontinued">
+                  Discontinued
+                </option>
+
+                <option value="transferred">
+                  Transferred
+                </option>
+              </select>
+            </div>
+
+          </div>
+        </div>
+
+        {/* ===================================================
+            ERROR
+        =================================================== */}
 
         {error && (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
@@ -2346,7 +2843,9 @@ function HODAddStudent({
 
       </div>
 
-      {/* FOOTER */}
+      {/* =====================================================
+          FOOTER
+      ===================================================== */}
 
       <div className="flex items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/50 px-6 py-4">
 
@@ -2354,7 +2853,7 @@ function HODAddStudent({
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Cancel
         </button>
@@ -2362,15 +2861,18 @@ function HODAddStudent({
         <button
           type="submit"
           disabled={saving}
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
+          {saving && (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          )}
+
           {saving
             ? "Adding Student..."
             : "Add Student"}
         </button>
 
       </div>
-
     </form>
   );
 }

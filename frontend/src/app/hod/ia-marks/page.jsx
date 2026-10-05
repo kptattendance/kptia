@@ -1179,7 +1179,52 @@ export default function HODIAMarksPage() {
           )}
 
       </div>
+{/* =====================================================
+    STUDENT PHOTO PREVIEW
+===================================================== */}
+{selectedStudentPhoto && (
+  <div
+    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+    onClick={() => setSelectedStudentPhoto(null)}
+  >
+    <div
+      className="relative flex max-h-[95vh] max-w-[95vw] flex-col items-center"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* CLOSE BUTTON */}
+      <button
+        type="button"
+        onClick={() => setSelectedStudentPhoto(null)}
+        className="absolute right-2 top-2 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-2xl font-bold text-slate-700 shadow-lg transition hover:bg-slate-100 hover:text-red-600"
+        aria-label="Close photo"
+      >
+        ×
+      </button>
 
+      {/* LARGE PHOTO */}
+      <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
+        <img
+          src={selectedStudentPhoto.imageUrl}
+          alt={selectedStudentPhoto.name}
+          className="max-h-[75vh] max-w-[90vw] rounded-xl object-contain"
+        />
+      </div>
+
+      {/* STUDENT DETAILS */}
+      <div className="mt-3 rounded-xl bg-white px-5 py-3 text-center shadow-lg">
+        <p className="text-sm font-bold text-slate-900">
+          {selectedStudentPhoto.name}
+        </p>
+
+        {selectedStudentPhoto.registerNumber && (
+          <p className="mt-1 text-xs font-medium text-slate-500">
+            {selectedStudentPhoto.registerNumber}
+          </p>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
     </div>
   );
