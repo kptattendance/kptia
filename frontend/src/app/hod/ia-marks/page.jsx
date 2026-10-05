@@ -55,7 +55,7 @@ export default function HODIAMarksPage() {
 
   const [error, setError] =
     useState("");
-
+const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
   // ---------------------------------------------------
   // HOD DEPARTMENT
   // ---------------------------------------------------
@@ -1037,32 +1037,28 @@ export default function HODIAMarksPage() {
                 <td className="sticky left-[48px] z-20 w-[60px] min-w-[60px] border-r border-slate-100 bg-white px-1.5 py-2.5 sm:left-[55px] sm:w-[70px] sm:min-w-[70px] sm:px-2">
 
                   <div className="flex justify-center">
-
-                    {student.imageUrl ? (
-
-                      <img
-                        src={student.imageUrl}
-                        alt={
-                          student.name ||
-                          "Student"
-                        }
-                        className="h-9 w-9 rounded-full bg-slate-100 object-cover ring-2 ring-slate-100 sm:h-10 sm:w-10"
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                      />
-
-                    ) : (
-
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 sm:h-10 sm:w-10">
-                        {String(
-                          student.name ||
-                            "S"
-                        )
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-
-                    )}
+{student.imageUrl ? (
+  <img
+    src={student.imageUrl}
+    alt={student.name || "Student"}
+    className="h-9 w-9 cursor-pointer rounded-full bg-slate-100 object-cover ring-2 ring-slate-100 transition hover:scale-110 hover:ring-2 hover:ring-amber-400 sm:h-10 sm:w-10"
+    loading="lazy"
+    referrerPolicy="no-referrer"
+    onClick={() => {
+      setSelectedStudentPhoto({
+        imageUrl: student.imageUrl,
+        name: student.name || "Student",
+        registerNumber: student.registerNumber || "",
+      });
+    }}
+  />
+) : (
+  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 sm:h-10 sm:w-10">
+    {String(student.name || "S")
+      .charAt(0)
+      .toUpperCase()}
+  </div>
+)}
 
                   </div>
 

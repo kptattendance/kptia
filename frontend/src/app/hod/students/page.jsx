@@ -63,6 +63,7 @@ export default function HODStudentsPage() {
   // Photo
   const photoInputRef = useRef(null);
   const [photoStudent, setPhotoStudent] = useState(null);
+const [previewPhoto, setPreviewPhoto] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Messages
@@ -1770,6 +1771,46 @@ setStudents(departmentStudents);
         </div>
       )}
 
+
+{/* ==========================================
+    PHOTO PREVIEW
+========================================== */}
+
+{previewPhoto && (
+  <div
+    className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+    onClick={() => setPreviewPhoto(null)}
+  >
+    <div
+      className="relative max-h-[90vh] max-w-[90vw]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* CLOSE BUTTON */}
+      <button
+        type="button"
+        onClick={() => setPreviewPhoto(null)}
+        className="absolute -right-3 -top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl font-bold text-slate-700 shadow-lg transition hover:bg-red-50 hover:text-red-600"
+        aria-label="Close photo preview"
+      >
+        ✕
+      </button>
+
+      {/* PHOTO */}
+      <img
+        src={previewPhoto.imageUrl}
+        alt={previewPhoto.name || "Student photo"}
+        className="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain shadow-2xl"
+      />
+
+      {/* STUDENT NAME */}
+      {previewPhoto.name && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-lg bg-black/70 px-4 py-2 text-sm font-medium text-white">
+          {previewPhoto.name}
+        </div>
+      )}
+    </div>
+  </div>
+)}
     </div>
   );
 }
@@ -2873,6 +2914,10 @@ function HODAddStudent({
         </button>
 
       </div>
+
+      
     </form>
+
+    
   );
 }
