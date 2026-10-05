@@ -32,9 +32,6 @@ export default function RoleGuard({
 
     const checkRole = async () => {
       try {
-        console.log("========== ROLE GUARD ==========");
-        console.log("Allowed roles:", allowedRolesKey);
-
         const token = await getToken();
 
         if (!token) {
@@ -54,8 +51,7 @@ export default function RoleGuard({
 
         const user = response.data?.data;
 
-        console.log("RoleGuard user:", user);
-        console.log("RoleGuard user role:", user?.role);
+       
 
         if (!user) {
           console.log("No user returned from backend.");
@@ -71,23 +67,13 @@ export default function RoleGuard({
           .split(",")
           .filter(Boolean);
 
-        console.log(
-          "RoleGuard normalized role:",
-          userRole
-        );
-
-        console.log(
-          "RoleGuard permitted roles:",
-          permittedRoles
-        );
+       
+      
 
         const hasAccess =
           permittedRoles.includes(userRole);
 
-        console.log(
-          "RoleGuard has access:",
-          hasAccess
-        );
+        
 
         if (!hasAccess) {
           console.log(
@@ -98,9 +84,7 @@ export default function RoleGuard({
           return;
         }
 
-        console.log(
-          "ROLE MATCH → ACCESS GRANTED"
-        );
+     
 
         if (!cancelled) {
           setChecking(false);

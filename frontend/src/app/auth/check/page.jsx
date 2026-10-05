@@ -54,8 +54,6 @@ export default function AuthCheckPage() {
           );
         }
 
-        console.log("Verified user:", user);
-        console.log("Role:", user.role);
 
         // ==========================================
         // ROLE BASED REDIRECTION
