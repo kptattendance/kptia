@@ -61,7 +61,7 @@ export default function RoleGuard({ allowedRoles, children }) {
         setChecking(false);
       } catch (error) {
         console.error("Role verification failed:", error);
-        router.replace("/");
+        router.replace("/access-denied");
       }
     };
 
