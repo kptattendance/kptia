@@ -5,10 +5,9 @@ import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export default function RoleGuard({
-  allowedRoles = [],
-  children,
-}) {
+import FacultySidebar from "./components/FacultySidebar";
+
+export default function FacultyLayout({ children }) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const router = useRouter();
 
@@ -24,8 +23,10 @@ export default function RoleGuard({
       return;
     }
 
-    const verifyRole = async () => {
+    const verifyFaculty = async () => {
       try {
+        console.log("FACULTY LAYOUT: checking access");
+
         const token = await getToken();
 
         if (!token) {
@@ -44,34 +45,33 @@ export default function RoleGuard({
 
         const user = response.data?.data;
 
-        if (!user) {
-          router.replace("/access-denied");
-          return;
-        }
-
-        const userRole = String(user.role || "")
-          .trim()
-          .toLowerCase();
-
-        const permittedRoles = allowedRoles.map((role) =>
-          String(role).trim().toLowerCase()
+        console.log(
+          "FACULTY LAYOUT USER:",
+          user
         );
 
-        // ==========================================
-        // ROLE CHECK
-        // ==========================================
-        if (!permittedRoles.includes(userRole)) {
+        console.log(
+          "FACULTY LAYOUT ROLE:",
+          user?.role
+        );
+
+        if (!user || user.role !== "staff") {
+          console.log(
+            "FACULTY LAYOUT: ACCESS DENIED"
+          );
+
           router.replace("/access-denied");
           return;
         }
 
-        // ==========================================
-        // ACCESS ALLOWED
-        // ==========================================
+        console.log(
+          "FACULTY LAYOUT: ACCESS GRANTED"
+        );
+
         setChecking(false);
       } catch (error) {
         console.error(
-          "Role verification failed:",
+          "Faculty verification failed:",
           error
         );
 
@@ -79,31 +79,35 @@ export default function RoleGuard({
       }
     };
 
-    verifyRole();
+    verifyFaculty();
   }, [
     isLoaded,
     isSignedIn,
     getToken,
     router,
-    allowedRoles,
   ]);
 
-  // ==========================================
-  // WHILE CHECKING
-  // ==========================================
   if (!isLoaded || checking) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-black" />
 
-          <p className="mt-4 text-sm text-gray-500">
-            Verifying access...
+          <p className="mt-4 text-sm text-gray-600">
+            Verifying faculty access...
           </p>
         </div>
       </div>
     );
   }
 
-  return children;
+  return (
+    <div className="min-h-screen overflow-x-hidden bg-gray-50">
+      <FacultySidebar />
+
+      <main className="min-h-screen ml-0 lg:ml-72">
+        {children}
+      </main>
+    </div>
+  );
 }
