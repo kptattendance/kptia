@@ -101,7 +101,8 @@ router.delete(
     "admin",
     "principal",
     "coe",
-    "exam_officer"
+    "exam_officer",
+    "hod",
   ),
   deleteStudent
 );
