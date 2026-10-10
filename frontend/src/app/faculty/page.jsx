@@ -20,6 +20,20 @@ export default function FacultyDashboard() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Subjects allocated to this faculty by the HOD
+  const [courses, setCourses] = useState([]);
+
+  // The academic year starts in July.
+  const today = new Date();
+
+  const academicStartYear =
+    today.getMonth() >= 6
+      ? today.getFullYear()
+      : today.getFullYear() - 1;
+
+  const academicYear =
+    `${academicStartYear}-${String(academicStartYear + 1).slice(-2)}`;
+
   useEffect(() => {
     const loadUser = async () => {
       try {
@@ -44,6 +58,32 @@ export default function FacultyDashboard() {
 
     loadUser();
   }, [getToken]);
+
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        const token = await getToken();
+
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/allocations/my`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            params: {
+              academicYear,
+            },
+          }
+        );
+
+        setCourses(response.data?.data || []);
+      } catch (error) {
+        console.error("Failed to load allocated subjects:", error);
+      }
+    };
+
+    loadCourses();
+  }, [getToken, academicYear]);
 
   const facultyName =
     user?.name ||
@@ -283,6 +323,57 @@ export default function FacultyDashboard() {
             <h2 className="mt-1 text-lg font-bold text-slate-900">
               Faculty Work Area
             </h2>
+          </div>
+
+          {/* MY SUBJECTS */}
+
+          <div className="mb-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+            <div className="border-b border-slate-100 px-5 py-4 sm:px-7">
+              <h2 className="text-base font-semibold text-slate-900">
+                My Subjects · {academicYear}
+              </h2>
+
+              <p className="mt-0.5 text-xs text-slate-500">
+                Subjects allocated to you by the HOD.
+              </p>
+            </div>
+
+            {courses.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-slate-500 sm:px-7">
+                No subjects have been allocated to you yet. You can still enter attendance and IA marks for subjects that are not allocated to anyone.
+              </p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {courses.map((course) => (
+                  <div
+                    key={course._id}
+                    className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {course.subjectId?.name || "Subject"}
+                      </p>
+
+                      <p className="mt-0.5 font-mono text-xs text-slate-500">
+                        {course.subjectId?.code}
+                      </p>
+                    </div>
+
+                    <p className="text-xs font-semibold text-slate-600">
+                      {String(course.department || "").toUpperCase()}
+                      {" · "}
+                      Semester {course.semester}
+                      {" · "}
+                      {course.batchNumbers?.length === 2
+                        ? "Both Batches"
+                        : `Batch ${course.batchNumbers?.[0]}`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
           </div>
 
           <div className="grid gap-5 md:grid-cols-2">

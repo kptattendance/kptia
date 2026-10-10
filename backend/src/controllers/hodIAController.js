@@ -514,6 +514,11 @@ if (
 
         records: records.map(
           (record) => ({
+            _id: record._id,
+
+            isLocked:
+              record.isLocked !== false,
+
             iaNumber:
               record.iaNumber,
 

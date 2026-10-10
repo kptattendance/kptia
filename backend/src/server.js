@@ -11,6 +11,8 @@ import subjectRoutes from "./routes/subjectRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
 import iaRoutes from "./routes/iaRoutes.js";
 import studentAcademicRoutes from "./routes/studentAcademicRoutes.js";
+import courseAllocationRoutes from "./routes/courseAllocationRoutes.js";
+import courseOutcomeRoutes from "./routes/courseOutcomeRoutes.js";
 
 dotenv.config();
 
@@ -74,6 +76,14 @@ app.use(
 app.use(
   "/api/students",
   studentAcademicRoutes
+);
+app.use(
+  "/api/allocations",
+  courseAllocationRoutes
+);
+app.use(
+  "/api/course-outcomes",
+  courseOutcomeRoutes
 );
 connectDB().then(() => {
   if (process.env.NODE_ENV !== "production") {

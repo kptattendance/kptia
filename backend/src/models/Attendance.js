@@ -165,6 +165,20 @@ const attendanceSchema = new mongoose.Schema(
     lockedBy: {
       type: String,
     },
+
+    // Set when the HOD/Admin unlocks the record
+    // so the faculty can correct it.
+    unlockedAt: {
+      type: Date,
+    },
+
+    unlockedBy: {
+      type: String,
+    },
+
+    correctedBy: {
+      type: String,
+    },
   },
   {
     timestamps: true,
@@ -182,6 +196,26 @@ attendanceSchema.index({
   month: 1,
   year: 1,
 });
+
+// =========================================================
+// ONE RECORD PER SUBJECT + MONTH + YEAR + BATCH
+//
+// batchNumbers is an array, so this is enforced for
+// every batch in it: [1] and [1, 2] cannot both exist
+// for the same subject and month.
+// =========================================================
+
+attendanceSchema.index(
+  {
+    subjectId: 1,
+    month: 1,
+    year: 1,
+    batchNumbers: 1,
+  },
+  {
+    unique: true,
+  }
+);
 
 export default mongoose.model(
   "Attendance",

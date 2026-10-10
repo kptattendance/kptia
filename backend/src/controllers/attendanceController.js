@@ -1,6 +1,11 @@
+import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
+import {
+  getAcademicYearForMonth,
+  getAllocationError,
+} from "./courseAllocationController.js";
 
 // =====================================================
 // SAVE ATTENDANCE
@@ -100,76 +105,105 @@ export const saveAttendance = async (req, res) => {
       Number(classesConducted);
 
     // -----------------------------------------
+    // VALIDATE SUBJECT
+    // -----------------------------------------
+
+    if (!mongoose.Types.ObjectId.isValid(subjectId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid subject.",
+      });
+    }
+
+    // -----------------------------------------
+    // COURSE ALLOCATION
+    // -----------------------------------------
+
+    const allocationError = await getAllocationError({
+      user: req.user,
+      subjectId,
+      academicYear: getAcademicYearForMonth(
+        month,
+        year
+      ),
+      batchNumbers: selectedBatches,
+    });
+
+    if (allocationError) {
+      return res.status(403).json({
+        success: false,
+        message: allocationError,
+      });
+    }
+
+    // -----------------------------------------
     // CHECK EXISTING ATTENDANCE
     // -----------------------------------------
     //
-    // Batch 1 selected:
-    //   Existing [1]     -> locked
-    //   Existing [1,2]   -> locked
-    //   Existing [2]     -> allowed
+    // A locked record that covers any selected
+    // batch blocks the save.
     //
-    // Batch 2 selected:
-    //   Existing [2]     -> locked
-    //   Existing [1,2]   -> locked
-    //   Existing [1]     -> allowed
+    // A record unlocked by the HOD can be corrected,
+    // but only with the same batch selection it was
+    // originally entered with.
     //
-    // Both selected:
-    //   Any existing batch -> locked
-    //
-    // Old records without batchNumbers are
-    // considered locked for the entire subject.
+    // Old records without batchNumbers cover the
+    // entire subject.
     // -----------------------------------------
 
     const existingRecords =
       await Attendance.find({
-        department:
-          department.toLowerCase(),
-
-        semester:
-          Number(semester),
-
+        department: department.toLowerCase(),
+        semester: Number(semester),
         subjectId,
+        month: Number(month),
+        year: Number(year),
+      })
+        .select("batchNumbers isLocked")
+        .lean();
 
-        month:
-          Number(month),
+    const overlappingRecords = existingRecords.filter(
+      (existing) =>
+        !Array.isArray(existing.batchNumbers) ||
+        existing.batchNumbers.length === 0 ||
+        existing.batchNumbers.some((batch) =>
+          selectedBatches.includes(Number(batch))
+        )
+    );
 
-        year:
-          Number(year),
-      }).lean();
+    if (
+      overlappingRecords.some(
+        (existing) => existing.isLocked !== false
+      )
+    ) {
+      return res.status(409).json({
+        success: false,
+        locked: true,
+        message:
+          "Attendance has already been entered for the selected batch and is locked.",
+      });
+    }
 
-    for (const existing of existingRecords) {
-      // Old attendance record
-      // without batchNumbers
-      if (
-        !Array.isArray(
-          existing.batchNumbers
-        ) ||
-        existing.batchNumbers.length === 0
-      ) {
+    let recordToCorrect = null;
+
+    if (overlappingRecords.length > 0) {
+      const sameSelection =
+        overlappingRecords.length === 1 &&
+        [...(overlappingRecords[0].batchNumbers || [])]
+          .map(Number)
+          .sort()
+          .join(",") === selectedBatches.join(",");
+
+      if (!sameSelection) {
         return res.status(409).json({
           success: false,
-          locked: true,
+          locked: false,
           message:
-            "Attendance has already been entered for this month and subject and is locked.",
+            "This attendance was unlocked for correction. Please select the same batch it was originally entered for.",
         });
       }
 
-      const overlap =
-        existing.batchNumbers.some(
-          (batch) =>
-            selectedBatches.includes(
-              Number(batch)
-            )
-        );
-
-      if (overlap) {
-        return res.status(409).json({
-          success: false,
-          locked: true,
-          message:
-            "Attendance has already been entered for the selected batch and is locked.",
-        });
-      }
+      recordToCorrect = overlappingRecords[0];
     }
 
     // -----------------------------------------
@@ -179,156 +213,114 @@ export const saveAttendance = async (req, res) => {
     if (students.length === 0) {
       return res.status(400).json({
         success: false,
-        message:
-          "No students were selected.",
+        message: "No students were selected.",
       });
     }
 
+    const studentIds = students.map((student) =>
+      String(student.studentId || "")
+    );
+
+    if (
+      studentIds.some(
+        (id) => !mongoose.Types.ObjectId.isValid(id)
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Student ID is missing.",
+      });
+    }
+
+    if (new Set(studentIds).size !== studentIds.length) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A student appears more than once in the attendance.",
+      });
+    }
+
+    const cleanedStudents = [];
+
     for (const student of students) {
-      const attended =
-        Number(
-          student.classesAttended
-        );
+      const attended = Number(student.classesAttended);
 
-      if (!student.studentId) {
+      const eligible =
+        student.classesEligible !== undefined &&
+        student.classesEligible !== null &&
+        student.classesEligible !== ""
+          ? Number(student.classesEligible)
+          : conducted;
+
+      if (!Number.isInteger(eligible)) {
         return res.status(400).json({
           success: false,
-          message:
-            "Student ID is missing.",
+          message: "Invalid maximum classes value.",
         });
       }
 
-      if (!Number.isFinite(attended)) {
+      if (eligible < 0) {
         return res.status(400).json({
           success: false,
-          message:
-            "Invalid attendance value.",
+          message: "Maximum classes cannot be negative.",
         });
       }
 
-   // -----------------------------------------
-// VALIDATE STUDENTS
-// -----------------------------------------
-
-if (students.length === 0) {
-  return res.status(400).json({
-    success: false,
-    message: "No students were selected.",
-  });
-}
-
-for (const student of students) {
-  const attended = Number(student.classesAttended);
-
-  const eligible =
-    student.classesEligible !== undefined &&
-    student.classesEligible !== null &&
-    student.classesEligible !== ""
-      ? Number(student.classesEligible)
-      : conducted;
-
-  if (!student.studentId) {
-    return res.status(400).json({
-      success: false,
-      message: "Student ID is missing.",
-    });
-  }
-
-  if (!Number.isFinite(eligible) || !Number.isInteger(eligible)) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Invalid maximum classes value.",
-    });
-  }
-
-  if (eligible < 0) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Maximum classes cannot be negative.",
-    });
-  }
-
-  if (eligible > conducted) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "A student's maximum classes cannot exceed classes conducted.",
-    });
-  }
-
-  if (!Number.isFinite(attended)) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid attendance value.",
-    });
-  }
-
-  if (attended < 0 || attended > eligible) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "Classes attended cannot exceed the student's maximum eligible classes.",
-    });
-  }
-
-  // -----------------------------------------
-  // VERIFY STUDENT EXISTS AND BATCH MATCHES
-  // -----------------------------------------
-
-  const dbStudent =
-    await Student.findById(student.studentId).lean();
-
-  if (!dbStudent) {
-    return res.status(400).json({
-      success: false,
-      message:
-        "One or more selected students do not exist.",
-    });
-  }
-
-  if (
-    !selectedBatches.includes(
-      Number(dbStudent.batchNumber)
-    )
-  ) {
-    return res.status(400).json({
-      success: false,
-      message:
-        `Student ${dbStudent.name} does not belong to the selected batch.`,
-    });
-  }
-
-  if (
-    dbStudent.department?.toLowerCase() !==
-    department.toLowerCase()
-  ) {
-    return res.status(400).json({
-      success: false,
-      message:
-        `Student ${dbStudent.name} does not belong to the selected department.`,
-    });
-  }
-} 
-
-      // -----------------------------------------
-      // VERIFY STUDENT EXISTS AND BATCH MATCHES
-      // -----------------------------------------
-
-      const dbStudent =
-        await Student.findById(
-          student.studentId
-        ).lean();
-
-      if (!dbStudent) {
+      if (eligible > conducted) {
         return res.status(400).json({
           success: false,
           message:
-            "One or more selected students do not exist.",
+            "A student's maximum classes cannot exceed classes conducted.",
         });
       }
 
+      if (
+        student.classesAttended === "" ||
+        student.classesAttended === null ||
+        student.classesAttended === undefined ||
+        !Number.isFinite(attended)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid attendance value.",
+        });
+      }
+
+      if (attended < 0 || attended > eligible) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Classes attended cannot exceed the student's maximum eligible classes.",
+        });
+      }
+
+      cleanedStudents.push({
+        studentId: student.studentId,
+        classesEligible: eligible,
+        classesAttended: attended,
+      });
+    }
+
+    // -----------------------------------------
+    // VERIFY STUDENTS EXIST AND BATCH MATCHES
+    // (one query for the whole class)
+    // -----------------------------------------
+
+    const dbStudents = await Student.find({
+      _id: { $in: studentIds },
+    })
+      .select("name department batchNumber")
+      .lean();
+
+    if (dbStudents.length !== studentIds.length) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "One or more selected students do not exist.",
+      });
+    }
+
+    for (const dbStudent of dbStudents) {
       if (
         !selectedBatches.includes(
           Number(dbStudent.batchNumber)
@@ -354,56 +346,68 @@ for (const student of students) {
     }
 
     // -----------------------------------------
-    // CREATE — NEVER UPDATE
+    // CORRECT AN UNLOCKED RECORD
     // -----------------------------------------
 
-    const attendance =
-      await Attendance.create({
-        department:
-          department.toLowerCase(),
+    if (recordToCorrect) {
+      const corrected =
+        await Attendance.findOneAndUpdate(
+          {
+            _id: recordToCorrect._id,
+            isLocked: false,
+          },
+          {
+            $set: {
+              classesConducted: conducted,
+              students: cleanedStudents,
+              isLocked: true,
+              lockedAt: new Date(),
+              lockedBy: req.user.id,
+              correctedBy: req.user.id,
+            },
+          },
+          {
+            returnDocument: "after",
+            runValidators: true,
+          }
+        );
 
-        semester:
-          Number(semester),
+      if (!corrected) {
+        return res.status(409).json({
+          success: false,
+          locked: true,
+          message:
+            "Attendance has already been entered for the selected batch and is locked.",
+        });
+      }
 
-        subjectId,
-
-        month:
-          Number(month),
-
-        year:
-          Number(year),
-
-        batchNumbers:
-          selectedBatches,
-
-        classesConducted:
-          conducted,
-students: students.map((student) => ({
-  studentId: student.studentId,
-
-  classesEligible:
-    student.classesEligible !== undefined &&
-    student.classesEligible !== null &&
-    student.classesEligible !== ""
-      ? Number(student.classesEligible)
-      : conducted,
-
-  classesAttended: Number(
-    student.classesAttended
-  ),
-})),
-
-        enteredBy:
-          req.user.id,
-
-        lockedAt:
-          new Date(),
-
-        lockedBy:
-          req.user.id,
-
-        isLocked: true,
+      return res.status(200).json({
+        success: true,
+        locked: true,
+        message:
+          "Attendance corrected successfully and is now locked.",
+        data: corrected,
       });
+    }
+
+    // -----------------------------------------
+    // CREATE
+    // -----------------------------------------
+
+    const attendance = await Attendance.create({
+      department: department.toLowerCase(),
+      semester: Number(semester),
+      subjectId,
+      month: Number(month),
+      year: Number(year),
+      batchNumbers: selectedBatches,
+      classesConducted: conducted,
+      students: cleanedStudents,
+      enteredBy: req.user.id,
+      lockedAt: new Date(),
+      lockedBy: req.user.id,
+      isLocked: true,
+    });
 
     return res.status(201).json({
       success: true,
@@ -417,6 +421,16 @@ students: students.map((student) => ({
       "Save Attendance Error:",
       error
     );
+
+    // Two saves for the same batch arrived together.
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        locked: true,
+        message:
+          "Attendance has already been entered for the selected batch and is locked.",
+      });
+    }
 
     return res.status(500).json({
       success: false,
@@ -648,10 +662,16 @@ const matchingRecords =
         studentMap.values()
       );
 
+    // Locked unless every matching record has been
+    // unlocked by the HOD for correction.
+    const isLocked = matchingRecords.some(
+      (record) => record.isLocked !== false
+    );
+
     return res.status(200).json({
       success: true,
       exists: true,
-      locked: true,
+      locked: isLocked,
 
       data: {
         // Keep the existing fields
@@ -692,9 +712,7 @@ const matchingRecords =
         students:
           combinedStudents,
 
-        // Attendance is locked if any matching
-        // attendance record exists.
-        isLocked: true,
+        isLocked,
 
         lockedAt:
           matchingRecords[0]?.lockedAt ||
@@ -715,6 +733,118 @@ const matchingRecords =
       success: false,
       message:
         "Failed to fetch attendance.",
+    });
+  }
+};
+
+// =====================================================
+// UNLOCK ATTENDANCE FOR CORRECTION
+// =====================================================
+//
+// HOD (own department) or Admin.
+//
+// The record is kept as it is. The faculty can then
+// correct it and save again, which locks it again.
+//
+// =====================================================
+
+export const unlockAttendance = async (req, res) => {
+  try {
+    const role = String(req.user?.role || "").toLowerCase();
+
+    if (!["hod", "admin"].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only HOD or Admin can unlock attendance.",
+      });
+    }
+
+    const {
+      department,
+      semester,
+      subjectId,
+      month,
+      year,
+      batchNumbers,
+    } = req.body;
+
+    if (
+      !department ||
+      !semester ||
+      !month ||
+      !year ||
+      !mongoose.Types.ObjectId.isValid(subjectId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Attendance selection data is missing.",
+      });
+    }
+
+    const requestedDepartment =
+      String(department).trim().toLowerCase();
+
+    if (
+      role === "hod" &&
+      String(req.user?.department || "")
+        .trim()
+        .toLowerCase() !== requestedDepartment
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "HOD can unlock attendance only for their own department.",
+      });
+    }
+
+    const filter = {
+      department: requestedDepartment,
+      semester: Number(semester),
+      subjectId,
+      month: Number(month),
+      year: Number(year),
+      isLocked: { $ne: false },
+    };
+
+    const requestedBatches = (
+      Array.isArray(batchNumbers) ? batchNumbers : []
+    )
+      .map(Number)
+      .filter((batch) => [1, 2].includes(batch));
+
+    if (requestedBatches.length > 0) {
+      filter.batchNumbers = { $in: requestedBatches };
+    }
+
+    const result = await Attendance.updateMany(filter, {
+      $set: {
+        isLocked: false,
+        unlockedAt: new Date(),
+        unlockedBy: req.user.id,
+      },
+    });
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "No locked attendance was found for this selection.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Attendance unlocked. The faculty can now correct and save it again.",
+    });
+  } catch (error) {
+    console.error("Unlock Attendance Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to unlock attendance.",
     });
   }
 };

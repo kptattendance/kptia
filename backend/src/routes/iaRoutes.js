@@ -4,6 +4,7 @@ import express from "express";
 
 import {
   saveIAMarks,
+  unlockIAMarks,
   getIAMarks,
   getIAMarksById,
   updateIAMarks,
@@ -67,6 +68,16 @@ router.get(
 router.get(
   "/:id",
   getIAMarksById
+);
+
+// --------------------------------------------------
+// UNLOCK FOR CORRECTION
+// HOD (own department) / Admin
+// --------------------------------------------------
+
+router.post(
+  "/:id/unlock",
+  unlockIAMarks
 );
 
 // --------------------------------------------------

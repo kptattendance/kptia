@@ -11,6 +11,7 @@ import {
   ChevronDown,
   User,
   Download,
+  LockOpen,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 
@@ -166,6 +167,68 @@ const handleIAChange = (value) => {
       data,
       selectedIA,
     ]);
+
+  // =====================================================
+  // UNLOCK IA FOR CORRECTION
+  //
+  // The saved marks are kept. The faculty can correct
+  // them and save again, which freezes the IA again.
+  // =====================================================
+
+  const handleUnlockIA = async (record) => {
+    const confirmation = await Swal.fire({
+      icon: "question",
+      title: "Unlock IA Marks?",
+      text: `IA ${record.iaNumber} · Batch ${record.batchNumber}. The faculty will be able to correct these marks and save them again.`,
+      showCancelButton: true,
+      confirmButtonText: "Unlock",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#0f172a",
+      cancelButtonColor: "#94a3b8",
+      reverseButtons: true,
+    });
+
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    try {
+      const token = await getToken();
+
+      await axios.post(
+        `${API_URL}/api/ia/${record._id}/unlock`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      await loadData(selectedIA);
+
+      await Swal.fire({
+        icon: "success",
+        title: "IA Unlocked",
+        text: "The faculty can now correct these marks and save them again.",
+        confirmButtonColor: "#0f172a",
+      });
+    } catch (err) {
+      console.error(
+        "Unlock IA error:",
+        err
+      );
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Unlock",
+        text:
+          err.response?.data?.message ||
+          "Failed to unlock IA marks.",
+        confirmButtonColor: "#0f172a",
+      });
+    }
+  };
 
   // =====================================================
   // GET STUDENT IA DATA
@@ -674,6 +737,34 @@ const downloadExcelReport = async () => {
             </div>
 
           </div>
+
+          {selectedRecords.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {selectedRecords.map((record) =>
+                record.isLocked === false ? (
+                  <span
+                    key={record._id}
+                    className="inline-flex items-center gap-2 rounded-xl bg-sky-50 px-4 py-2.5 text-sm font-semibold text-sky-700"
+                  >
+                    <LockOpen size={16} />
+                    Batch {record.batchNumber} unlocked for correction
+                  </span>
+                ) : (
+                  <button
+                    key={record._id}
+                    type="button"
+                    onClick={() =>
+                      handleUnlockIA(record)
+                    }
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <LockOpen size={16} />
+                    Unlock Batch {record.batchNumber}
+                  </button>
+                )
+              )}
+            </div>
+          )}
 
         </div>
 

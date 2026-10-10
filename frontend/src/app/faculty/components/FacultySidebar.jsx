@@ -22,6 +22,11 @@ const menuItems = [
     href: "/faculty/ia-marks",
     icon: "▤",
   },
+  {
+    name: "Course Outcomes",
+    href: "/faculty/course-outcomes",
+    icon: "◎",
+  },
 ];
 
 export default function FacultySidebar() {

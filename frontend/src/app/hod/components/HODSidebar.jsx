@@ -23,6 +23,21 @@ const menuItems = [
     icon: "👨‍🏫",
   },
   {
+    name: "Course Allocation",
+    href: "/hod/allocations",
+    icon: "🗂",
+  },
+  {
+    name: "Program Outcomes",
+    href: "/hod/program-outcomes",
+    icon: "🎯",
+  },
+  {
+    name: "Course Outcomes",
+    href: "/hod/course-outcomes",
+    icon: "🧭",
+  },
+  {
     name: "Students",
     href: "/hod/students",
     icon: "👨‍🎓",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -24,6 +24,45 @@ import {
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:5000";
+
+// =====================================================
+// BROWSER DRAFT
+//
+// Attendance is kept in this browser while it is being
+// entered, so a failed save or a closed tab does not
+// lose it. The draft is removed once it is saved.
+// =====================================================
+
+const getAttendanceDraftKey = (...parts) =>
+  `kptia:attendance-draft:${parts.join(":")}`;
+
+const readDraft = (key) => {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeDraft = (key, value) => {
+  try {
+    window.localStorage.setItem(
+      key,
+      JSON.stringify(value)
+    );
+  } catch {
+    // Storage full or unavailable.
+  }
+};
+
+const removeDraft = (key) => {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Storage unavailable.
+  }
+};
 
 // =====================================================
 // DEPARTMENTS
@@ -161,6 +200,9 @@ const [studentMaxClasses, setStudentMaxClasses] =
 
   const [attendanceLocked, setAttendanceLocked] =
     useState(false);
+
+  // Browser draft key of the attendance currently being entered.
+  const draftKeyRef = useRef(null);
     const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
 
   // =====================================================
@@ -343,6 +385,8 @@ const resetAttendanceArea = () => {
   useEffect(() => {
     const loadStudentsAndAttendance =
       async () => {
+        draftKeyRef.current = null;
+
         if (
           !department ||
           !semester ||
@@ -498,8 +542,12 @@ setStudents(filteredStudents);
           // ---------------------------------------------
 
           if (existingAttendance) {
+            // Unlocked by the HOD for correction.
+            const unlockedForCorrection =
+              existingAttendance.isLocked === false;
+
             setAttendanceLocked(
-              true
+              !unlockedForCorrection
             );
 
             setClassesConducted(
@@ -541,6 +589,20 @@ setStudentMaxClasses(savedMaxClasses);
               )?.label ||
               month;
 
+            if (unlockedForCorrection) {
+              await Swal.fire({
+                icon: "info",
+
+                title:
+                  "Unlocked for Correction",
+
+                text:
+                  "The HOD has unlocked this attendance. Correct the entries and save to lock it again.",
+
+                confirmButtonColor:
+                  "#0f172a",
+              });
+            } else {
             await Swal.fire({
               icon: "info",
 
@@ -574,6 +636,7 @@ setStudentMaxClasses(savedMaxClasses);
               confirmButtonColor:
                 "#0f172a",
             });
+            }
           }
 
           // ---------------------------------------------
@@ -585,20 +648,38 @@ setStudentMaxClasses(savedMaxClasses);
               false
             );
 
+            // Restore attendance typed earlier in this
+            // browser that was never saved.
+            const draftKey = getAttendanceDraftKey(
+              department,
+              semester,
+              subjectId,
+              month,
+              year,
+              batchSelection
+            );
+
+            const draft = readDraft(draftKey);
+
             setClassesConducted(
-              ""
+              draft?.classesConducted ?? ""
             );
 
             const initialAttendance = {};
             const initialMaxClasses = {};
 
             filteredStudents.forEach((student) => {
-              initialAttendance[student._id] = "";
-              initialMaxClasses[student._id] = "";
+              initialAttendance[student._id] =
+                draft?.attendance?.[student._id] ?? "";
+
+              initialMaxClasses[student._id] =
+                draft?.studentMaxClasses?.[student._id] ?? "";
             });
 
             setAttendance(initialAttendance);
             setStudentMaxClasses(initialMaxClasses);
+
+            draftKeyRef.current = draftKey;
           }
         } catch (error) {
           console.error(
@@ -653,6 +734,88 @@ setStudentMaxClasses(savedMaxClasses);
     year,
     getToken,
   ]);
+
+  // =====================================================
+  // KEEP A BROWSER DRAFT WHILE ATTENDANCE IS ENTERED
+  // =====================================================
+
+  useEffect(() => {
+    const draftKey = draftKeyRef.current;
+
+    if (
+      !draftKey ||
+      attendanceLocked ||
+      students.length === 0
+    ) {
+      return;
+    }
+
+    // Ignore a draft key left over from a
+    // previous selection.
+    if (
+      draftKey !==
+      getAttendanceDraftKey(
+        department,
+        semester,
+        subjectId,
+        month,
+        year,
+        batchSelection
+      )
+    ) {
+      return;
+    }
+
+    const hasEntries =
+      classesConducted !== "" ||
+      Object.values(attendance).some(
+        (value) =>
+          value !== "" &&
+          value !== null &&
+          value !== undefined
+      );
+
+    if (!hasEntries) {
+      removeDraft(draftKey);
+      return;
+    }
+
+    writeDraft(draftKey, {
+      classesConducted,
+      attendance,
+      studentMaxClasses,
+      savedAt: Date.now(),
+    });
+  }, [
+    classesConducted,
+    attendance,
+    studentMaxClasses,
+    students.length,
+    attendanceLocked,
+    department,
+    semester,
+    subjectId,
+    month,
+    year,
+    batchSelection,
+  ]);
+
+  // =====================================================
+  // MAXIMUM CLASSES FOR A STUDENT
+  //
+  // A blank value means the student was eligible
+  // for all the classes conducted.
+  // =====================================================
+
+  const getMaxClasses = (studentId) => {
+    const value = studentMaxClasses[studentId];
+
+    return value === "" ||
+      value === null ||
+      value === undefined
+      ? Number(classesConducted)
+      : Number(value);
+  };
 
   // =====================================================
   // ATTENDANCE PERCENTAGE
@@ -1094,6 +1257,11 @@ if (
       return;
     }
 
+    // A save is already in progress.
+    if (saving) {
+      return;
+    }
+
     // ---------------------------------------------
     // SELECTION VALIDATION
     // ---------------------------------------------
@@ -1247,10 +1415,7 @@ if (
 
 
       const maxClasses =
-        Number(
-          studentMaxClasses[student._id] ??
-            classesConducted
-        );
+        getMaxClasses(student._id);
 
       if (
         !Number.isFinite(maxClasses) ||
@@ -1429,11 +1594,7 @@ if (
         student._id,
 
       classesEligible:
-        Number(
-          studentMaxClasses[
-            student._id
-          ] ?? classesConducted
-        ),
+        getMaxClasses(student._id),
 
       classesAttended:
         Number(
@@ -1463,6 +1624,11 @@ if (
       setAttendanceLocked(
         true
       );
+
+      if (draftKeyRef.current) {
+        removeDraft(draftKeyRef.current);
+        draftKeyRef.current = null;
+      }
 
       await Swal.fire({
         icon: "success",
@@ -1536,7 +1702,9 @@ if (
         text:
           error.response?.data
             ?.message ||
-          "Failed to save attendance.",
+          (error.response
+            ? "Failed to save attendance."
+            : "Could not reach the server. Please check your internet connection and try again. Your entries are still on this page and are kept as a draft on this device."),
 
         confirmButtonColor:
           "#0f172a",
@@ -2507,7 +2675,7 @@ if (
                         <p className="mt-0.5 max-w-xl text-xs leading-5 text-slate-400">
                           {attendanceLocked
                             ? "This attendance record cannot be edited once saved."
-                            : "After saving, this month's attendance for the selected subject and batch will be permanently locked."}
+                            : "After saving, this month's attendance for the selected subject and batch will be locked. Only the HOD can unlock it for correction."}
                         </p>
 
                       </div>

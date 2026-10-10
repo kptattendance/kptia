@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState,useRef } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import axios from "axios";
+import Swal from "sweetalert2";
 import {
   AlertTriangle,
   CalendarDays,
@@ -13,6 +14,7 @@ import {
   Users,
   BookOpen,
   Lock,
+  LockOpen,
   Building2,
   GraduationCap,
   Download,
@@ -1335,6 +1337,83 @@ setSubjects(nonBridgeSubjects);
   getToken,
   ]);
 
+// =====================================================
+// UNLOCK ATTENDANCE FOR CORRECTION
+//
+// The saved attendance is kept. The faculty can correct
+// it and save again, which locks it again.
+// =====================================================
+
+const handleUnlockAttendance = async (subject) => {
+  const batchLabel =
+    batchSelection === "both"
+      ? "Batch 1 & Batch 2"
+      : `Batch ${batchSelection}`;
+
+  const confirmation = await Swal.fire({
+    icon: "question",
+    title: "Unlock Attendance?",
+    text: `${subject.code} · ${batchLabel}. The faculty will be able to correct this month's attendance and save it again.`,
+    showCancelButton: true,
+    confirmButtonText: "Unlock",
+    cancelButtonText: "Cancel",
+    confirmButtonColor: "#0f172a",
+    cancelButtonColor: "#94a3b8",
+    reverseButtons: true,
+  });
+
+  if (!confirmation.isConfirmed) {
+    return;
+  }
+
+  try {
+    const token = await getToken();
+
+    await axios.post(
+      `${API_URL}/api/attendance/unlock`,
+      {
+        department,
+        semester: Number(semester),
+        subjectId: subject._id,
+        month: Number(month),
+        year: Number(year),
+        batchNumbers:
+          batchSelection === "both"
+            ? [1, 2]
+            : [Number(batchSelection)],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    setRefreshKey((prev) => prev + 1);
+
+    await Swal.fire({
+      icon: "success",
+      title: "Attendance Unlocked",
+      text: "The faculty can now correct this attendance and save it again.",
+      confirmButtonColor: "#0f172a",
+    });
+  } catch (unlockError) {
+    console.error(
+      "Unlock attendance error:",
+      unlockError
+    );
+
+    await Swal.fire({
+      icon: "error",
+      title: "Unable to Unlock",
+      text:
+        unlockError.response?.data?.message ||
+        "Failed to unlock attendance.",
+      confirmButtonColor: "#0f172a",
+    });
+  }
+};
+
  // =====================================================
 // STUDENT LIST
 // IMPORTANT:
@@ -2433,6 +2512,25 @@ const students = useMemo(() => {
                                   <div className="mt-2 inline-flex rounded-md bg-slate-200/70 px-2 py-1 text-[10px] font-bold text-slate-600">
                                     Max: {maxClasses}
                                   </div>
+
+                                  {subjectAttendance &&
+                                    (subjectAttendance.isLocked === false ? (
+                                      <div className="mt-2 flex items-center justify-center gap-1 text-[10px] font-bold text-sky-700">
+                                        <LockOpen size={11} />
+                                        Unlocked
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleUnlockAttendance(subject)
+                                        }
+                                        className="mx-auto mt-2 flex items-center justify-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100"
+                                      >
+                                        <LockOpen size={11} />
+                                        Unlock
+                                      </button>
+                                    ))}
                                 </div>
                               </th>
                             );

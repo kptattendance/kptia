@@ -7,6 +7,45 @@ import Swal from "sweetalert2";
 import * as XLSX from "xlsx";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// --------------------------------------------------
+// BROWSER DRAFT
+//
+// Marks are kept in this browser while they are being
+// entered, so a failed save or a closed tab does not
+// lose them. The draft is removed once the IA is saved.
+// --------------------------------------------------
+
+const getIADraftKey = (...parts) =>
+  `kptia:ia-draft:${parts.join(":")}`;
+
+const readDraft = (key) => {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeDraft = (key, value) => {
+  try {
+    window.localStorage.setItem(
+      key,
+      JSON.stringify(value)
+    );
+  } catch {
+    // Storage full or unavailable.
+  }
+};
+
+const removeDraft = (key) => {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Storage unavailable.
+  }
+};
+
 const departments = [
   { value: "at", label: "Automobile Engineering" },
   { value: "ch", label: "Chemical Engineering" },
@@ -74,7 +113,14 @@ export default function FacultyIAMarksPage() {
       confirmButtonColor: "#4f46e5",
     });
   };
-  const currentYear = new Date().getFullYear();
+  // The academic year starts in July, so January to
+  // June still belong to the year that began earlier.
+  const today = new Date();
+
+  const currentYear =
+    today.getMonth() >= 6
+      ? today.getFullYear()
+      : today.getFullYear() - 1;
 
   // --------------------------------------------------
   // SELECTION
@@ -137,6 +183,13 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
 
   const [existingIA, setExistingIA] = useState(null);
   const [checkingExisting, setCheckingExisting] = useState(false);
+
+  // True when the HOD has unlocked a frozen IA
+  // so that it can be corrected and saved again.
+  const [correctionMode, setCorrectionMode] = useState(false);
+
+  // Browser draft key of the IA currently being entered.
+  const draftKeyRef = useRef(null);
 
  
 
@@ -621,6 +674,9 @@ const loadBatch = async () => {
     selectedBatchNumber,
     selectedStudents = []
   ) => {
+    draftKeyRef.current = null;
+    setCorrectionMode(false);
+
     try {
       setCheckingExisting(true);
 
@@ -715,7 +771,17 @@ const loadBatch = async () => {
           students: uniqueStudents,
         };
 
-        setExistingIA(displayRecord);
+        // Records unlocked by the HOD stay editable.
+        // They are loaded below and frozen again on save.
+        const unlockedForCorrection = records.every(
+          (record) => record.isLocked === false
+        );
+
+        setExistingIA(
+          unlockedForCorrection ? null : displayRecord
+        );
+
+        setCorrectionMode(unlockedForCorrection);
 
         // Load existing tests
         setTests(
@@ -765,15 +831,46 @@ const loadBatch = async () => {
       } else {
         // New IA/batch
         setExistingIA(null);
-        setTests([]);
+
+        // Restore marks typed earlier in this browser
+        // that were never saved.
+        const draftKey = getIADraftKey(
+          year,
+          dept,
+          sem,
+          subject,
+          selectedIaNumber,
+          selectedBatchNumber
+        );
+
+        const draft = readDraft(draftKey);
+
+        const hasDraft =
+          Array.isArray(draft?.tests) &&
+          draft.tests.length > 0;
+
+        setTests(hasDraft ? draft.tests : []);
 
         const initialMarks = {};
 
         selectedStudents.forEach((student) => {
-          initialMarks[student._id] = {};
+          initialMarks[student._id] =
+            (hasDraft &&
+              draft.studentMarks?.[student._id]) ||
+            {};
         });
 
         setStudentMarks(initialMarks);
+
+        draftKeyRef.current = draftKey;
+
+        if (hasDraft) {
+          showAlert(
+            "info",
+            "Draft Restored",
+            "Marks you entered earlier on this device were restored. Please verify them before saving."
+          );
+        }
       }
     } catch (error) {
       console.error(
@@ -786,6 +883,60 @@ const loadBatch = async () => {
       setCheckingExisting(false);
     }
   };
+
+  // ==================================================
+  // KEEP A BROWSER DRAFT WHILE MARKS ARE ENTERED
+  // ==================================================
+
+  useEffect(() => {
+    const draftKey = draftKeyRef.current;
+
+    if (
+      !draftKey ||
+      existingIA ||
+      students.length === 0
+    ) {
+      return;
+    }
+
+    // Ignore a draft key left over from a
+    // previous selection.
+    if (
+      draftKey !==
+      getIADraftKey(
+        academicYear,
+        department,
+        semester,
+        subjectId,
+        Number(iaNumber),
+        batchNumber
+      )
+    ) {
+      return;
+    }
+
+    if (tests.length === 0) {
+      removeDraft(draftKey);
+      return;
+    }
+
+    writeDraft(draftKey, {
+      tests,
+      studentMarks,
+      savedAt: Date.now(),
+    });
+  }, [
+    tests,
+    studentMarks,
+    students.length,
+    existingIA,
+    academicYear,
+    department,
+    semester,
+    subjectId,
+    iaNumber,
+    batchNumber,
+  ]);
 
 const addTest = () => {
   if (existingIA) return;
@@ -1415,6 +1566,11 @@ const exportIAMarksToExcel = () => {
   // ==================================================
 
 const handleSave = async () => {
+  // A save is already in progress.
+  if (saving) {
+    return;
+  }
+
   // --------------------------------------------------
   // GET SELECTED SUBJECT CATEGORY
   // --------------------------------------------------
@@ -1509,6 +1665,11 @@ const handleSave = async () => {
     // ----------------------------------------------
     // SAVE
     // ----------------------------------------------
+
+    // Batches saved / found already frozen
+    // during this attempt.
+    const savedBatches = [];
+    const frozenBatches = [];
 
     try {
       setSaving(true);
@@ -1768,29 +1929,59 @@ for (const batch of batchesToSave) {
     continue;
   }
 
-  await axios.post(
-    `${API_URL}/api/ia/save`,
-    {
-      ...payload,
-      batchNumber: batch,
-      students: studentsForBatch,
-    },
-    {
-      headers: {
-        Authorization:
-          `Bearer ${token}`,
+  try {
+    await axios.post(
+      `${API_URL}/api/ia/save`,
+      {
+        ...payload,
+        batchNumber: batch,
+        students: studentsForBatch,
       },
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
+      }
+    );
+
+    savedBatches.push(batch);
+  } catch (batchError) {
+    // With Both Batches, one batch may already have
+    // been saved by an earlier attempt. Carry on with
+    // the other batch instead of stopping.
+    if (
+      batchNumber === "both" &&
+      batchError.response?.status === 409
+    ) {
+      frozenBatches.push(batch);
+      continue;
     }
-  );
+
+    throw batchError;
+  }
 }
 
-      showAlert(
-        "success",
-        "IA Saved Successfully",
-        batchNumber === "both"
-          ? "IA marks have been saved and frozen for Batch 1 and Batch 2."
-          : "IA marks have been saved and frozen successfully."
-      );
+      if (draftKeyRef.current) {
+        removeDraft(draftKeyRef.current);
+        draftKeyRef.current = null;
+      }
+
+      if (savedBatches.length === 0) {
+        showAlert(
+          "warning",
+          "IA Already Frozen",
+          "This IA has already been saved and frozen."
+        );
+      } else {
+        showAlert(
+          "success",
+          "IA Saved Successfully",
+          batchNumber === "both"
+            ? "IA marks have been saved and frozen for Batch 1 and Batch 2."
+            : "IA marks have been saved and frozen successfully."
+        );
+      }
 
       // Mark page as locked
       await checkExistingIA(
@@ -1808,12 +1999,24 @@ for (const batch of batchesToSave) {
         error
       );
 
-   showAlert(
-  "error",
-  "Save Failed",
-  error.response?.data?.message ||
-    "Failed to save IA marks."
-);
+      const reason =
+        error.response?.data?.message ||
+        (error.response
+          ? "Failed to save IA marks."
+          : "Could not reach the server. Please check your internet connection.");
+
+      const completedBatches = [
+        ...savedBatches,
+        ...frozenBatches,
+      ];
+
+      showAlert(
+        "error",
+        "Save Failed",
+        completedBatches.length > 0
+          ? `Batch ${completedBatches.join(" and ")} is saved, but the other batch was not: ${reason} Your marks are still on this page. Please press Save again.`
+          : `${reason} Your marks are still on this page and are kept as a draft on this device.`
+      );
     } finally {
       setSaving(false);
     }
@@ -2171,6 +2374,20 @@ for (const batch of batchesToSave) {
         {/* ================================================= */}
         {/* EXISTING IA NOTICE */}
         {/* ================================================= */}
+
+        {correctionMode &&
+          !existingIA &&
+          students.length > 0 && (
+            <div className="mt-4 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+              <p className="text-sm font-bold text-sky-800">
+                Unlocked for correction
+              </p>
+
+              <p className="text-xs text-sky-700">
+                The HOD has unlocked this IA. Correct the marks and save to freeze it again.
+              </p>
+            </div>
+          )}
 
         {existingIA && (
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -2774,7 +2991,7 @@ for (const batch of batchesToSave) {
                       Final IA: {totalIAMarks} marks
                     </p>
                     <p className="text-xs text-slate-400">
-                      Once saved, the IA record will be permanently frozen.
+                      Once saved, the IA record will be frozen. Only the HOD can unlock it for correction.
                     </p>
                   </div>
 

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import IAMarks from "../models/IAMarks.js";
 import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
+import { getAllocationError } from "./courseAllocationController.js";
 
 // --------------------------------------------------
 // CONSTANTS
@@ -754,6 +755,25 @@ export const saveIAMarks = async (
       );
 
     // --------------------------------------------------
+    // COURSE ALLOCATION
+    // --------------------------------------------------
+
+    const allocationError =
+      await getAllocationError({
+        user: req.user,
+        subjectId,
+        academicYear,
+        batchNumbers: [batchNumberValue],
+      });
+
+    if (allocationError) {
+      return res.status(403).json({
+        success: false,
+        message: allocationError,
+      });
+    }
+
+    // --------------------------------------------------
     // CHECK EXISTING RECORD
     //
     // IA1 Batch1 and IA1 Batch2 are different.
@@ -774,7 +794,10 @@ export const saveIAMarks = async (
           batchNumberValue,
       });
 
-    if (existing) {
+    // A record unlocked by the HOD (isLocked === false)
+    // can be corrected and is frozen again below.
+
+    if (existing && existing.isLocked !== false) {
       return res.status(409).json({
         success: false,
         message:
@@ -830,6 +853,53 @@ const studentValidation =
 
     const now =
       new Date();
+
+    // --------------------------------------------------
+    // CORRECT AN UNLOCKED IA RECORD
+    // --------------------------------------------------
+
+    if (existing) {
+      const corrected =
+        await IAMarks.findOneAndUpdate(
+          {
+            _id: existing._id,
+            isLocked: false,
+          },
+          {
+            $set: {
+              tests:
+                testValidation.tests,
+              totalMaxMarks:
+                testValidation.totalMaxMarks,
+              students:
+                studentValidation.students,
+              isLocked: true,
+              lockedAt: now,
+              lockedBy: req.user.id,
+              correctedBy: req.user.id,
+            },
+          },
+          {
+            returnDocument: "after",
+            runValidators: true,
+          }
+        );
+
+      if (!corrected) {
+        return res.status(409).json({
+          success: false,
+          message:
+            `IA ${iaNumberValue} for Batch ${batchNumberValue} has already been saved and frozen.`,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message:
+          `IA ${iaNumberValue} Batch ${batchNumberValue} corrected and frozen successfully.`,
+        data: corrected,
+      });
+    }
 
     const iaMarks =
       await IAMarks.create({
@@ -900,6 +970,112 @@ const studentValidation =
       success: false,
       message:
         "Failed to save IA marks.",
+    });
+  }
+};
+
+// ==================================================
+// UNLOCK IA MARKS FOR CORRECTION
+//
+// HOD (own department) or Admin.
+//
+// The record is kept as it is. The faculty can then
+// correct it and save again, which freezes it again.
+// ==================================================
+
+export const unlockIAMarks = async (
+  req,
+  res
+) => {
+  try {
+    const role =
+      getRole(req);
+
+    if (
+      !["hod", "admin"].includes(role)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only HOD or Admin can unlock IA marks.",
+      });
+    }
+
+    const { id } = req.params;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(id)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid IA record ID.",
+      });
+    }
+
+    const filter = {
+      _id: id,
+    };
+
+    if (role === "hod") {
+      const hodDepartment =
+        normalizeDepartment(
+          req.user?.department
+        );
+
+      if (!hodDepartment) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "HOD department is not assigned.",
+        });
+      }
+
+      filter.department =
+        hodDepartment;
+    }
+
+    const iaMarks =
+      await IAMarks.findOneAndUpdate(
+        filter,
+        {
+          $set: {
+            isLocked: false,
+            unlockedAt: new Date(),
+            unlockedBy: req.user.id,
+          },
+        },
+        {
+          returnDocument: "after",
+        }
+      ).select(
+        "iaNumber batchNumber isLocked"
+      );
+
+    if (!iaMarks) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "IA record not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        `IA ${iaMarks.iaNumber} Batch ${iaMarks.batchNumber} unlocked. The faculty can now correct and save it again.`,
+      data: iaMarks,
+    });
+  } catch (error) {
+    console.error(
+      "Unlock IA Marks Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to unlock IA marks.",
     });
   }
 };

@@ -261,6 +261,20 @@ const iaMarksSchema = new mongoose.Schema(
     lockedBy: {
       type: String,
     },
+
+    // Set when the HOD/Admin unlocks the record
+    // so the faculty can correct it.
+    unlockedAt: {
+      type: Date,
+    },
+
+    unlockedBy: {
+      type: String,
+    },
+
+    correctedBy: {
+      type: String,
+    },
   },
   {
     timestamps: true,
