@@ -1,21 +1,41 @@
 import mongoose from "mongoose";
 
-const connectDB = async () => {
-  try {
-    if (!process.env.MONGO_URI) {
-      throw new Error("MONGO_URI is not defined in .env");
-    }
+// The connection is opened once and shared.
+// On Vercel the same promise is reused by every
+// request handled by a warm function instance.
 
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
+let connectionPromise = null;
+
+const connectDB = () => {
+  if (connectionPromise) {
+    return connectionPromise;
+  }
+
+  if (!process.env.MONGO_URI) {
+    return Promise.reject(
+      new Error("MONGO_URI is not defined in .env")
+    );
+  }
+
+  connectionPromise = mongoose
+    .connect(process.env.MONGO_URI, {
       // modern options, mongoose >= 8 handles most automatically
       dbName: process.env.MONGO_DB_NAME || "kptia",
+    })
+    .then((conn) => {
+      console.log(`✅ MongoDB connected.....: ${conn.connection.host}`);
+      return conn;
+    })
+    .catch((error) => {
+      console.error("❌ MongoDB connection error........:", error.message);
+
+      // Allow the next request to try again.
+      connectionPromise = null;
+
+      throw error;
     });
 
-    console.log(`✅ MongoDB connected.....: ${conn.connection.host}`);
-  } catch (error) {
-    console.error("❌ MongoDB connection error........:", error.message);
-    process.exit(1);
-  }
+  return connectionPromise;
 };
 
 export default connectDB;

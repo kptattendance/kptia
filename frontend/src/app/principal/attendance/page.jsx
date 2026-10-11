@@ -138,7 +138,7 @@ export default function PrincipalAttendancePage() {
       const token = await getToken();
 
       const response = await axios.get(
-        `${API_URL}/api/students/getstudents`,
+        `${API_URL}/api/students`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

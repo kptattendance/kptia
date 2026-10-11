@@ -18,7 +18,7 @@ router.post("/unlock", authenticateUser, unlockAttendance);
 router.get("/", authenticateUser, getAttendance);
 router.get(
   "/admin-statistics",
-  // authenticateUser,
+  authenticateUser,
   getAdminAttendanceStatistics
 );
 

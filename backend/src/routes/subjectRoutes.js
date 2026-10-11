@@ -9,7 +9,14 @@ import {
   bulkUploadSubjects,
 } from "../controllers/subjectController.js";
 
+import Subject from "../models/Subject.js";
 import { authenticateUser } from "../middlewares/authMiddleware.js";
+import { authorizeRoles } from "../middlewares/roleMiddleware.js";
+import {
+  hodOwnDepartment,
+  bodyDepartment,
+  recordAndBodyDepartment,
+} from "../middlewares/departmentScope.js";
 import { uploadCSV } from "../middlewares/uploadCSV.js";
 
 const router = express.Router();
@@ -32,6 +39,8 @@ router.get(
 router.post(
   "/addsubject",
   authenticateUser,
+  authorizeRoles("admin", "hod"),
+  hodOwnDepartment(bodyDepartment),
   createSubject
 );
 
@@ -39,6 +48,8 @@ router.post(
 router.put(
   "/updatesubject/:id",
   authenticateUser,
+  authorizeRoles("admin", "hod"),
+  hodOwnDepartment(recordAndBodyDepartment(Subject)),
   updateSubject
 );
 
@@ -46,6 +57,8 @@ router.put(
 router.delete(
   "/deletesubject/:id",
   authenticateUser,
+  authorizeRoles("admin", "hod"),
+  hodOwnDepartment(recordAndBodyDepartment(Subject)),
   deleteSubject
 );
 
@@ -53,6 +66,7 @@ router.delete(
 router.post(
   "/bulk-upload",
   authenticateUser,
+  authorizeRoles("admin"),
   uploadCSV,
   bulkUploadSubjects
 );

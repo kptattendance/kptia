@@ -45,7 +45,7 @@ export default function PrincipalDashboard() {
 
       // Students
       const studentsResponse = await axios.get(
-        `${API_URL}/api/students/getstudents`,
+        `${API_URL}/api/students`,
         { headers }
       );
 

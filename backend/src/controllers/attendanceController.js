@@ -450,6 +450,31 @@ export const saveAttendance = async (req, res) => {
 
 export const getAttendance = async (req, res) => {
   try {
+    // -----------------------------------------
+    // ROLE CHECK
+    // Students see only their own attendance,
+    // through /api/students/me/academic.
+    // -----------------------------------------
+
+    if (
+      ![
+        "staff",
+        "hod",
+        "admin",
+        "principal",
+        "coe",
+        "exam_officer",
+      ].includes(
+        String(req.user?.role || "").toLowerCase()
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not authorized to view attendance.",
+      });
+    }
+
     const {
       department,
       semester,

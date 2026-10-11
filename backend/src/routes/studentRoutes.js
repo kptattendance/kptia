@@ -13,6 +13,12 @@ import {
 
 import { authenticateUser } from "../middlewares/authMiddleware.js";
 import { authorizeRoles } from "../middlewares/roleMiddleware.js";
+import Student from "../models/Student.js";
+import {
+  hodOwnDepartment,
+  bodyDepartment,
+  recordDepartment,
+} from "../middlewares/departmentScope.js";
 import { uploadSingleImage } from "../middlewares/uploadImage.js";
 import { uploadExcel } from "../middlewares/uploadExcel.js";
 
@@ -69,6 +75,7 @@ router.post(
     "hod"
   ),
   uploadSingleImage,
+  hodOwnDepartment(bodyDepartment),
   createStudent
 );
 
@@ -86,7 +93,9 @@ router.put(
     "exam_officer",
     "hod"
   ),
+  hodOwnDepartment(recordDepartment(Student)),
   uploadSingleImage,
+  hodOwnDepartment(bodyDepartment),
   updateStudent
 );
 
@@ -104,6 +113,7 @@ router.delete(
     "exam_officer",
     "hod",
   ),
+  hodOwnDepartment(recordDepartment(Student)),
   deleteStudent
 );
 
@@ -121,6 +131,7 @@ router.patch(
     "exam_officer",
     "hod"
   ),
+  hodOwnDepartment(recordDepartment(Student)),
   updateStudentStatus
 );
 
@@ -138,6 +149,7 @@ router.get(
     "exam_officer",
     "hod"
   ),
+  hodOwnDepartment(recordDepartment(Student)),
   getStudentById
 );
 

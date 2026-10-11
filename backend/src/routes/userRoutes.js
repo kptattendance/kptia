@@ -22,9 +22,26 @@ import {
 } from "../middlewares/uploadExcel.js";
 
 import { uploadSingleImage } from "../middlewares/uploadImage.js";
-import { authenticateUser } from "../middlewares/authMiddleware.js";
+import {
+  authenticateUser,
+  clearUserCache,
+} from "../middlewares/authMiddleware.js";
+import { authorizeRoles } from "../middlewares/roleMiddleware.js";
 
 const router = express.Router();
+
+// =====================================================
+// A changed role or department must be used at once.
+// Any change to users clears the remembered users.
+// =====================================================
+
+router.use((req, res, next) => {
+  if (req.method !== "GET") {
+    res.on("finish", () => clearUserCache());
+  }
+
+  next();
+});
 
 // =====================================================
 // CREATE USER
@@ -44,6 +61,7 @@ router.post(
 router.get(
   "/getusers",
   authenticateUser,
+  authorizeRoles("admin", "principal", "hod"),
   getUsers
 );
 
@@ -54,6 +72,7 @@ router.get(
 router.get(
   "/getuser/:id",
   authenticateUser,
+  authorizeRoles("admin", "principal", "hod"),
   getUserById
 );
 

@@ -198,6 +198,14 @@ attendanceSchema.index({
 });
 
 // =========================================================
+// A STUDENT'S OWN ATTENDANCE
+// =========================================================
+
+attendanceSchema.index({
+  "students.studentId": 1,
+});
+
+// =========================================================
 // ONE RECORD PER SUBJECT + MONTH + YEAR + BATCH
 //
 // batchNumbers is an array, so this is enforced for

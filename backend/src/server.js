@@ -52,6 +52,20 @@ app.use(
   })
 );
 
+// Wait for the database before handling a request.
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      message:
+        "The server could not reach the database. Please try again.",
+    });
+  }
+});
+
 app.use(clerkMiddleware());
 
 app.use(express.json());
@@ -85,12 +99,20 @@ app.use(
   "/api/course-outcomes",
   courseOutcomeRoutes
 );
-connectDB().then(() => {
-  if (process.env.NODE_ENV !== "production") {
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running at http://localhost:${PORT}`);
-    });
-  }
-});
+connectDB()
+  .then(() => {
+    if (process.env.NODE_ENV !== "production") {
+      app.listen(PORT, () => {
+        console.log(`🚀 Server running at http://localhost:${PORT}`);
+      });
+    }
+  })
+  .catch(() => {
+    // Locally there is nothing to serve without a database.
+    // On Vercel the next request tries to connect again.
+    if (process.env.NODE_ENV !== "production") {
+      process.exit(1);
+    }
+  });
 
 export default app;
