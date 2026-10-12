@@ -405,12 +405,10 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
 
     dragRef.current = {
       active: true,
+      moved: false,
       startX: e.clientX,
       startScroll: el.scrollLeft,
     };
-
-    el.style.cursor = "grabbing";
-    el.style.userSelect = "none";
   };
 
   const dragTable = (e) => {
@@ -421,6 +419,20 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
 
     const distance =
       e.clientX - dragRef.current.startX;
+
+    // A small movement is still a click, not a drag.
+    if (
+      !dragRef.current.moved &&
+      Math.abs(distance) < 5
+    ) {
+      return;
+    }
+
+    if (!dragRef.current.moved) {
+      dragRef.current.moved = true;
+      el.style.cursor = "grabbing";
+      el.style.userSelect = "none";
+    }
 
     el.scrollLeft =
       dragRef.current.startScroll -
@@ -435,6 +447,15 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
     if (el) {
       el.style.cursor = "grab";
       el.style.userSelect = "auto";
+    }
+  };
+
+  // Releasing the mouse after dragging the table must
+  // not open the subject that happens to be under it.
+  const cancelClickAfterDrag = (e) => {
+    if (dragRef.current.moved) {
+      e.preventDefault();
+      dragRef.current.moved = false;
     }
   };
 
@@ -1000,13 +1021,27 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
                   key={String(subject._id)}
                   className="w-[145px] min-w-[145px] border-r border-slate-200 px-3 py-3 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400 sm:w-[160px] sm:min-w-[160px] sm:px-4 sm:py-3.5 sm:text-[11px]"
                 >
-                  <div className="max-w-[130px] whitespace-normal leading-4 sm:max-w-[145px]">
-                    {subject.code}
-                  </div>
+                  <Link
+                    href={`/hod/ia-marks/${subject._id}?academicYear=${encodeURIComponent(
+                      academicYear
+                    )}&semester=${semester}`}
+                    draggable={false}
+                    onClick={cancelClickAfterDrag}
+                    title="View CO-wise marks"
+                    className="group block cursor-pointer rounded-lg px-1 py-1 transition hover:bg-amber-50"
+                  >
+                    <div className="max-w-[130px] whitespace-normal leading-4 text-slate-600 underline decoration-slate-300 underline-offset-2 group-hover:text-amber-800 sm:max-w-[145px]">
+                      {subject.code}
+                    </div>
 
-                  <div className="mt-1 max-w-[130px] whitespace-normal text-[9px] font-medium normal-case leading-3 text-slate-400 sm:max-w-[145px] sm:text-[10px]">
-                    {subject.name}
-                  </div>
+                    <div className="mt-1 max-w-[130px] whitespace-normal text-[9px] font-medium normal-case leading-3 text-slate-400 sm:max-w-[145px] sm:text-[10px]">
+                      {subject.name}
+                    </div>
+
+                    <div className="mt-1 text-[9px] font-semibold normal-case text-amber-700 sm:text-[10px]">
+                      View CO marks →
+                    </div>
+                  </Link>
                 </th>
               ))}
 
