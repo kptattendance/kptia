@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
-import { RefreshCw } from "lucide-react";
+import Swal from "sweetalert2";
+import {
+  Pencil,
+  RefreshCw,
+  Save,
+  Trash2,
+  X,
+} from "lucide-react";
 import EntryStatusGrid, {
   getDepartmentLabel,
 } from "../components/EntryStatusGrid";
@@ -90,6 +97,11 @@ export default function AdminIAMarksPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState("");
 
+  // Record being corrected
+  // { [studentId]: [{ absent, coMarks: { CO1: "" } }, ...one per test] }
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+
   // =====================================================
   // LOAD STATUS OF EVERY SUBJECT
   // =====================================================
@@ -130,9 +142,6 @@ export default function AdminIAMarksPage() {
         setLoading(false);
       }
     };
-
-    setDetailTitle("");
-    setDetail(null);
 
     loadStatus();
   }, [
@@ -209,11 +218,16 @@ export default function AdminIAMarksPage() {
   // SELECT A DEPARTMENT + SEMESTER
   // =====================================================
 
-  const handleSelect = (department, semester) => {
-    setSelected({ department, semester });
+  const closeDetail = () => {
     setDetailTitle("");
     setDetail(null);
     setDetailError("");
+    setEditing(null);
+  };
+
+  const handleSelect = (department, semester) => {
+    setSelected({ department, semester });
+    closeDetail();
   };
 
   // =====================================================
@@ -232,6 +246,7 @@ export default function AdminIAMarksPage() {
 
       setDetail(null);
       setDetailError("");
+      setEditing(null);
       setLoadingDetail(true);
 
       const token = await getToken();
@@ -270,6 +285,213 @@ export default function AdminIAMarksPage() {
       );
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  // =====================================================
+  // CORRECT THE RECORD
+  // =====================================================
+
+  const startEditing = () => {
+    const students = {};
+
+    detail.students.forEach((entry) => {
+      students[entry.studentId?._id] = detail.tests.map(
+        (_, testIndex) => {
+          const studentTest =
+            entry.tests?.[testIndex] || {};
+
+          const coMarks = {};
+
+          CO_NAMES.forEach((co) => {
+            coMarks[co] =
+              studentTest.coMarks?.[co] ?? 0;
+          });
+
+          return {
+            absent: studentTest.status === "ABSENT",
+            coMarks,
+          };
+        }
+      );
+    });
+
+    setEditing(students);
+  };
+
+  const updateEditingTest = (
+    studentId,
+    testIndex,
+    change
+  ) => {
+    setEditing((prev) => ({
+      ...prev,
+      [studentId]: prev[studentId].map(
+        (test, index) =>
+          index === testIndex
+            ? { ...test, ...change }
+            : test
+      ),
+    }));
+  };
+
+  const getEditingTotal = (test) =>
+    test.absent
+      ? 0
+      : CO_NAMES.reduce(
+          (total, co) =>
+            total + Number(test.coMarks[co] || 0),
+          0
+        );
+
+  const handleSaveCorrection = async () => {
+    if (saving || !editing || !detail) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const token = await getToken();
+
+      await axios.put(
+        `${API_URL}/api/ia/${detail._id}`,
+        {
+          academicYear: detail.academicYear,
+          department: detail.department,
+          semester: detail.semester,
+          subjectId:
+            detail.subjectId?._id || detail.subjectId,
+          iaNumber: detail.iaNumber,
+          batchNumber: detail.batchNumber,
+          tests: detail.tests,
+          students: Object.entries(editing).map(
+            ([studentId, tests]) => ({
+              studentId,
+              tests: tests.map((test) => ({
+                status: test.absent
+                  ? "ABSENT"
+                  : "PRESENT",
+                coMarks: test.coMarks,
+              })),
+            })
+          ),
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      // Show the saved values.
+      const response = await axios.get(
+        `${API_URL}/api/ia/${detail._id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const record = response.data?.data;
+
+      setDetail({
+        ...record,
+        students: [...(record?.students || [])].sort(
+          (a, b) =>
+            String(
+              a.studentId?.registerNumber || ""
+            ).localeCompare(
+              String(
+                b.studentId?.registerNumber || ""
+              )
+            )
+        ),
+      });
+
+      setEditing(null);
+
+      setRefreshKey((prev) => prev + 1);
+
+      await Swal.fire({
+        icon: "success",
+        title: "IA Marks Corrected",
+        confirmButtonColor: "#0f172a",
+      });
+    } catch (err) {
+      console.error("Correct IA error:", err);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Save",
+        text:
+          err.response?.data?.message ||
+          "Failed to correct IA marks.",
+        confirmButtonColor: "#0f172a",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // =====================================================
+  // DELETE THE RECORD
+  // =====================================================
+
+  const handleDelete = async () => {
+    const confirmation = await Swal.fire({
+      icon: "warning",
+      title: "Delete IA Marks?",
+      html: `
+        <div style="font-size:14px;line-height:1.8;color:#64748b">
+          <strong style="color:#0f172a">${detailTitle}</strong>
+          <br>
+          IA ${detail.iaNumber} · ${detail.academicYear}
+          · ${detail.students.length} students
+          <br><br>
+          The whole record will be removed and the faculty can enter it again.
+          <strong style="color:#dc2626">This cannot be undone from the website.</strong>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Delete",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#dc2626",
+      cancelButtonColor: "#94a3b8",
+      reverseButtons: true,
+    });
+
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    try {
+      const token = await getToken();
+
+      await axios.delete(
+        `${API_URL}/api/ia/${detail._id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      closeDetail();
+
+      setRefreshKey((prev) => prev + 1);
+    } catch (err) {
+      console.error("Delete IA error:", err);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Delete",
+        text:
+          err.response?.data?.message ||
+          "Failed to delete IA marks.",
+        confirmButtonColor: "#0f172a",
+      });
     }
   };
 
@@ -375,9 +597,10 @@ export default function AdminIAMarksPage() {
 
             <select
               value={academicYear}
-              onChange={(e) =>
-                setAcademicYear(e.target.value)
-              }
+              onChange={(e) => {
+                setAcademicYear(e.target.value);
+                closeDetail();
+              }}
               className={selectClass}
             >
               {academicYears.map((item) => (
@@ -395,9 +618,10 @@ export default function AdminIAMarksPage() {
 
             <select
               value={iaNumber}
-              onChange={(e) =>
-                setIaNumber(Number(e.target.value))
-              }
+              onChange={(e) => {
+                setIaNumber(Number(e.target.value));
+                closeDetail();
+              }}
               className={selectClass}
             >
               {iaNumbers.map((item) => (
@@ -418,6 +642,7 @@ export default function AdminIAMarksPage() {
               onChange={(e) => {
                 setTerm(e.target.value);
                 setSelected(null);
+                closeDetail();
               }}
               className={selectClass}
             >
@@ -448,7 +673,7 @@ export default function AdminIAMarksPage() {
 
       {/* GRID */}
 
-      {!loading && !error && (
+      {!error && (
         <EntryStatusGrid
           cells={cells}
           semesters={terms[term]}
@@ -463,7 +688,7 @@ export default function AdminIAMarksPage() {
 
       {/* SUBJECTS OF THE SELECTED CELL */}
 
-      {selected && !loading && (
+      {selected && (
         <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
           <div className="border-b border-slate-100 px-5 py-4">
@@ -532,17 +757,69 @@ export default function AdminIAMarksPage() {
       {detailTitle && (
         <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-          <div className="border-b border-slate-100 px-5 py-4">
-            <h2 className="text-base font-semibold text-slate-900">
-              {detailTitle}
-            </h2>
+          <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
 
-            <p className="mt-0.5 text-xs text-slate-500">
-              IA {iaNumber}, {academicYear}
-              {detail
-                ? ` · Maximum ${detail.totalMaxMarks} marks`
-                : ""}
-            </p>
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">
+                {detailTitle}
+              </h2>
+
+              <p className="mt-0.5 text-xs text-slate-500">
+                IA {iaNumber}, {academicYear}
+                {detail
+                  ? ` · Maximum ${detail.totalMaxMarks} marks`
+                  : ""}
+              </p>
+            </div>
+
+            {detail && (
+              <div className="flex flex-wrap items-center gap-2">
+                {editing ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleSaveCorrection}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Save size={14} />
+                      {saving ? "Saving..." : "Save"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditing(null)}
+                      disabled={saving}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <X size={14} />
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={startEditing}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <Pencil size={14} />
+                      Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
           </div>
 
           {loadingDetail && (
@@ -650,9 +927,15 @@ export default function AdminIAMarksPage() {
                           const studentTest =
                             entry.tests?.[testIndex] || {};
 
-                          const absent =
-                            studentTest.status ===
-                            "ABSENT";
+                          const editingTest =
+                            editing?.[
+                              entry.studentId?._id
+                            ]?.[testIndex];
+
+                          const absent = editingTest
+                            ? editingTest.absent
+                            : studentTest.status ===
+                              "ABSENT";
 
                           return [
                             ...usedCOs(test).map(
@@ -665,11 +948,42 @@ export default function AdminIAMarksPage() {
                                       : ""
                                   }`}
                                 >
-                                  {absent
-                                    ? "-"
-                                    : studentTest.coMarks?.[
-                                        co
-                                      ] ?? 0}
+                                  {editingTest ? (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max={test.coMarks[co]}
+                                      step="0.01"
+                                      disabled={absent}
+                                      value={
+                                        absent
+                                          ? ""
+                                          : editingTest
+                                              .coMarks[co]
+                                      }
+                                      onChange={(e) =>
+                                        updateEditingTest(
+                                          entry.studentId._id,
+                                          testIndex,
+                                          {
+                                            coMarks: {
+                                              ...editingTest.coMarks,
+                                              [co]: e.target
+                                                .value,
+                                            },
+                                          }
+                                        )
+                                      }
+                                      aria-label={`${co} marks of ${entry.studentId?.name} in ${test.testName}`}
+                                      className="w-16 rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-center text-sm text-slate-900 outline-none focus:border-slate-600 disabled:bg-slate-100"
+                                    />
+                                  ) : absent ? (
+                                    "-"
+                                  ) : (
+                                    studentTest.coMarks?.[
+                                      co
+                                    ] ?? 0
+                                  )}
                                 </td>
                               )
                             ),
@@ -681,16 +995,56 @@ export default function AdminIAMarksPage() {
                                   : "text-slate-900"
                               }`}
                             >
-                              {absent
-                                ? "AB"
-                                : studentTest.marks ?? 0}
+                              {editingTest ? (
+                                <span className="flex flex-col items-center gap-1">
+                                  <span>
+                                    {absent
+                                      ? "AB"
+                                      : getEditingTotal(
+                                          editingTest
+                                        )}
+                                  </span>
+
+                                  <label className="flex items-center gap-1 text-[10px] font-semibold text-slate-500">
+                                    <input
+                                      type="checkbox"
+                                      checked={absent}
+                                      onChange={(e) =>
+                                        updateEditingTest(
+                                          entry.studentId._id,
+                                          testIndex,
+                                          {
+                                            absent:
+                                              e.target
+                                                .checked,
+                                          }
+                                        )
+                                      }
+                                    />
+                                    Absent
+                                  </label>
+                                </span>
+                              ) : absent ? (
+                                "AB"
+                              ) : (
+                                studentTest.marks ?? 0
+                              )}
                             </td>,
                           ];
                         }
                       )}
 
                       <td className="border-l border-slate-100 px-4 py-2.5 text-right font-bold text-slate-900">
-                        {entry.totalMarks}
+                        {editing?.[entry.studentId?._id]
+                          ? editing[
+                              entry.studentId._id
+                            ].reduce(
+                              (total, test) =>
+                                total +
+                                getEditingTotal(test),
+                              0
+                            )
+                          : entry.totalMarks}
                       </td>
                     </tr>
                   ))}

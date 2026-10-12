@@ -5,6 +5,10 @@ import {
   getAttendance,
   unlockAttendance,
   getAdminAttendanceStatistics,
+  getAdminAttendanceMonths,
+  getAdminAttendanceRecords,
+  updateAttendance,
+  deleteAttendance,
 } from "../controllers/attendanceController.js";
 
 import { authenticateUser } from "../middlewares/authMiddleware.js";
@@ -21,5 +25,25 @@ router.get(
   authenticateUser,
   getAdminAttendanceStatistics
 );
+
+// Admin: months of a year that have attendance
+router.get(
+  "/admin-months",
+  authenticateUser,
+  getAdminAttendanceMonths
+);
+
+// Admin: every saved record of a subject + month
+router.get(
+  "/admin-records",
+  authenticateUser,
+  getAdminAttendanceRecords
+);
+
+// Admin: correct a saved record
+router.put("/:id", authenticateUser, updateAttendance);
+
+// Admin: delete a saved record
+router.delete("/:id", authenticateUser, deleteAttendance);
 
 export default router;

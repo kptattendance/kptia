@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import IAMarks from "../models/IAMarks.js";
 import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
+import DeletedRecord from "../models/DeletedRecord.js";
 import { getAllocationError } from "./courseAllocationController.js";
 
 // --------------------------------------------------
@@ -1726,6 +1727,9 @@ export const updateIAMarks = async (
     existing.lockedBy =
       req.user.id;
 
+    existing.correctedBy =
+      req.user.id;
+
     await existing.save();
 
     return res.status(200).json({
@@ -1796,9 +1800,7 @@ export const deleteIAMarks = async (
     }
 
     const iaMarks =
-      await IAMarks.findByIdAndDelete(
-        id
-      );
+      await IAMarks.findById(id).lean();
 
     if (!iaMarks) {
       return res.status(404).json({
@@ -1807,6 +1809,18 @@ export const deleteIAMarks = async (
           "IA marks not found.",
       });
     }
+
+    // Keep a copy before deleting.
+    await DeletedRecord.create({
+      kind: "ia",
+      recordId: iaMarks._id,
+      data: iaMarks,
+      deletedBy: req.user.id,
+    });
+
+    await IAMarks.deleteOne({
+      _id: id,
+    });
 
     return res.status(200).json({
       success: true,

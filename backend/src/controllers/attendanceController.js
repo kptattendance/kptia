@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
+import User from "../models/User.js";
+import DeletedRecord from "../models/DeletedRecord.js";
 import {
   getAcademicYearForMonth,
   getAllocationError,
@@ -870,6 +872,450 @@ export const unlockAttendance = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to unlock attendance.",
+    });
+  }
+};
+
+// =====================================================
+// ADMIN: MONTHS THAT HAVE ATTENDANCE
+// =====================================================
+//
+// Number of attendance records in each month of a year,
+// so that the admin page can open on a month that has
+// data instead of an empty one.
+//
+// =====================================================
+
+const ADMIN_VIEW_ROLES = [
+  "admin",
+  "principal",
+  "coe",
+  "exam_officer",
+];
+
+const isAdmin = (req) =>
+  String(req.user?.role || "").toLowerCase() === "admin";
+
+export const getAdminAttendanceMonths = async (
+  req,
+  res
+) => {
+  try {
+    if (
+      !ADMIN_VIEW_ROLES.includes(
+        String(req.user?.role || "").toLowerCase()
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not authorized to view attendance statistics.",
+      });
+    }
+
+    const year = Number(req.query.year);
+
+    if (!Number.isInteger(year)) {
+      return res.status(400).json({
+        success: false,
+        message: "Year is required.",
+      });
+    }
+
+    const months = await Attendance.aggregate([
+      {
+        $match: { year },
+      },
+      {
+        $group: {
+          _id: "$month",
+          records: { $sum: 1 },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: months.map((item) => ({
+        month: item._id,
+        records: item.records,
+      })),
+    });
+  } catch (error) {
+    console.error(
+      "Admin Attendance Months Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch attendance months.",
+    });
+  }
+};
+
+// =====================================================
+// ADMIN: ATTENDANCE RECORDS OF A SUBJECT + MONTH
+// =====================================================
+//
+// Every saved record separately (one per batch
+// selection), with who entered it, so that the admin
+// can correct or delete a particular record.
+//
+// =====================================================
+
+export const getAdminAttendanceRecords = async (
+  req,
+  res
+) => {
+  try {
+    if (
+      !ADMIN_VIEW_ROLES.includes(
+        String(req.user?.role || "").toLowerCase()
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not authorized to view attendance records.",
+      });
+    }
+
+    const { subjectId, month, year } = req.query;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(subjectId) ||
+      !month ||
+      !year
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Subject, month and year are required.",
+      });
+    }
+
+    const records = await Attendance.find({
+      subjectId,
+      month: Number(month),
+      year: Number(year),
+    })
+      .populate(
+        "students.studentId",
+        "registerNumber rollNumber name batchNumber"
+      )
+      .sort({
+        batchNumbers: 1,
+        createdAt: 1,
+      })
+      .lean();
+
+    // Names of the faculty who entered the records
+    const enteredBy = await User.find({
+      clerkId: {
+        $in: [
+          ...new Set(
+            records.map((record) => record.enteredBy)
+          ),
+        ],
+      },
+    })
+      .select("clerkId name")
+      .lean();
+
+    const nameByClerkId = new Map(
+      enteredBy.map((user) => [
+        user.clerkId,
+        user.name,
+      ])
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: records.length,
+      data: records.map((record) => ({
+        ...record,
+        isLocked: record.isLocked !== false,
+        enteredByName:
+          nameByClerkId.get(record.enteredBy) || "",
+      })),
+    });
+  } catch (error) {
+    console.error(
+      "Admin Attendance Records Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to fetch attendance records.",
+    });
+  }
+};
+
+// =====================================================
+// ADMIN: CORRECT AN ATTENDANCE RECORD
+// =====================================================
+//
+// Changes classes conducted and the attended / maximum
+// classes of the students already in the record.
+// Students cannot be added or removed here.
+//
+// =====================================================
+
+export const updateAttendance = async (req, res) => {
+  try {
+    if (!isAdmin(req)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only admin can correct saved attendance.",
+      });
+    }
+
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid attendance record ID.",
+      });
+    }
+
+    const { classesConducted, students } = req.body;
+
+    const conducted = Number(classesConducted);
+
+    if (
+      classesConducted === "" ||
+      classesConducted === null ||
+      classesConducted === undefined ||
+      !Number.isInteger(conducted) ||
+      conducted < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Classes conducted must be a valid number.",
+      });
+    }
+
+    if (!Array.isArray(students)) {
+      return res.status(400).json({
+        success: false,
+        message: "Student attendance is required.",
+      });
+    }
+
+    const record = await Attendance.findById(id)
+      .select("students")
+      .lean();
+
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance record not found.",
+      });
+    }
+
+    // Names, for the error messages
+    const dbStudents = await Student.find({
+      _id: {
+        $in: record.students.map(
+          (entry) => entry.studentId
+        ),
+      },
+    })
+      .select("name")
+      .lean();
+
+    const nameById = new Map(
+      dbStudents.map((student) => [
+        String(student._id),
+        student.name,
+      ])
+    );
+
+    const submitted = new Map(
+      students.map((student) => [
+        String(student.studentId),
+        student,
+      ])
+    );
+
+    const cleanedStudents = [];
+
+    for (const entry of record.students) {
+      const studentId = String(entry.studentId);
+
+      const name =
+        nameById.get(studentId) || "A student";
+
+      const change = submitted.get(studentId);
+
+      // Not sent (for example a student who has since
+      // been deleted): keep what was saved.
+      if (!change) {
+        cleanedStudents.push({
+          studentId,
+          classesEligible: Math.min(
+            Number(
+              entry.classesEligible ?? conducted
+            ),
+            conducted
+          ),
+          classesAttended: Math.min(
+            Number(entry.classesAttended || 0),
+            conducted
+          ),
+        });
+
+        continue;
+      }
+
+      const blank = (value) =>
+        value === "" ||
+        value === null ||
+        value === undefined;
+
+      const eligible = blank(change.classesEligible)
+        ? conducted
+        : Number(change.classesEligible);
+
+      const attended = Number(
+        change.classesAttended
+      );
+
+      if (
+        !Number.isInteger(eligible) ||
+        eligible < 0 ||
+        eligible > conducted
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `${name}: maximum classes must be between 0 and ${conducted}.`,
+        });
+      }
+
+      if (
+        blank(change.classesAttended) ||
+        !Number.isFinite(attended) ||
+        attended < 0 ||
+        attended > eligible
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `${name}: classes attended must be between 0 and ${eligible}.`,
+        });
+      }
+
+      cleanedStudents.push({
+        studentId,
+        classesEligible: eligible,
+        classesAttended: attended,
+      });
+    }
+
+    await Attendance.updateOne(
+      { _id: id },
+      {
+        $set: {
+          classesConducted: conducted,
+          students: cleanedStudents,
+          isLocked: true,
+          lockedAt: new Date(),
+          lockedBy: req.user.id,
+          correctedBy: req.user.id,
+        },
+      },
+      { runValidators: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Attendance corrected successfully.",
+    });
+  } catch (error) {
+    console.error(
+      "Update Attendance Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to correct attendance.",
+    });
+  }
+};
+
+// =====================================================
+// ADMIN: DELETE AN ATTENDANCE RECORD
+// =====================================================
+//
+// For attendance entered under the wrong subject,
+// month or batch. The faculty can enter it again
+// afterwards. A copy is kept in DeletedRecord.
+//
+// =====================================================
+
+export const deleteAttendance = async (req, res) => {
+  try {
+    if (!isAdmin(req)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only admin can delete saved attendance.",
+      });
+    }
+
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid attendance record ID.",
+      });
+    }
+
+    const record = await Attendance.findById(id).lean();
+
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance record not found.",
+      });
+    }
+
+    // Keep a copy before deleting.
+    await DeletedRecord.create({
+      kind: "attendance",
+      recordId: record._id,
+      data: record,
+      deletedBy: req.user.id,
+    });
+
+    await Attendance.deleteOne({ _id: id });
+
+    return res.status(200).json({
+      success: true,
+      message: "Attendance deleted successfully.",
+    });
+  } catch (error) {
+    console.error(
+      "Delete Attendance Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete attendance.",
     });
   }
 };
