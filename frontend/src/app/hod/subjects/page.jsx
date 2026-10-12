@@ -19,6 +19,105 @@ const departments = [
   { value: "sc", label: "Science & English" },
 ];
 
+// =====================================================
+// MASTER DATA
+// Same values as the admin subject page.
+// =====================================================
+
+const subjectCategories = [
+  { value: "REGULAR", label: "Regular" },
+  { value: "ELECTIVE", label: "Elective" },
+  { value: "BRIDGE", label: "Bridge" },
+];
+
+const subjectTypes = [
+  { value: "IT", label: "IT - Integrated Theory" },
+  { value: "IP", label: "IP - Integrated Practical" },
+  { value: "I", label: "I - Institutional" },
+];
+
+const semesters = [1, 2, 3, 4, 5, 6, 7, 8];
+
+const boards = [
+  "SC",
+  "EG",
+  "ME",
+  "AT",
+  "CE",
+  "CS",
+  "EE",
+  "CH",
+  "EC",
+  "PO",
+  "KA",
+];
+
+const schemeYears = [
+  2025,
+  2026,
+  2027,
+  2028,
+  2029,
+  2030,
+];
+
+const marksFields = [
+  ["iaMax", "IA Max"],
+  ["iaMin", "IA Min"],
+  ["theoryExamMax", "Theory Exam Max"],
+  ["theoryExamMin", "Theory Exam Min"],
+  ["practicalExamMax", "Practical Exam Max"],
+  ["practicalExamMin", "Practical Exam Min"],
+  ["totalMax", "Total Max"],
+  ["totalMin", "Total Min"],
+  ["credit", "Credit"],
+];
+
+// Department is not part of the form.
+// It is always the HOD's own department.
+
+const emptyForm = {
+  subjectId: "",
+  code: "",
+  name: "",
+  sequence: "",
+  semester: "",
+
+  subjectCategory: "REGULAR",
+  electiveGroup: "",
+
+  subjectType: "",
+  board: "",
+
+  iaMax: "",
+  iaMin: "",
+
+  theoryExamMax: "",
+  theoryExamMin: "",
+
+  practicalExamMax: "",
+  practicalExamMin: "",
+
+  totalMax: "",
+  totalMin: "",
+
+  credit: "",
+
+  schemeYear: "2025",
+};
+
+const numberValue = (value) => {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return 0;
+  }
+
+  return Number(value);
+};
+
 const getDepartmentName = (value) => {
   return (
     departments.find(
@@ -44,11 +143,7 @@ export default function HODSubjectsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
 
-  const [form, setForm] = useState({
-    code: "",
-    name: "",
-    semester: "",
-  });
+  const [form, setForm] = useState(emptyForm);
 
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -143,18 +238,19 @@ export default function HODSubjectsPage() {
     setForm((prev) => ({
       ...prev,
       [name]: value,
+
+      // Regular / Bridge should not retain
+      // an elective group.
+      ...(name === "subjectCategory" &&
+      value !== "ELECTIVE"
+        ? { electiveGroup: "" }
+        : {}),
     }));
   };
 
   const openAddModal = () => {
     setEditingSubject(null);
-
-    setForm({
-      code: "",
-      name: "",
-      semester: "",
-    });
-
+    setForm({ ...emptyForm });
     setShowModal(true);
   };
 
@@ -162,9 +258,36 @@ export default function HODSubjectsPage() {
     setEditingSubject(subject);
 
     setForm({
+      subjectId: subject.subjectId || "",
       code: subject.code || "",
       name: subject.name || "",
+      sequence: subject.sequence || "",
       semester: subject.semester || "",
+
+      subjectCategory:
+        subject.subjectCategory || "REGULAR",
+      electiveGroup: subject.electiveGroup || "",
+
+      subjectType: subject.subjectType || "",
+      board: subject.board || "",
+
+      iaMax: subject.iaMax ?? "",
+      iaMin: subject.iaMin ?? "",
+
+      theoryExamMax: subject.theoryExamMax ?? "",
+      theoryExamMin: subject.theoryExamMin ?? "",
+
+      practicalExamMax:
+        subject.practicalExamMax ?? "",
+      practicalExamMin:
+        subject.practicalExamMin ?? "",
+
+      totalMax: subject.totalMax ?? "",
+      totalMin: subject.totalMin ?? "",
+
+      credit: subject.credit ?? "",
+
+      schemeYear: subject.schemeYear || "2025",
     });
 
     setShowModal(true);
@@ -175,6 +298,7 @@ export default function HODSubjectsPage() {
 
     setShowModal(false);
     setEditingSubject(null);
+    setForm({ ...emptyForm });
   };
 
   // =====================================================
@@ -191,6 +315,68 @@ export default function HODSubjectsPage() {
       return;
     }
 
+    const departmentCode =
+      hodDepartment.trim().toUpperCase();
+
+    const category = String(
+      form.subjectCategory || "REGULAR"
+    ).toUpperCase();
+
+    if (
+      category === "ELECTIVE" &&
+      !form.electiveGroup.trim()
+    ) {
+      alert(
+        "Elective Group is required for an elective subject."
+      );
+      return;
+    }
+
+    if (
+      !form.subjectId.trim() ||
+      !form.code.trim() ||
+      !form.name.trim() ||
+      !form.sequence.trim() ||
+      !form.semester ||
+      !form.subjectType ||
+      !form.board
+    ) {
+      alert(
+        "Please fill all required subject details."
+      );
+      return;
+    }
+
+    // Sequence format used by backend:
+    // 1AT01, 3CS05, etc.
+    const sequence = form.sequence
+      .trim()
+      .toUpperCase();
+
+    if (!/^[1-8][A-Z]{2}\d{2}$/.test(sequence)) {
+      alert(
+        `Invalid Sequence. Use format like 1${departmentCode}01 or 3${departmentCode}05.`
+      );
+      return;
+    }
+
+    if (
+      Number(sequence.substring(0, 1)) !==
+      Number(form.semester)
+    ) {
+      alert(
+        `Sequence ${sequence} does not belong to Semester ${form.semester}.`
+      );
+      return;
+    }
+
+    if (sequence.substring(1, 3) !== departmentCode) {
+      alert(
+        `Sequence ${sequence} does not belong to department ${departmentCode}.`
+      );
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -199,10 +385,53 @@ export default function HODSubjectsPage() {
       // IMPORTANT:
       // Department is always the HOD's department.
       const payload = {
+        subjectId:
+          form.subjectId.trim().toUpperCase(),
+
         code: form.code.trim().toUpperCase(),
+
         name: form.name.trim(),
+
+        sequence,
+
         semester: Number(form.semester),
-        department: hodDepartment,
+
+        department: departmentCode,
+
+        subjectCategory: category,
+
+        electiveGroup:
+          category === "ELECTIVE"
+            ? form.electiveGroup
+                .trim()
+                .toUpperCase()
+            : "",
+
+        subjectType:
+          form.subjectType.trim().toUpperCase(),
+
+        board: form.board.trim().toUpperCase(),
+
+        iaMax: numberValue(form.iaMax),
+        iaMin: numberValue(form.iaMin),
+
+        theoryExamMax:
+          numberValue(form.theoryExamMax),
+        theoryExamMin:
+          numberValue(form.theoryExamMin),
+
+        practicalExamMax:
+          numberValue(form.practicalExamMax),
+        practicalExamMin:
+          numberValue(form.practicalExamMin),
+
+        totalMax: numberValue(form.totalMax),
+        totalMin: numberValue(form.totalMin),
+
+        credit: numberValue(form.credit),
+
+        schemeYear:
+          numberValue(form.schemeYear) || 2025,
       };
 
       if (editingSubject) {
@@ -228,7 +457,6 @@ export default function HODSubjectsPage() {
       }
 
       closeModal();
-
       await fetchSubjects();
     } catch (err) {
       console.error(
@@ -238,6 +466,7 @@ export default function HODSubjectsPage() {
 
       alert(
         err.response?.data?.message ||
+          err.response?.data?.error ||
           "Failed to save subject."
       );
     } finally {
@@ -371,6 +600,12 @@ export default function HODSubjectsPage() {
   // =====================================================
   // UI
   // =====================================================
+
+  const formInputClass =
+    "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-slate-400";
+
+  const formLabelClass =
+    "mb-1.5 block text-xs font-semibold text-slate-600";
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
@@ -748,32 +983,37 @@ export default function HODSubjectsPage() {
 
       {showModal && (
 
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 backdrop-blur-sm">
 
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+          <div
+            className="absolute inset-0"
+            onClick={closeModal}
+          />
+
+          <div className="relative max-h-[94vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
 
             {/* HEADER */}
 
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
 
               <div>
-
-                <h2 className="text-lg font-bold text-slate-900">
+                <h2 className="text-lg font-bold text-slate-950">
                   {editingSubject
                     ? "Edit Subject"
                     : "Add Subject"}
                 </h2>
 
-                <p className="mt-1 text-xs text-slate-500">
-                  Enter subject details below.
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Enter complete subject, sequence, category and marks details.
                 </p>
-
               </div>
 
               <button
+                type="button"
                 onClick={closeModal}
                 disabled={saving}
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                aria-label="Close"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
               >
                 ✕
               </button>
@@ -784,115 +1024,334 @@ export default function HODSubjectsPage() {
 
             <form
               onSubmit={handleSaveSubject}
-              className="space-y-5 p-6"
+              className="max-h-[calc(94vh-74px)] overflow-y-auto p-5"
             >
 
-              <div className="grid gap-5 sm:grid-cols-2">
+              {/* BASIC */}
 
-                {/* SUBJECT CODE */}
+              <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
 
-                <div>
+                <div className="mb-4">
+                  <p className="text-sm font-bold text-slate-800">
+                    Basic Subject Information
+                  </p>
 
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Subject Code
-                  </label>
-
-                  <input
-                    name="code"
-                    value={form.code}
-                    onChange={handleFormChange}
-                    placeholder="CS301"
-                    required
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm uppercase outline-none focus:border-slate-400"
-                  />
-
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Subject ID, code, name and sequence.
+                  </p>
                 </div>
 
-                {/* SEMESTER */}
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 
-                <div>
+                  <div>
+                    <label className={formLabelClass}>
+                      Subject ID *
+                    </label>
 
-                  <label className="mb-2 block text-sm font-semibold text-slate-700">
-                    Semester
-                  </label>
+                    <input
+                      name="subjectId"
+                      value={form.subjectId}
+                      onChange={handleFormChange}
+                      placeholder={`25${hodDepartment.toUpperCase()}340PA`}
+                      required
+                      className={`${formInputClass} uppercase`}
+                    />
+                  </div>
 
-                  <select
-                    name="semester"
-                    value={form.semester}
-                    onChange={handleFormChange}
-                    required
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-400"
-                  >
+                  <div>
+                    <label className={formLabelClass}>
+                      Subject Code *
+                    </label>
 
-                    <option value="">
-                      Select semester
-                    </option>
+                    <input
+                      name="code"
+                      value={form.code}
+                      onChange={handleFormChange}
+                      placeholder={`25${hodDepartment.toUpperCase()}340`}
+                      required
+                      className={`${formInputClass} uppercase`}
+                    />
+                  </div>
 
-                    {[1,2,3,4,5,6,7,8].map(
-                      (semester) => (
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-amber-700">
+                      Sequence *
+                    </label>
+
+                    <input
+                      name="sequence"
+                      value={form.sequence}
+                      onChange={handleFormChange}
+                      placeholder={`3${hodDepartment.toUpperCase()}05`}
+                      required
+                      className={`${formInputClass} uppercase`}
+                    />
+
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      Semester + {hodDepartment.toUpperCase()} + two digits.
+                    </p>
+                  </div>
+
+                  <div className="md:col-span-2 lg:col-span-3">
+                    <label className={formLabelClass}>
+                      Subject Name *
+                    </label>
+
+                    <input
+                      name="name"
+                      value={form.name}
+                      onChange={handleFormChange}
+                      placeholder="Data Structures"
+                      required
+                      className={formInputClass}
+                    />
+                  </div>
+
+                </div>
+              </div>
+
+              {/* ACADEMIC */}
+
+              <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
+
+                <div className="mb-4">
+                  <p className="text-sm font-bold text-slate-800">
+                    Academic Details
+                  </p>
+
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Semester, category, type, board and scheme.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+
+                  <div>
+                    <label className={formLabelClass}>
+                      Semester *
+                    </label>
+
+                    <select
+                      name="semester"
+                      value={form.semester}
+                      onChange={handleFormChange}
+                      required
+                      className={formInputClass}
+                    >
+                      <option value="">
+                        Select semester
+                      </option>
+
+                      {semesters.map((semester) => (
                         <option
                           key={semester}
                           value={semester}
                         >
                           Semester {semester}
                         </option>
-                      )
-                    )}
+                      ))}
+                    </select>
+                  </div>
 
-                  </select>
+                  <div>
+                    <label className={formLabelClass}>
+                      Department
+                    </label>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm font-medium text-slate-600">
+                      {getDepartmentName(hodDepartment)}
+                    </div>
+
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      HOD can manage subjects only for their department.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className={formLabelClass}>
+                      Subject Category *
+                    </label>
+
+                    <select
+                      name="subjectCategory"
+                      value={form.subjectCategory}
+                      onChange={handleFormChange}
+                      required
+                      className={formInputClass}
+                    >
+                      {subjectCategories.map(
+                        (category) => (
+                          <option
+                            key={category.value}
+                            value={category.value}
+                          >
+                            {category.label}
+                          </option>
+                        )
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={formLabelClass}>
+                      Elective Group
+                      {form.subjectCategory ===
+                      "ELECTIVE"
+                        ? " *"
+                        : ""}
+                    </label>
+
+                    <input
+                      name="electiveGroup"
+                      value={form.electiveGroup}
+                      onChange={handleFormChange}
+                      placeholder="A / B / C"
+                      disabled={
+                        form.subjectCategory !==
+                        "ELECTIVE"
+                      }
+                      className={`${formInputClass} uppercase disabled:bg-slate-100 disabled:text-slate-400`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={formLabelClass}>
+                      Subject Type *
+                    </label>
+
+                    <select
+                      name="subjectType"
+                      value={form.subjectType}
+                      onChange={handleFormChange}
+                      required
+                      className={formInputClass}
+                    >
+                      <option value="">
+                        Select type
+                      </option>
+
+                      {subjectTypes.map((type) => (
+                        <option
+                          key={type.value}
+                          value={type.value}
+                        >
+                          {type.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={formLabelClass}>
+                      Board *
+                    </label>
+
+                    <select
+                      name="board"
+                      value={form.board}
+                      onChange={handleFormChange}
+                      required
+                      className={formInputClass}
+                    >
+                      <option value="">
+                        Select board
+                      </option>
+
+                      {boards.map((board) => (
+                        <option
+                          key={board}
+                          value={board}
+                        >
+                          {board}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={formLabelClass}>
+                      Scheme Year
+                    </label>
+
+                    <select
+                      name="schemeYear"
+                      value={form.schemeYear}
+                      onChange={handleFormChange}
+                      className={formInputClass}
+                    >
+                      {schemeYears.map((year) => (
+                        <option
+                          key={year}
+                          value={year}
+                        >
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
                 </div>
-
               </div>
 
-              {/* SUBJECT NAME */}
+              {/* MARKS */}
 
-              <div>
+              <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
 
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Subject Name
-                </label>
+                <div className="mb-4">
+                  <p className="text-sm font-bold text-slate-800">
+                    Marks & Credit
+                  </p>
 
-                <input
-                  name="name"
-                  value={form.name}
-                  onChange={handleFormChange}
-                  placeholder="Data Structures"
-                  required
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-400"
-                />
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    Enter maximum and minimum marks as defined in the scheme.
+                  </p>
+                </div>
 
-              </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
 
-              {/* DEPARTMENT */}
+                  {marksFields.map(
+                    ([field, label]) => (
+                      <div key={field}>
+                        <label className={formLabelClass}>
+                          {label}
+                          {[
+                            "totalMax",
+                            "totalMin",
+                            "credit",
+                          ].includes(field)
+                            ? " *"
+                            : ""}
+                        </label>
 
-              <div>
-
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Department
-                </label>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-600">
-                  {getDepartmentName(
-                    hodDepartment
+                        <input
+                          type="number"
+                          min="0"
+                          name={field}
+                          value={form[field]}
+                          onChange={handleFormChange}
+                          required={[
+                            "totalMax",
+                            "totalMin",
+                            "credit",
+                          ].includes(field)}
+                          className={formInputClass}
+                        />
+                      </div>
+                    )
                   )}
+
                 </div>
-
-                <p className="mt-1.5 text-xs text-slate-400">
-                  HOD can manage subjects only for their department.
-                </p>
-
               </div>
 
               {/* FOOTER */}
 
-              <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
 
                 <button
                   type="button"
                   onClick={closeModal}
                   disabled={saving}
-                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -905,7 +1364,7 @@ export default function HODSubjectsPage() {
                   {saving
                     ? "Saving..."
                     : editingSubject
-                    ? "Update Subject"
+                    ? "Save Changes"
                     : "Add Subject"}
                 </button>
 
