@@ -6,11 +6,17 @@
 //   npm run connect-drive
 //
 // Before running, put these two lines in backend/.env
-// (from the OAuth client you created in Google Cloud,
-// application type "Desktop app"):
+// (from the OAuth client you created in Google Cloud):
 //
 //   GOOGLE_CLIENT_ID=...
 //   GOOGLE_CLIENT_SECRET=...
+//
+// If the OAuth client is of type "Web application", add
+// this under "Authorized redirect URIs" in Google Cloud:
+//
+//   http://localhost:53682/callback
+//
+// A client of type "Desktop app" needs nothing added.
 //
 // The script opens Google in your browser. Sign in with the
 // college's study material Gmail account and press Allow.
@@ -96,7 +102,11 @@ const page = (title, text) =>
 
 const state = crypto.randomBytes(16).toString("hex");
 
-let redirectUri = "";
+// A fixed address, so that it can be added to a
+// "Web application" OAuth client in Google Cloud.
+const PORT = 53682;
+
+const redirectUri = `http://localhost:${PORT}/callback`;
 
 const finish = (server, code) => {
   server.close();
@@ -212,10 +222,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// Port 0 = any free port.
-server.listen(0, "127.0.0.1", () => {
-  redirectUri = `http://127.0.0.1:${server.address().port}/callback`;
+server.on("error", (error) => {
+  console.error(
+    error.code === "EADDRINUSE"
+      ? `\nPort ${PORT} is in use. Close the other window running this script and try again.\n`
+      : `\n${error.message}\n`
+  );
 
+  process.exit(1);
+});
+
+server.listen(PORT, () => {
   const authUrl =
     "https://accounts.google.com/o/oauth2/v2/auth?" +
     new URLSearchParams({
@@ -234,6 +251,10 @@ server.listen(0, "127.0.0.1", () => {
       "\nSign in with the college's study material Gmail account and press Allow." +
       "\n\nIf the browser does not open, copy this address into it:\n\n" +
       authUrl +
+      '\n\nIf Google says "redirect_uri_mismatch", add this exact address under' +
+      '\n"Authorized redirect URIs" of your OAuth client in Google Cloud, wait' +
+      "\na few minutes, and run this again:\n\n  " +
+      redirectUri +
       "\n"
   );
 
