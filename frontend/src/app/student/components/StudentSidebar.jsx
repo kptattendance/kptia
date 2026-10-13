@@ -26,6 +26,11 @@ const menuItems = [
     icon: "📖",
   },
   {
+    name: "Progress Report",
+    href: "/student/progress-report",
+    icon: "📄",
+  },
+  {
     name: "Profile",
     href: "/student/profile",
     icon: "👤",

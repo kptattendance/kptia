@@ -315,6 +315,14 @@ iaMarksSchema.index(
   }
 );
 
+// ==========================================================
+// A STUDENT'S OWN IA MARKS
+// ==========================================================
+
+iaMarksSchema.index({
+  "students.studentId": 1,
+});
+
 export default mongoose.model(
   "IAMarks",
   iaMarksSchema
