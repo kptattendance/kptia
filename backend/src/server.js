@@ -13,6 +13,7 @@ import iaRoutes from "./routes/iaRoutes.js";
 import studentAcademicRoutes from "./routes/studentAcademicRoutes.js";
 import courseAllocationRoutes from "./routes/courseAllocationRoutes.js";
 import courseOutcomeRoutes from "./routes/courseOutcomeRoutes.js";
+import studyMaterialRoutes from "./routes/studyMaterialRoutes.js";
 
 dotenv.config();
 
@@ -98,6 +99,10 @@ app.use(
 app.use(
   "/api/course-outcomes",
   courseOutcomeRoutes
+);
+app.use(
+  "/api/materials",
+  studyMaterialRoutes
 );
 connectDB()
   .then(() => {

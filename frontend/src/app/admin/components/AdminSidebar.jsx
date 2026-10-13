@@ -138,6 +138,23 @@ const menuItems = [
       </svg>
     ),
   },
+  {
+    name: "Study Material",
+    href: "/admin/study-material",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="h-5 w-5"
+      >
+        <path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z" />
+        <path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z" />
+      </svg>
+    ),
+  },
   
   {
     name: "Mongo Users",

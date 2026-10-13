@@ -52,6 +52,7 @@ export default function EntryStatusGrid({
   semesters,
   selectedKey,
   onSelect,
+  note = "Each cell counts subject-batches: a subject with Batch 1 and Batch 2 counts as two. Click a cell to see its subjects.",
 }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -149,7 +150,7 @@ export default function EntryStatusGrid({
       </div>
 
       <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
-        Each cell counts subject-batches: a subject with Batch 1 and Batch 2 counts as two. Click a cell to see its subjects.
+        {note}
       </p>
 
     </div>

@@ -52,6 +52,11 @@ const menuItems = [
     href: "/hod/ia-marks",
     icon: "📝",
   },
+  {
+    name: "Study Material",
+    href: "/hod/study-material",
+    icon: "📖",
+  },
 ];
 
 export default function HODSidebar() {

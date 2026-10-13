@@ -21,6 +21,11 @@ const menuItems = [
     icon: "📝",
   },
   {
+    name: "Study Material",
+    href: "/student/study-material",
+    icon: "📖",
+  },
+  {
     name: "Profile",
     href: "/student/profile",
     icon: "👤",

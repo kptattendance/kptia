@@ -27,6 +27,11 @@ const menuItems = [
     href: "/faculty/course-outcomes",
     icon: "◎",
   },
+  {
+    name: "Study Material",
+    href: "/faculty/study-material",
+    icon: "▣",
+  },
 ];
 
 export default function FacultySidebar() {
