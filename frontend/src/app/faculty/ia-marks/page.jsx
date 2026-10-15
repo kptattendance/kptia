@@ -5,6 +5,11 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
 import * as XLSX from "xlsx";
+import {
+  cleanNumberInput,
+  handleGridKeyDown,
+  selectOnFocus,
+} from "../../utils/gridKeyboard";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // --------------------------------------------------
@@ -1063,7 +1068,7 @@ const addTest = () => {
               [co]:
                 value === ""
                   ? ""
-                  : Number(value),
+                  : value,
             },
           }
           : test
@@ -1078,12 +1083,15 @@ const addTest = () => {
   const getCOTotal = (
     coMarks = {}
   ) => {
-    return CO_NAMES.reduce(
-      (total, co) =>
-        total +
+    const total = CO_NAMES.reduce(
+      (sum, co) =>
+        sum +
         Number(coMarks[co] || 0),
       0
     );
+
+    // 0.1 + 0.2 must be 0.3
+    return Math.round(total * 100) / 100;
   };
 
   // ==================================================
@@ -1105,6 +1113,191 @@ const addTest = () => {
       getCOTotal(test.coMarks) ===
       Number(test.maxMarks)
     );
+  };
+
+  // ==================================================
+  // PROBLEMS IN A TEST'S SET-UP
+  //
+  // Shown under the test while it is being typed, so
+  // that nothing is found only when Save is pressed.
+  //
+  // errors -> must be fixed before marks can be entered
+  // notes  -> worth checking, but allowed
+  // ==================================================
+
+  const getTestIssues = (test) => {
+    const errors = [];
+    const notes = [];
+
+    const maxMarks = Number(test.maxMarks);
+
+    if (
+      test.maxMarks === "" ||
+      !Number.isFinite(maxMarks) ||
+      maxMarks <= 0
+    ) {
+      errors.push(
+        "Enter the Max Marks of this test first."
+      );
+
+      return { errors, notes };
+    }
+
+    const values = CO_NAMES.map((co) =>
+      Number(test.coMarks?.[co] || 0)
+    );
+
+    // A CO filled while an earlier CO is empty
+    const firstFilled = values.findIndex(
+      (value) => value > 0
+    );
+
+    const gap = values.findIndex(
+      (value, index) =>
+        value === 0 &&
+        values.slice(index + 1).some((later) => later > 0)
+    );
+
+    if (firstFilled > 0 || gap !== -1) {
+      const emptyIndex =
+        firstFilled > 0 ? 0 : gap;
+
+      const filledIndex = values.findIndex(
+        (value, index) =>
+          index > emptyIndex && value > 0
+      );
+
+      notes.push(
+        `${CO_NAMES[filledIndex]} has marks but ${CO_NAMES[emptyIndex]} is empty. Fill the COs from CO1 onwards, unless this test does not cover ${CO_NAMES[emptyIndex]}.`
+      );
+    }
+
+    const coTotal = getCOTotal(test.coMarks);
+
+    if (coTotal === 0) {
+      errors.push(
+        `Now split the ${maxMarks} marks between the COs below.`
+      );
+    } else if (coTotal > maxMarks) {
+      errors.push(
+        `The CO marks add up to ${coTotal}, which is ${Math.round((coTotal - maxMarks) * 100) / 100} more than the Max Marks (${maxMarks}).`
+      );
+    } else if (coTotal < maxMarks) {
+      errors.push(
+        `The CO marks add up to ${coTotal} of ${maxMarks}. ${Math.round((maxMarks - coTotal) * 100) / 100} more to split between the COs.`
+      );
+    }
+
+    return { errors, notes };
+  };
+
+  // ==================================================
+  // WHAT IS STILL NEEDED BEFORE SAVING
+  //
+  // Shown next to the Save button, so that it is clear
+  // why the button is not active.
+  // ==================================================
+
+  const getSaveProblems = () => {
+    const problems = [];
+
+    if (tests.length === 0) {
+      problems.push("Add at least one IA test.");
+      return problems;
+    }
+
+    tests.forEach((test, testIndex) => {
+      const label =
+        test.testName || `Test ${testIndex + 1}`;
+
+      if (!String(test.testName || "").trim()) {
+        problems.push(
+          `Test ${testIndex + 1}: choose the test name.`
+        );
+      }
+
+      getTestIssues(test).errors.forEach(
+        (error) => {
+          problems.push(`${label}: ${error}`);
+        }
+      );
+    });
+
+    const tooHigh = [];
+
+    students.forEach((student) => {
+      tests.forEach((test, testIndex) => {
+        const record = getStudentTest(
+          student._id,
+          testIndex
+        );
+
+        if (record.status === "ABSENT") {
+          return;
+        }
+
+        CO_NAMES.forEach((co) => {
+          if (
+            Number(record.coMarks?.[co] || 0) >
+            Number(test.coMarks?.[co] || 0)
+          ) {
+            tooHigh.push(
+              `${student.name} (${test.testName} ${co})`
+            );
+          }
+        });
+      });
+    });
+
+    if (tooHigh.length > 0) {
+      problems.push(
+        `${tooHigh.length} ${tooHigh.length === 1 ? "mark is" : "marks are"} more than the CO maximum (shown in red): ${tooHigh
+          .slice(0, 3)
+          .join(", ")}${tooHigh.length > 3 ? " ..." : ""}`
+      );
+    }
+
+    return problems;
+  };
+
+  // Allowed, but worth a look before freezing.
+  const getSaveNotes = () => {
+    let emptyEntries = 0;
+
+    students.forEach((student) => {
+      tests.forEach((test, testIndex) => {
+        const record = getStudentTest(
+          student._id,
+          testIndex
+        );
+
+        if (record.status === "ABSENT") {
+          return;
+        }
+
+        const usedCOs = CO_NAMES.filter(
+          (co) =>
+            Number(test.coMarks?.[co] || 0) > 0
+        );
+
+        if (
+          usedCOs.length > 0 &&
+          usedCOs.every(
+            (co) =>
+              record.coMarks?.[co] === "" ||
+              record.coMarks?.[co] === undefined
+          )
+        ) {
+          emptyEntries += 1;
+        }
+      });
+    });
+
+    return emptyEntries > 0
+      ? [
+          `${emptyEntries} ${emptyEntries === 1 ? "student-test has" : "student-tests have"} no marks typed and will be saved as 0. Use "Mark AB" for students who were absent.`,
+        ]
+      : [];
   };
 
   // ==================================================
@@ -1221,7 +1414,7 @@ const addTest = () => {
             [co]:
               value === ""
                 ? ""
-                : Number(value),
+                : value,
           },
         },
       },
@@ -2558,21 +2751,20 @@ for (const batch of batchesToSave) {
     </label>
 
     <input
-      type="number"
-      min="1"
+      type="text"
+      inputMode="numeric"
       value={test.maxMarks}
       disabled={!!existingIA}
       onChange={(e) =>
         updateTest(
           index,
           "maxMarks",
-          e.target.value
+          cleanNumberInput(e.target.value)
         )
       }
-      onWheel={(e) =>
-        e.currentTarget.blur()
-      }
-      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold outline-none focus:border-slate-400 disabled:bg-slate-50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      onFocus={selectOnFocus}
+      placeholder="e.g. 25"
+      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold outline-none focus:border-slate-400 disabled:bg-slate-50"
     />
   </div>
 
@@ -2630,44 +2822,77 @@ for (const batch of batchesToSave) {
                                   </label>
 
                                   <input
-                                    type="number"
-                                    min="0"
+                                    type="text"
+                                    inputMode="decimal"
                                     value={
                                       test
                                         .coMarks?.[
                                       co
                                       ] ?? 0
                                     }
+                                    // Max Marks first, then the CO split
                                     disabled={
-                                      !!existingIA
+                                      !!existingIA ||
+                                      !(Number(test.maxMarks) > 0)
                                     }
                                     onChange={(e) =>
                                       updateTestCO(
                                         index,
                                         co,
-                                        e.target
-                                          .value
+                                        cleanNumberInput(
+                                          e.target.value,
+                                          true
+                                        )
                                       )
                                     }
-                                    onWheel={(e) => e.currentTarget.blur()}
-                                    className={`w-full rounded-lg border px-3 py-2 text-center text-sm font-semibold outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${valid
+                                    onFocus={selectOnFocus}
+                                    className={`w-full rounded-lg border px-3 py-2 text-center text-sm font-semibold outline-none ${valid
                                         ? "border-slate-200"
                                         : "border-red-200 bg-red-50"
-                                      } disabled:bg-slate-50`}
+                                      } disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300`}
                                   />
                                 </div>
                               )
                             )}
                           </div>
 
-                          {!valid && (
-                            <p className="mt-2 text-xs font-medium text-red-500">
-                              CO1 + CO2 + CO3 + CO4 + CO5 + CO6 must equal{" "}
-                              {test.maxMarks ||
-                                0}
-                              .
-                            </p>
-                          )}
+                          {!existingIA &&
+                            (() => {
+                              const issues =
+                                getTestIssues(test);
+
+                              return (
+                                <>
+                                  {issues.errors.map(
+                                    (error) => (
+                                      <p
+                                        key={error}
+                                        className="mt-2 text-xs font-medium text-red-600"
+                                      >
+                                        {error}
+                                      </p>
+                                    )
+                                  )}
+
+                                  {issues.notes.map(
+                                    (note) => (
+                                      <p
+                                        key={note}
+                                        className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800"
+                                      >
+                                        {note}
+                                      </p>
+                                    )
+                                  )}
+
+                                  {valid && (
+                                    <p className="mt-2 text-xs font-medium text-emerald-600">
+                                      CO split matches the Max Marks. Marks can now be entered for this test.
+                                    </p>
+                                  )}
+                                </>
+                              );
+                            })()}
                         </div>
                       </div>
                     );
@@ -2723,6 +2948,10 @@ for (const batch of batchesToSave) {
     <p className="text-xs text-slate-500">
       Enter CO-wise marks directly in the table. Use AB for an absent student.
     </p>
+
+    <p className="mt-1 hidden text-xs text-slate-400 md:block">
+      Keyboard: arrow keys move between cells, Enter goes to the next student, Tab moves along the row.
+    </p>
   </div>
 
   <div className="flex flex-wrap items-center gap-3">
@@ -2745,6 +2974,18 @@ for (const batch of batchesToSave) {
   </div>
 </div>
 
+{!existingIA &&
+  tests.some((test) => !isTestValid(test)) && (
+    <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
+      Marks can be entered for a test once its CO split above adds up to its Max Marks. Waiting for:{" "}
+      {tests
+        .filter((test) => !isTestValid(test))
+        .map((test) => test.testName || "a test")
+        .join(", ")}
+      .
+    </div>
+  )}
+
 <div
   ref={tableScrollRef}
   onMouseDown={startDrag}
@@ -2754,7 +2995,8 @@ for (const batch of batchesToSave) {
   className="relative w-full min-w-0 cursor-grab overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
   style={{
     WebkitOverflowScrolling: "touch",
-    touchAction: "pan-x",
+    // Vertical swipes still scroll the page on phones.
+    touchAction: "pan-x pan-y",
   }}
 >
   {checkingExisting || loadingStudents ? (
@@ -2778,10 +3020,10 @@ for (const batch of batchesToSave) {
                         <th className="sticky left-0 z-20 w-12 border-r border-slate-200 bg-slate-50 px-3 py-3 text-center text-[10px] font-bold uppercase tracking-wide text-slate-500">
                           #
                         </th>
-                        <th className="sticky left-12 z-20 w-32 border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                        <th className="z-20 w-32 md:sticky md:left-12 border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-slate-500">
                           Register No.
                         </th>
-                        <th className="sticky left-44 z-20 w-56 border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                        <th className="z-20 w-56 md:sticky md:left-44 border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-[10px] font-bold uppercase tracking-wide text-slate-500">
                           Student
                         </th>
 
@@ -2825,7 +3067,7 @@ for (const batch of batchesToSave) {
                           </th>
                         ))}
 
-                        <th className="sticky right-0 z-20 min-w-[80px] border-l border-slate-200 bg-slate-50 px-3 py-3 text-center text-[10px] font-bold uppercase tracking-wide text-slate-600">
+                        <th className="z-20 min-w-[80px] md:sticky md:right-0 border-l border-slate-200 bg-slate-50 px-3 py-3 text-center text-[10px] font-bold uppercase tracking-wide text-slate-600">
                           Final Total
                         </th>
                       </tr>
@@ -2838,11 +3080,11 @@ for (const batch of batchesToSave) {
                             {studentIndex + 1}
                           </td>
 
-                          <td className="sticky left-12 z-10 border-r border-slate-100 bg-white px-3 py-3 text-sm font-semibold text-slate-700">
+                          <td className="z-10 border-r md:sticky md:left-12 border-slate-100 bg-white px-3 py-3 text-sm font-semibold text-slate-700">
                             {student.registerNumber}
                           </td>
 
-                          <td className="sticky left-44 z-10 border-r border-slate-100 bg-white px-3 py-3">
+                          <td className="z-10 border-r md:sticky md:left-44 border-slate-100 bg-white px-3 py-3">
                             <div className="flex items-center gap-3">
                               {student.imageUrl ? (
                                 <img
@@ -2900,6 +3142,7 @@ for (const batch of batchesToSave) {
                                     {!existingIA && (
                                       <button
                                         type="button"
+                                        tabIndex={-1}
                                         onClick={() =>
                                           setStudentPresent(student._id, testIndex)
                                         }
@@ -2912,30 +3155,60 @@ for (const batch of batchesToSave) {
                                 ) : (
                                   <div className="min-w-[400px]">
                                     <div className="grid grid-cols-7 items-center gap-1">
-                                      {CO_NAMES.map((co) => {
+                                      {CO_NAMES.map((co, coIndex) => {
                                         const value = record.coMarks?.[co] ?? "";
                                         const maxCO = Number(test.coMarks?.[co] || 0);
+
+                                        // A CO that carries no marks in this test
+                                        // cannot be entered, and is skipped by the keyboard.
+                                        const notUsed = maxCO === 0;
+
+                                        const tooHigh =
+                                          value !== "" &&
+                                          Number(value) > maxCO;
 
                                         return (
                                           <input
                                             key={co}
-                                            type="number"
-                                            min="0"
-                                            max={maxCO}
-                                            step="0.01"
-                                            value={value}
-                                            disabled={!!existingIA}
+                                            type="text"
+                                            inputMode="decimal"
+                                            data-grid="ia"
+                                            data-row={studentIndex}
+                                            data-col={testIndex * CO_NAMES.length + coIndex}
+                                            value={notUsed ? "" : value}
+                                            disabled={
+                                              !!existingIA ||
+                                              notUsed ||
+                                              !isTestValid(test)
+                                            }
                                             onChange={(e) =>
                                               updateStudentCO(
                                                 student._id,
                                                 testIndex,
                                                 co,
-                                                e.target.value
+                                                cleanNumberInput(
+                                                  e.target.value,
+                                                  true
+                                                )
                                               )
                                             }
-                                            onWheel={(e) => e.currentTarget.blur()}
-                                            className="h-9 w-full rounded-md border border-slate-200 bg-white px-1 text-center text-xs font-semibold text-slate-700 outline-none transition focus:border-slate-400 focus:ring-1 focus:ring-slate-200 disabled:bg-slate-50 disabled:text-slate-500 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                            placeholder="0"
+                                            onKeyDown={handleGridKeyDown}
+                                            onFocus={selectOnFocus}
+                                            title={
+                                              tooHigh
+                                                ? `More than the ${co} maximum of ${maxCO}`
+                                                : undefined
+                                            }
+                                            className={`h-9 w-full rounded-md border px-1 text-center text-xs font-semibold outline-none transition focus:ring-2 disabled:cursor-not-allowed ${
+                                              tooHigh
+                                                ? "border-red-400 bg-red-50 text-red-700 focus:ring-red-200"
+                                                : "border-slate-200 bg-white text-slate-700 focus:border-slate-500 focus:ring-slate-200"
+                                            } ${
+                                              notUsed
+                                                ? "disabled:bg-slate-100"
+                                                : "disabled:bg-slate-50 disabled:text-slate-500"
+                                            }`}
+                                            placeholder={notUsed ? "–" : "0"}
                                             aria-label={`${student.name} ${test.testName} ${co}`}
                                           />
                                         );
@@ -2953,6 +3226,7 @@ for (const batch of batchesToSave) {
                                         </span>
                                         <button
                                           type="button"
+                                          tabIndex={-1}
                                           onClick={() =>
                                             setStudentAbsent(student._id, testIndex)
                                           }
@@ -2968,7 +3242,7 @@ for (const batch of batchesToSave) {
                             );
                           })}
 
-                          <td className="sticky right-0 z-10 border-l border-slate-100 bg-white px-3 py-3 text-center">
+                          <td className="z-10 border-l md:sticky md:right-0 border-slate-100 bg-white px-3 py-3 text-center">
                             <span className="inline-flex min-w-[65px] justify-center rounded-lg bg-slate-900 px-2 py-2 text-sm font-bold text-white">
                               {getStudentTotal(student._id)}
                             </span>
@@ -2983,6 +3257,49 @@ for (const batch of batchesToSave) {
               {/* ================================================= */}
               {/* SAVE */}
               {/* ================================================= */}
+
+              {students.length > 0 && !existingIA &&
+                (() => {
+                  const problems = getSaveProblems();
+                  const notes = getSaveNotes();
+
+                  return (
+                    <div
+                      className={`border-t px-4 py-3 text-xs ${
+                        problems.length > 0
+                          ? "border-red-100 bg-red-50 text-red-800"
+                          : "border-emerald-100 bg-emerald-50 text-emerald-800"
+                      }`}
+                    >
+                      {problems.length > 0 ? (
+                        <>
+                          <p className="font-bold">
+                            Save & Freeze will be available after these are done:
+                          </p>
+
+                          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                            {problems.map((problem) => (
+                              <li key={problem}>{problem}</li>
+                            ))}
+                          </ul>
+                        </>
+                      ) : (
+                        <p className="font-bold">
+                          Everything needed is entered. Check the marks once and press Save & Freeze IA.
+                        </p>
+                      )}
+
+                      {notes.map((note) => (
+                        <p
+                          key={note}
+                          className="mt-2 rounded-lg bg-amber-50 px-3 py-2 font-medium text-amber-800"
+                        >
+                          {note}
+                        </p>
+                      ))}
+                    </div>
+                  );
+                })()}
 
               {students.length > 0 && (
                 <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -3001,8 +3318,7 @@ for (const batch of batchesToSave) {
                       onClick={handleSave}
                       disabled={
                         saving ||
-                        tests.length === 0 ||
-                        tests.some((test) => !isTestValid(test))
+                        getSaveProblems().length > 0
                       }
                       className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >

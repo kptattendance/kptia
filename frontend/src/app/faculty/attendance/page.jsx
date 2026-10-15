@@ -6,6 +6,11 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import Swal from "sweetalert2";
 import {
+  cleanNumberInput,
+  handleGridKeyDown,
+  selectOnFocus,
+} from "../../utils/gridKeyboard";
+import {
   CalendarDays,
   Check,
   ChevronDown,
@@ -818,6 +823,77 @@ setStudentMaxClasses(savedMaxClasses);
   };
 
   // =====================================================
+  // WHAT IS STILL NEEDED BEFORE SAVING
+  //
+  // Shown next to the Save button, so that it is clear
+  // why the button is not active.
+  // =====================================================
+
+  const isBlank = (value) =>
+    value === "" ||
+    value === null ||
+    value === undefined;
+
+  const listNames = (list) =>
+    `${list
+      .slice(0, 3)
+      .map((student) => student.name)
+      .join(", ")}${list.length > 3 ? ` and ${list.length - 3} more` : ""}`;
+
+  const getSaveProblems = () => {
+    const problems = [];
+
+    const conducted = Number(classesConducted);
+
+    if (isBlank(classesConducted)) {
+      problems.push(
+        "Enter Classes Conducted at the top."
+      );
+
+      return problems;
+    }
+
+    const missing = [];
+    const aboveMaximum = [];
+    const maximumTooHigh = [];
+
+    students.forEach((student) => {
+      const value = attendance[student._id];
+      const maxClasses = getMaxClasses(student._id);
+
+      if (isBlank(value)) {
+        missing.push(student);
+      } else if (Number(value) > maxClasses) {
+        aboveMaximum.push(student);
+      }
+
+      if (maxClasses > conducted) {
+        maximumTooHigh.push(student);
+      }
+    });
+
+    if (missing.length > 0) {
+      problems.push(
+        `Classes attended is empty for ${missing.length} ${missing.length === 1 ? "student" : "students"}: ${listNames(missing)}.`
+      );
+    }
+
+    if (aboveMaximum.length > 0) {
+      problems.push(
+        `Classes attended is more than the maximum for ${aboveMaximum.length} ${aboveMaximum.length === 1 ? "student" : "students"} (shown in red): ${listNames(aboveMaximum)}.`
+      );
+    }
+
+    if (maximumTooHigh.length > 0) {
+      problems.push(
+        `Max Classes is more than Classes Conducted (${conducted}) for: ${listNames(maximumTooHigh)}.`
+      );
+    }
+
+    return problems;
+  };
+
+  // =====================================================
   // ATTENDANCE PERCENTAGE
   // =====================================================
 
@@ -1121,39 +1197,16 @@ const handleClassesConductedChange = (value) => {
     return;
   }
 
-  // Individual maximum can never be
-  // greater than overall classes conducted.
-  if (
-    classesConducted !== "" &&
-    numericValue >
-      Number(classesConducted)
-  ) {
-    return;
-  }
+  // A maximum above classes conducted is kept and
+  // shown in red (see getSaveProblems).
 
   setStudentMaxClasses((prev) => ({
     ...prev,
     [studentId]: numericValue,
   }));
 
-  // If current attendance is greater than
-  // the newly selected maximum, clear it.
-  setAttendance((prev) => {
-    const currentAttendance =
-      Number(prev[studentId]);
-
-    if (
-      Number.isFinite(currentAttendance) &&
-      currentAttendance > numericValue
-    ) {
-      return {
-        ...prev,
-        [studentId]: "",
-      };
-    }
-
-    return prev;
-  });
+  // Attendance above the new maximum is kept and
+  // shown in red, not cleared.
 };
   // =====================================================
   // HANDLE ATTENDANCE CHANGE
@@ -1192,18 +1245,9 @@ const handleClassesConductedChange = (value) => {
     ) {
       return;
     }
-const maxClasses =
-  studentMaxClasses[studentId] ??
-  classesConducted;
-
-if (
-  maxClasses !== "" &&
-  maxClasses !== undefined &&
-  maxClasses !== null &&
-  numericValue > Number(maxClasses)
-) {
-  return;
-}
+// A value above the maximum is kept and shown in red
+// (see getSaveProblems), instead of being ignored
+// without telling the faculty why.
 
     setAttendance((prev) => ({
       ...prev,
@@ -2278,9 +2322,9 @@ if (
                     </label>
 
                     <input
-                      type="number"
-                      onWheel={(e) => e.currentTarget.blur()}
-                      min="0"
+                      type="text"
+                      inputMode="numeric"
+                      onFocus={selectOnFocus}
                       value={
                         classesConducted
                       }
@@ -2290,7 +2334,7 @@ if (
                       }
                     onChange={(e) =>
   handleClassesConductedChange(
-    e.target.value
+    cleanNumberInput(e.target.value)
   )
 }
                       placeholder="Enter number of classes"
@@ -2419,9 +2463,15 @@ if (
                       Student Table
                   ----------------------------------------- */}
 
+                  {!attendanceLocked && (
+                    <p className="hidden border-b border-slate-100 px-5 py-2 text-xs text-slate-400 md:block">
+                      Keyboard: Enter or the down arrow goes to the next student, the left and right arrows move between Classes Attended and Max Classes.
+                    </p>
+                  )}
+
                   <div className="overflow-x-auto">
 
-                    <table className="w-full min-w-[850px]">
+                    <table className="w-full min-w-[720px]">
 
                       <thead>
 
@@ -2542,14 +2592,21 @@ if (
                                 <td className="px-4 py-4 text-center">
 
                                   <input
-                                    type="number"
-                                    onWheel={(e) => e.currentTarget.blur()}
-                                    min="0"
-                                   max={
-  studentMaxClasses[student._id] ??
-  classesConducted ??
-  undefined
-}
+                                    type="text"
+                                    inputMode="numeric"
+                                    data-grid="attendance"
+                                    data-row={index}
+                                    data-col={0}
+                                    onKeyDown={handleGridKeyDown}
+                                    onFocus={selectOnFocus}
+                                    aria-label={`Classes attended by ${student.name}`}
+                                    title={
+                                      !isBlank(attendance[student._id]) &&
+                                      Number(attendance[student._id]) >
+                                        getMaxClasses(student._id)
+                                        ? `More than the maximum of ${getMaxClasses(student._id)}`
+                                        : undefined
+                                    }
                                     value={
                                       attendance[
                                         student
@@ -2566,13 +2623,19 @@ if (
                                     ) =>
                                       handleAttendanceChange(
                                         student._id,
-                                        e
-                                          .target
-                                          .value
+                                        cleanNumberInput(
+                                          e.target.value
+                                        )
                                       )
                                     }
                                     placeholder="0"
-                                    className="mx-auto block w-32 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                                    className={`mx-auto block w-24 rounded-xl border px-3 py-2.5 text-center text-sm font-bold outline-none transition placeholder:text-slate-300 focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 sm:w-32 ${
+                                      !isBlank(attendance[student._id]) &&
+                                      Number(attendance[student._id]) >
+                                        getMaxClasses(student._id)
+                                        ? "border-red-400 bg-red-50 text-red-700 focus:ring-red-100"
+                                        : "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:ring-blue-50"
+                                    }`}
                                   />
 
                                 </td>
@@ -2580,12 +2643,14 @@ if (
 
 <td className="px-4 py-4 text-center">
   <input
-    type="number"
-    onWheel={(e) => e.currentTarget.blur()}
-    min="0"
-    max={
-      classesConducted || undefined
-    }
+    type="text"
+    inputMode="numeric"
+    data-grid="attendance"
+    data-row={index}
+    data-col={1}
+    onKeyDown={handleGridKeyDown}
+    onFocus={selectOnFocus}
+    aria-label={`Maximum classes of ${student.name}`}
     value={
       studentMaxClasses[student._id] ??
       classesConducted ??
@@ -2598,10 +2663,15 @@ if (
     onChange={(e) =>
       handleMaxClassesChange(
         student._id,
-        e.target.value
+        cleanNumberInput(e.target.value)
       )
     }
-    className="mx-auto block w-24 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-center text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+    className={`mx-auto block w-20 rounded-xl border px-3 py-2.5 text-center text-sm font-bold outline-none transition placeholder:text-slate-300 focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 sm:w-24 ${
+      classesConducted !== "" &&
+      getMaxClasses(student._id) > Number(classesConducted)
+        ? "border-red-400 bg-red-50 text-red-700 focus:ring-red-100"
+        : "border-slate-200 bg-white text-slate-900 focus:border-blue-500 focus:ring-blue-50"
+    }`}
   />
 </td>
                                 {/* Percentage */}
@@ -2669,8 +2739,23 @@ if (
                         <p className="text-xs font-semibold text-slate-700">
                           {attendanceLocked
                             ? "Attendance is locked"
-                            : "Please verify all entries before saving"}
+                            : getSaveProblems().length > 0
+                            ? "Save & Lock will be available after these are done:"
+                            : "Everything needed is entered. Please verify and save."}
                         </p>
+
+                        {!attendanceLocked &&
+                          getSaveProblems().length > 0 && (
+                            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs font-medium text-red-700">
+                              {getSaveProblems().map(
+                                (problem) => (
+                                  <li key={problem}>
+                                    {problem}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          )}
 
                         <p className="mt-0.5 max-w-xl text-xs leading-5 text-slate-400">
                           {attendanceLocked
@@ -2691,7 +2776,8 @@ if (
                         saving ||
                         loadingStudents ||
                         checkingAttendance ||
-                        attendanceLocked
+                        attendanceLocked ||
+                        getSaveProblems().length > 0
                       }
                       className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-7 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                     >

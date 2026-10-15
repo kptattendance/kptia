@@ -51,11 +51,14 @@ const isLateralStudent = (admissionType) => {
 };
 
 const getCOTotal = (coMarks = {}) => {
-  return CO_NAMES.reduce(
-    (total, co) =>
-      total + Number(coMarks[co] || 0),
+  const total = CO_NAMES.reduce(
+    (sum, co) =>
+      sum + Number(coMarks[co] || 0),
     0
   );
+
+  // 0.1 + 0.2 must be 0.3
+  return Math.round(total * 100) / 100;
 };
 
 // --------------------------------------------------

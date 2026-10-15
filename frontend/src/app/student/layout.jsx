@@ -7,7 +7,7 @@ export default function StudentLayout({ children }) {
             <RoleGuard allowedRoles={["student"]}>
       <StudentSidebar />
 
-      <main className="ml-72 min-h-screen">
+      <main className="min-h-screen pt-16 lg:ml-72 lg:pt-0">
 
         {children}
       </main>

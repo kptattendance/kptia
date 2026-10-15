@@ -105,7 +105,7 @@ export default function FacultyLayout({ children }) {
     <div className="min-h-screen overflow-x-hidden bg-gray-50">
       <FacultySidebar />
 
-      <main className="min-h-screen ml-0 lg:ml-72">
+      <main className="ml-0 min-h-screen pt-16 lg:ml-72 lg:pt-0">
         {children}
       </main>
     </div>
