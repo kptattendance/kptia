@@ -5,15 +5,159 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
 import { Download } from "lucide-react";
+import { Noto_Sans_Kannada } from "next/font/google";
 import {
   formatDate,
   formatMarks,
   formatPercent,
   getDepartmentName,
   getMonthLabel,
+  monthPercentage,
 } from "./progressReportPdf";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+// Kannada lines of the letterhead footer
+const kannadaFont = Noto_Sans_Kannada({
+  subsets: ["kannada"],
+  weight: ["400", "700"],
+});
+
+// =====================================================
+// LETTERHEAD
+// =====================================================
+
+const LOGOS = {
+  // College logo, left
+  leftLogo:
+    "https://res.cloudinary.com/dnreqxbdw/image/upload/v1757932916/logo3_vptob4.jpg",
+
+  // Emblem of Karnataka, middle
+  centerLogo:
+    "https://res.cloudinary.com/dnreqxbdw/image/upload/v1757932915/logo5_czeuoz.png",
+
+  // Platinum Jubilee logo, right
+  rightLogo:
+    "https://res.cloudinary.com/dnreqxbdw/image/upload/v1757932915/logo4_q0ujtn.png",
+};
+
+const KANNADA_FOOTER = [
+  {
+    text: "\u0c95\u0cb0\u0ccd\u0ca8\u0cbe\u0c9f\u0c95 (\u0cb8\u0cb0\u0ccd\u0c95\u0cbe\u0cb0\u0cbf) \u0caa\u0cbe\u0cb2\u0cbf\u0c9f\u0cc6\u0c95\u0ccd\u0ca8\u0cbf\u0c95\u0ccd (\u0cb8\u0ccd\u0cb5\u0cbe\u0caf\u0ca4\u0ccd\u0ca4), \u0cae\u0c82\u0c97\u0cb3\u0cc2\u0cb0\u0cc1",
+    weight: 700,
+    size: 46,
+    color: "#991b34",
+  },
+  {
+    text: "\u0c95\u0ca6\u0ccd\u0cb0\u0cbf \u0cb9\u0cbf\u0cb2\u0ccd\u0cb8\u0ccd, \u0cae\u0c82\u0c97\u0cb3\u0cc2\u0cb0\u0cc1 - 575004, \u0ca6\u0c95\u0ccd\u0cb7\u0cbf\u0ca3 \u0c95\u0ca8\u0ccd\u0ca8\u0ca1, \u0c95\u0cb0\u0ccd\u0ca8\u0cbe\u0c9f\u0c95",
+    weight: 400,
+    size: 40,
+    color: "#64748b",
+  },
+];
+
+// A logo, made smaller for the PDF. "" if it cannot load.
+const loadLogo = (url, maxSize = 360) =>
+  new Promise((resolve) => {
+    const image = new window.Image();
+
+    image.crossOrigin = "anonymous";
+
+    image.onload = () => {
+      try {
+        const scale = Math.min(
+          1,
+          maxSize /
+            Math.max(image.width, image.height)
+        );
+
+        const canvas = document.createElement("canvas");
+
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+
+        canvas
+          .getContext("2d")
+          .drawImage(
+            image,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
+
+        resolve(canvas.toDataURL("image/png"));
+      } catch {
+        resolve("");
+      }
+    };
+
+    image.onerror = () => resolve("");
+
+    image.src = url;
+  });
+
+// The Kannada lines are drawn by the browser, which
+// joins Kannada letters correctly; PDF fonts cannot.
+const renderKannadaFooter = async () => {
+  try {
+    const family = kannadaFont.style.fontFamily;
+
+    await Promise.all(
+      KANNADA_FOOTER.map((line) =>
+        document.fonts.load(
+          `${line.weight} ${line.size}px ${family}`,
+          line.text
+        )
+      )
+    );
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    const font = (line) =>
+      `${line.weight} ${line.size}px ${family}`;
+
+    const width = Math.ceil(
+      Math.max(
+        ...KANNADA_FOOTER.map((line) => {
+          context.font = font(line);
+          return context.measureText(line.text).width;
+        })
+      ) + 20
+    );
+
+    const lineHeights = KANNADA_FOOTER.map(
+      (line) => line.size * 1.45
+    );
+
+    canvas.width = width;
+    canvas.height = Math.ceil(
+      lineHeights.reduce((a, b) => a + b, 0)
+    );
+
+    let top = 0;
+
+    KANNADA_FOOTER.forEach((line, index) => {
+      context.font = font(line);
+      context.fillStyle = line.color;
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+
+      context.fillText(
+        line.text,
+        width / 2,
+        top + lineHeights[index] / 2
+      );
+
+      top += lineHeights[index];
+    });
+
+    return canvas.toDataURL("image/png");
+  } catch {
+    return "";
+  }
+};
 
 // =====================================================
 // PHOTO FOR THE PDF
@@ -134,13 +278,28 @@ export default function StudentProgressReportPage() {
       setDownloading(true);
 
       // The PDF code is loaded only when it is needed.
-      const [{ buildProgressReportPdf }, photo] =
-        await Promise.all([
-          import("./progressReportPdf"),
-          loadPhoto(report.student.imageUrl),
-        ]);
+      const [
+        { buildProgressReportPdf },
+        photo,
+        leftLogo,
+        centerLogo,
+        rightLogo,
+        kannadaFooter,
+      ] = await Promise.all([
+        import("./progressReportPdf"),
+        loadPhoto(report.student.imageUrl),
+        loadLogo(LOGOS.leftLogo),
+        loadLogo(LOGOS.centerLogo),
+        loadLogo(LOGOS.rightLogo),
+        renderKannadaFooter(),
+      ]);
 
-      buildProgressReportPdf(report, photo).save(
+      buildProgressReportPdf(report, photo, {
+        leftLogo,
+        centerLogo,
+        rightLogo,
+        kannadaFooter,
+      }).save(
         `Progress_Report_${report.student.registerNumber}.pdf`
       );
     } catch (err) {
@@ -188,7 +347,6 @@ export default function StudentProgressReportPage() {
     months,
     iaNumbers,
     rows,
-    overallAttendance,
     minimumAttendance,
     attendanceIsRunningTotal,
   } = report;
@@ -198,21 +356,30 @@ export default function StudentProgressReportPage() {
     value !== undefined &&
     value < minimumAttendance;
 
-  const nothingEntered =
-    months.length === 0 && iaNumbers.length === 0;
-
   const headClass =
     "px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-500";
 
   const cellClass =
     "px-3 py-2.5 text-center text-sm text-slate-700 whitespace-nowrap";
 
+  const subjectCell = (row) => (
+    <td className="px-5 py-2.5">
+      <p className="font-mono text-xs font-bold text-slate-500">
+        {row.subject.code}
+      </p>
+
+      <p className="text-sm font-medium text-slate-900">
+        {row.subject.name}
+      </p>
+    </td>
+  );
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
 
       {/* HEADER */}
 
-      <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-6 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
@@ -220,7 +387,14 @@ export default function StudentProgressReportPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            Your attendance and internal assessment marks for Semester {student.semester}, {report.academicYear}, as on {formatDate(report.generatedAt)}. Download it, get it signed by your parent and submit it to your HOD.
+            {student.name} · {student.registerNumber} · {getDepartmentName(student.department)} · Semester {student.semester}, {report.academicYear}
+            {student.mentorName
+              ? ` · Mentor: ${student.mentorName}`
+              : ""}
+          </p>
+
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            As on {formatDate(report.generatedAt)}. Download it, sign it, get it signed by your parent and submit it to your HOD.
           </p>
         </div>
 
@@ -238,56 +412,6 @@ export default function StudentProgressReportPage() {
 
       </div>
 
-      {/* STUDENT + OVERALL */}
-
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:col-span-2">
-          <p className="text-base font-semibold text-slate-900">
-            {student.name}
-          </p>
-
-          <p className="mt-1 text-sm text-slate-500">
-            {student.registerNumber}
-            {" · "}
-            {getDepartmentName(student.department)}
-            {" · "}
-            Semester {student.semester}
-            {" · "}
-            Batch {student.batchNumber}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Overall attendance
-          </p>
-
-          <p
-            className={`mt-1 text-2xl font-bold ${
-              isLow(overallAttendance.percentage)
-                ? "text-red-600"
-                : "text-slate-900"
-            }`}
-          >
-            {formatPercent(overallAttendance.percentage)}
-          </p>
-
-          <p className="text-xs text-slate-500">
-            {overallAttendance.eligible > 0
-              ? `${overallAttendance.attended} of ${overallAttendance.eligible} classes`
-              : "Not entered yet"}
-          </p>
-        </div>
-
-      </div>
-
-      {nothingEntered && (
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
-          Attendance and IA marks have not been entered for this semester yet. The report will fill in as your faculty enter them.
-        </div>
-      )}
-
       {/* ATTENDANCE */}
 
       <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -299,8 +423,8 @@ export default function StudentProgressReportPage() {
 
           <p className="mt-0.5 text-xs text-slate-500">
             {attendanceIsRunningTotal
-              ? "Classes attended / classes held from the start of the semester up to the end of each month."
-              : "Classes attended / classes held, month by month."}{" "}
+              ? "Classes attended / classes held from the start of the semester up to the end of each month, with the percentage."
+              : "Classes attended / classes held in each month, with the percentage."}{" "}
             Below {minimumAttendance}% is shown in red.
           </p>
         </div>
@@ -312,7 +436,7 @@ export default function StudentProgressReportPage() {
         ) : (
           <div className="overflow-x-auto">
 
-            <table className="w-full min-w-[640px]">
+            <table className="w-full min-w-[560px]">
 
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
@@ -331,13 +455,6 @@ export default function StudentProgressReportPage() {
                       {getMonthLabel(month)}
                     </th>
                   ))}
-
-                  <th className={headClass}>
-                    {attendanceIsRunningTotal
-                      ? "To date"
-                      : "Total"}
-                  </th>
-                  <th className={headClass}>%</th>
                 </tr>
               </thead>
 
@@ -345,51 +462,42 @@ export default function StudentProgressReportPage() {
 
                 {rows.map((row) => (
                   <tr key={row.subject._id}>
-                    <td className="px-5 py-2.5">
-                      <p className="font-mono text-xs font-bold text-slate-500">
-                        {row.subject.code}
-                      </p>
-
-                      <p className="text-sm font-medium text-slate-900">
-                        {row.subject.name}
-                      </p>
-                    </td>
+                    {subjectCell(row)}
 
                     {months.map((month) => {
                       const value =
                         row.attendance[month.key];
+
+                      const percent =
+                        monthPercentage(value);
 
                       return (
                         <td
                           key={month.key}
                           className={cellClass}
                         >
-                          {value
-                            ? `${value.attended} / ${value.eligible}`
-                            : "-"}
+                          {value ? (
+                            <>
+                              <span className="block">
+                                {value.attended} / {value.eligible}
+                              </span>
+
+                              <span
+                                className={`block text-xs font-bold ${
+                                  isLow(percent)
+                                    ? "text-red-600"
+                                    : "text-slate-500"
+                                }`}
+                              >
+                                {formatPercent(percent)}
+                              </span>
+                            </>
+                          ) : (
+                            "-"
+                          )}
                         </td>
                       );
                     })}
-
-                    <td className={cellClass}>
-                      {row.attendanceTotal.eligible > 0
-                        ? `${row.attendanceTotal.attended} / ${row.attendanceTotal.eligible}`
-                        : "-"}
-                    </td>
-
-                    <td
-                      className={`${cellClass} font-bold ${
-                        isLow(
-                          row.attendanceTotal.percentage
-                        )
-                          ? "text-red-600"
-                          : "text-slate-900"
-                      }`}
-                    >
-                      {formatPercent(
-                        row.attendanceTotal.percentage
-                      )}
-                    </td>
                   </tr>
                 ))}
 
@@ -423,7 +531,7 @@ export default function StudentProgressReportPage() {
         ) : (
           <div className="overflow-x-auto">
 
-            <table className="w-full min-w-[560px]">
+            <table className="w-full min-w-[480px]">
 
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
@@ -439,8 +547,6 @@ export default function StudentProgressReportPage() {
                       IA {iaNumber}
                     </th>
                   ))}
-
-                  <th className={headClass}>Total</th>
                 </tr>
               </thead>
 
@@ -448,15 +554,7 @@ export default function StudentProgressReportPage() {
 
                 {rows.map((row) => (
                   <tr key={row.subject._id}>
-                    <td className="px-5 py-2.5">
-                      <p className="font-mono text-xs font-bold text-slate-500">
-                        {row.subject.code}
-                      </p>
-
-                      <p className="text-sm font-medium text-slate-900">
-                        {row.subject.name}
-                      </p>
-                    </td>
+                    {subjectCell(row)}
 
                     {iaNumbers.map((iaNumber) => {
                       const value = row.ia[iaNumber];
@@ -484,18 +582,6 @@ export default function StudentProgressReportPage() {
                         </td>
                       );
                     })}
-
-                    <td
-                      className={`${cellClass} font-bold text-slate-900`}
-                    >
-                      {row.iaTotal.maxMarks > 0
-                        ? `${formatMarks(
-                            row.iaTotal.marks
-                          )} / ${formatMarks(
-                            row.iaTotal.maxMarks
-                          )}`
-                        : "-"}
-                    </td>
                   </tr>
                 ))}
 
@@ -509,7 +595,7 @@ export default function StudentProgressReportPage() {
       </div>
 
       <p className="text-xs leading-5 text-slate-500">
-        The PDF has both tables on one page, your photo, a declaration for your parent, and places for your signature, your parent&apos;s signature and the HOD&apos;s signature. Each time new attendance or IA marks are entered, download it again: the new report includes everything entered so far.
+        The PDF has both tables on one page with your photo and mentor, a declaration for your parent, and places for the signatures of you, your parent, your mentor, the HOD and the Principal. Each time new attendance or IA marks are entered, download it again: the new report includes everything entered so far.
       </p>
 
     </div>

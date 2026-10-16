@@ -3,6 +3,7 @@ import Subject from "../models/Subject.js";
 import Attendance from "../models/Attendance.js";
 import IAMarks from "../models/IAMarks.js";
 import { getAcademicYearForMonth } from "./courseAllocationController.js";
+import { getMentorName } from "./mentorController.js";
 
 // --------------------------------------------------
 // CONSTANTS
@@ -128,7 +129,12 @@ export const getMyProgressReport = async (
       };
     }
 
-    const [subjects, attendanceRecords, iaRecords] =
+    const [
+      subjects,
+      attendanceRecords,
+      iaRecords,
+      mentorName,
+    ] =
       await Promise.all([
         Subject.find(subjectFilter)
           .select(
@@ -186,6 +192,8 @@ export const getMyProgressReport = async (
             },
           }
         ).lean(),
+
+        getMentorName(student._id, academicYear),
       ]);
 
     // --------------------------------------------------
@@ -407,6 +415,7 @@ export const getMyProgressReport = async (
         batch: student.batch,
         batchNumber: student.batchNumber,
         imageUrl: student.imageUrl || "",
+        mentorName,
       },
 
       months,

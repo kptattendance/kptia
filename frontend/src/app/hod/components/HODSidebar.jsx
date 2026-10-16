@@ -28,6 +28,11 @@ const menuItems = [
     icon: "🗂",
   },
   {
+    name: "Mentors",
+    href: "/hod/mentors",
+    icon: "🤝",
+  },
+  {
     name: "Program Outcomes",
     href: "/hod/program-outcomes",
     icon: "🎯",

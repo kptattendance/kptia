@@ -14,6 +14,7 @@ import studentAcademicRoutes from "./routes/studentAcademicRoutes.js";
 import courseAllocationRoutes from "./routes/courseAllocationRoutes.js";
 import courseOutcomeRoutes from "./routes/courseOutcomeRoutes.js";
 import studyMaterialRoutes from "./routes/studyMaterialRoutes.js";
+import mentorRoutes from "./routes/mentorRoutes.js";
 
 dotenv.config();
 
@@ -103,6 +104,10 @@ app.use(
 app.use(
   "/api/materials",
   studyMaterialRoutes
+);
+app.use(
+  "/api/mentors",
+  mentorRoutes
 );
 connectDB()
   .then(() => {
