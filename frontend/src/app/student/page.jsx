@@ -78,7 +78,7 @@ export default function StudentDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 p-6 md:p-8">
+      <div className="min-h-screen p-6 md:p-8">
         <div className="mx-auto max-w-7xl animate-pulse">
           <div className="h-8 w-56 rounded bg-slate-200" />
 
@@ -98,7 +98,7 @@ export default function StudentDashboard() {
 
   if (!student) {
     return (
-      <div className="min-h-screen bg-slate-50 p-6 md:p-8">
+      <div className="min-h-screen p-6 md:p-8">
         <div className="mx-auto max-w-7xl">
           <div className="rounded-2xl border border-red-100 bg-red-50 p-6 text-sm font-medium text-red-700">
             {error || "Student information not found."}
@@ -146,7 +146,7 @@ export default function StudentDashboard() {
     "";
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen">
       {/* Header */}
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-6 md:px-8">

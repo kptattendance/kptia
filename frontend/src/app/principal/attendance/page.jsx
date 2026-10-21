@@ -334,7 +334,7 @@ export default function PrincipalAttendancePage() {
   // --------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen">
       {/* Header */}
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-6 md:px-8">

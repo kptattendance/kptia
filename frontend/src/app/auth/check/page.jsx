@@ -122,7 +122,7 @@ switch (user.role) {
   ]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen items-center justify-center">
       <div className="w-full max-w-md rounded-xl border bg-white p-8 text-center shadow-sm">
 
         <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-black" />

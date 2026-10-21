@@ -608,7 +608,7 @@ export default function HODSubjectsPage() {
     "mb-1.5 block text-xs font-semibold text-slate-600";
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+    <div className="min-h-screen p-6 lg:p-8">
 
       {/* HEADER */}
 

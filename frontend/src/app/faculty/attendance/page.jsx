@@ -1799,7 +1799,7 @@ const handleClassesConductedChange = (value) => {
   // =====================================================
 
   return (
-    <div className="min-h-screen bg-[#f6f8fb] px-4 py-5 sm:px-6 lg:px-8">
+    <div className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
 
       <div className="mx-auto max-w-[1500px]">
 

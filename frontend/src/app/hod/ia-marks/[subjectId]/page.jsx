@@ -550,7 +550,7 @@ const downloadExcelReport = async () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+      <div className="min-h-screen p-4 md:p-6 lg:p-8">
         <div className="mx-auto max-w-7xl">
 
           <div className="rounded-2xl border border-slate-200 bg-white px-6 py-20 text-center shadow-sm">
@@ -577,7 +577,7 @@ const downloadExcelReport = async () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+      <div className="min-h-screen p-4 md:p-6 lg:p-8">
         <div className="mx-auto max-w-7xl">
 
           <Link
@@ -603,7 +603,7 @@ const downloadExcelReport = async () => {
 
   if (!data?.subject) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+      <div className="min-h-screen p-4 md:p-6 lg:p-8">
         <div className="mx-auto max-w-7xl">
 
           <Link
@@ -626,7 +626,7 @@ const downloadExcelReport = async () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen p-4 md:p-6 lg:p-8">
 
       <div className="mx-auto max-w-[1500px]">
 

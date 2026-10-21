@@ -235,7 +235,7 @@ export default function AdminStudyMaterialPage() {
     "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+    <div className="min-h-screen p-6 lg:p-8">
 
       {/* HEADER */}
 

@@ -1,6 +1,14 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import Navbar from "./components/Navbar";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+
+// Site font
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+  display: "swap",
+});
 
 export const metadata = {
   metadataBase: new URL("https://ia.kptmangaluru.in"),
@@ -71,6 +79,13 @@ export const metadata = {
   },
 };
 
+// Phone browser bar in the theme colour
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#3d52a0",
+};
+
 const organizationSchema = {
   "@context": "https://schema.org",
   "@type": "EducationalOrganization",
@@ -81,9 +96,17 @@ const organizationSchema = {
 
 export default function RootLayout({ children }) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className="min-h-screen bg-gray-50 text-gray-900">
+    <ClerkProvider
+      appearance={{
+        variables: {
+          colorPrimary: "#3d52a0",
+          colorText: "#1d2550",
+          borderRadius: "0.75rem",
+        },
+      }}
+    >
+      <html lang="en" className={jakarta.variable}>
+        <body className="min-h-screen font-sans text-slate-900">
           <Navbar />
 
           <main>{children}</main>

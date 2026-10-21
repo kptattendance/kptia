@@ -684,7 +684,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
 
 
   return (
-  <div className="min-h-screen bg-[#f6f8fb] px-3 pb-6 pt-20 sm:px-5 sm:py-6 md:px-6 lg:px-8">
+  <div className="min-h-screen px-3 pb-6 pt-20 sm:px-5 sm:py-6 md:px-6 lg:px-8">
     <div className="mx-auto w-full max-w-[1500px]">
 
       {/* =====================================================

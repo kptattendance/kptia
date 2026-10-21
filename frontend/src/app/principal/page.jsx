@@ -97,7 +97,7 @@ export default function PrincipalDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 p-6 md:p-8">
+      <div className="min-h-screen p-6 md:p-8">
         <div className="mx-auto max-w-7xl">
           <div className="animate-pulse">
             <div className="h-8 w-56 rounded bg-slate-200" />
@@ -117,7 +117,7 @@ export default function PrincipalDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen">
       {/* Header */}
       <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-6 py-6 md:px-8">

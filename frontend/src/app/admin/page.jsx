@@ -113,7 +113,7 @@ const dashboardItems = [
 
 export default function AdminDashboard() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+    <div className="min-h-screen p-6 lg:p-8">
 
       {/* Header */}
       <div className="mb-8">

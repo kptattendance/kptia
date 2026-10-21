@@ -8,14 +8,38 @@ import {
 } from "@clerk/nextjs";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { ArrowRight } from "lucide-react";
+
+// The portals have their own navigation (PortalSidebar),
+// so this bar is shown only on the public pages.
+const PORTALS = [
+  "/admin",
+  "/principal",
+  "/hod",
+  "/faculty",
+  "/student",
+];
 
 export default function Navbar() {
   const { getToken } = useAuth();
-  const [dashboard, setDashboard] = useState("/");
+  const pathname = usePathname();
+
+  const [dashboard, setDashboard] = useState("/auth/check");
+
+  const inPortal = PORTALS.some(
+    (portal) =>
+      pathname === portal ||
+      pathname.startsWith(`${portal}/`)
+  );
 
   useEffect(() => {
+    if (inPortal) {
+      return;
+    }
+
     const getDashboard = async () => {
       try {
         const token = await getToken();
@@ -33,85 +57,62 @@ export default function Navbar() {
 
         const role = response.data?.data?.role;
 
-        switch (role) {
-          case "admin":
-            setDashboard("/admin");
-            break;
+        const dashboards = {
+          admin: "/admin",
+          principal: "/principal",
+          hod: "/hod",
+          staff: "/faculty",
+          student: "/student",
+        };
 
-          case "principal":
-            setDashboard("/principal");
-            break;
-
-          case "hod":
-            setDashboard("/hod");
-            break;
-
-          case "staff":
-            setDashboard("/faculty");
-            break;
-
-          case "student":
-            setDashboard("/student");
-            break;
-
-          default:
-            setDashboard("/");
-        }
+        setDashboard(dashboards[role] || "/auth/check");
       } catch (error) {
         console.error("Failed to determine dashboard:", error);
-        setDashboard("/");
+        setDashboard("/auth/check");
       }
     };
 
     getDashboard();
-  }, [getToken]);
+  }, [getToken, inPortal]);
+
+  if (inPortal) {
+    return null;
+  }
 
   return (
-    <nav className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+    <nav className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
 
         {/* Logo */}
-        <Link
-          href="/"
-          className="flex items-center gap-3"
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-950 text-sm font-bold text-white shadow-sm">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#7091e6] to-[#3d52a0] text-base font-extrabold text-white shadow-lg shadow-[#3d52a0]/30">
             K
           </div>
 
           <div className="leading-tight">
-            <div className="text-lg font-bold tracking-tight text-slate-900">
+            <div className="text-lg font-extrabold tracking-tight text-slate-900">
               KPT IA
             </div>
 
-            <div className="text-[9px] font-semibold uppercase tracking-widest text-slate-400">
+            <div className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">
               Academic Portal
             </div>
           </div>
         </Link>
 
         {/* Navigation */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
 
-          {/* Home */}
-          <Link
-            href="/"
-            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
-          >
-            Home
-          </Link>
-
-          {/* Signed In */}
           <Show when="signed-in">
-
             <Link
               href={dashboard}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-slate-800"
             >
               Dashboard
+              <ArrowRight size={15} />
             </Link>
 
-            <div className="ml-2 border-l border-slate-200 pl-4">
+            <div className="ml-2">
               <UserButton
                 appearance={{
                   elements: {
@@ -120,20 +121,18 @@ export default function Navbar() {
                 }}
               />
             </div>
-
           </Show>
 
-          {/* Signed Out */}
           <Show when="signed-out">
-
             <SignInButton mode="modal">
               <button
-                className="ml-2 rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#3d52a0] to-[#7091e6] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#3d52a0]/25 transition hover:-translate-y-0.5 hover:shadow-xl"
               >
                 Login
+                <ArrowRight size={15} />
               </button>
             </SignInButton>
-
           </Show>
 
         </div>

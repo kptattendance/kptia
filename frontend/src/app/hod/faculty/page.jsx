@@ -369,7 +369,7 @@ export default function HODFacultyPage() {
   // ---------------------------------------
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+    <div className="min-h-screen p-6 lg:p-8">
 
       {/* HEADER */}
       <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">

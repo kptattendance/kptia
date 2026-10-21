@@ -144,7 +144,7 @@ export default function FacultyDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb] p-5 sm:p-6 lg:p-8">
+    <div className="min-h-screen p-5 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-[1400px]">
 
         {/* ------------------------------------------------ */}
@@ -152,7 +152,7 @@ export default function FacultyDashboard() {
         {/* ------------------------------------------------ */}
 
         <div className="mb-6">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#b58a00]">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#4f6bc8]">
             Faculty Portal
           </p>
 
@@ -175,7 +175,7 @@ export default function FacultyDashboard() {
         <section className="mb-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
           {/* Profile top */}
-          <div className="border-b border-slate-100 bg-gradient-to-r from-[#fff9df] via-white to-white px-5 py-6 sm:px-7">
+          <div className="border-b border-slate-100 bg-gradient-to-r from-[#eef1fd] via-white to-white px-5 py-6 sm:px-7">
 
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
 
@@ -191,7 +191,7 @@ export default function FacultyDashboard() {
                     className="h-24 w-24 rounded-2xl object-cover ring-4 ring-white shadow-md"
                   />
                 ) : (
-                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-[#d4a900] text-2xl font-bold text-white ring-4 ring-white shadow-md">
+                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-[#3d52a0] text-2xl font-bold text-white ring-4 ring-white shadow-md">
                     {getInitials(facultyName)}
                   </div>
                 )}
@@ -210,7 +210,7 @@ export default function FacultyDashboard() {
                   </h2>
 
                   {!loading && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#fff4c2] px-3 py-1 text-xs font-bold text-[#8a6800]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#e0e6fb] px-3 py-1 text-xs font-bold text-[#34468a]">
                       <CheckCircle2 size={13} />
                       Faculty
                     </span>
@@ -381,10 +381,10 @@ export default function FacultyDashboard() {
             {/* ATTENDANCE */}
             <a
               href="/faculty/attendance"
-              className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-[#d4a900] hover:shadow-md"
+              className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-[#3d52a0] hover:shadow-md"
             >
 
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#d4a900] text-white shadow-sm">
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#3d52a0] text-white shadow-sm">
                 <ClipboardCheck size={22} />
               </div>
 
@@ -396,7 +396,7 @@ export default function FacultyDashboard() {
                 Mark and submit monthly attendance for assigned subjects.
               </p>
 
-              <div className="mt-5 text-sm font-bold text-[#a07800]">
+              <div className="mt-5 text-sm font-bold text-[#3d52a0]">
                 Open Attendance →
               </div>
 
@@ -405,10 +405,10 @@ export default function FacultyDashboard() {
             {/* IA MARKS */}
             <a
               href="/faculty/ia-marks"
-              className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-[#d4a900] hover:shadow-md"
+              className="group rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-[#3d52a0] hover:shadow-md"
             >
 
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#d4a900] text-white shadow-sm">
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-[#3d52a0] text-white shadow-sm">
                 <FileText size={22} />
               </div>
 
@@ -420,7 +420,7 @@ export default function FacultyDashboard() {
                 Enter and manage internal assessment marks for assigned subjects.
               </p>
 
-              <div className="mt-5 text-sm font-bold text-[#a07800]">
+              <div className="mt-5 text-sm font-bold text-[#3d52a0]">
                 Open IA Marks →
               </div>
 

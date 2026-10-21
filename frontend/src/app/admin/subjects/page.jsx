@@ -1340,7 +1340,7 @@ export default function SubjectsPage() {
   // =====================================================
 
   return (
-    <div className="min-h-screen bg-slate-50 px-3 py-4 sm:px-5 lg:px-7">
+    <div className="min-h-screen px-3 py-4 sm:px-5 lg:px-7">
 
       {/* =================================================
           HEADER

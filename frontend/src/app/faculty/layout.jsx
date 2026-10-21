@@ -89,7 +89,7 @@ export default function FacultyLayout({ children }) {
 
   if (!isLoaded || checking) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-gray-200 border-t-black" />
 
@@ -102,10 +102,10 @@ export default function FacultyLayout({ children }) {
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-gray-50">
+    <div className="min-h-screen overflow-x-hidden">
       <FacultySidebar />
 
-      <main className="ml-0 min-h-screen pt-16 lg:ml-72 lg:pt-0">
+      <main className="min-h-screen pt-16 lg:pl-72 lg:pt-0">
         {children}
       </main>
     </div>

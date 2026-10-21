@@ -180,7 +180,7 @@ export default function HODProgramOutcomesPage() {
     "mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm";
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+    <div className="min-h-screen p-6 lg:p-8">
 
       {/* HEADER */}
 

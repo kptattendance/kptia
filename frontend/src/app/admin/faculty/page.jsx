@@ -847,7 +847,7 @@ export default function FacultyPage() {
   // =========================================================
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-5 sm:px-6 lg:px-7">
+    <div className="min-h-screen px-4 py-5 sm:px-6 lg:px-7">
 
       {/* =====================================================
           HEADER

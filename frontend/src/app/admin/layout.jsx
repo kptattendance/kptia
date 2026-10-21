@@ -46,7 +46,7 @@ export default function AdminLayout({ children }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
 
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-200 border-t-slate-900" />
@@ -61,13 +61,13 @@ export default function AdminLayout({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen">
 
       {/* Sidebar */}
       <AdminSidebar />
 
       {/* Page Content */}
-      <main className="ml-72 min-h-screen">
+      <main className="min-h-screen pt-16 lg:pl-72 lg:pt-0">
         {children}
       </main>
 

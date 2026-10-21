@@ -444,7 +444,7 @@ export default function HODDashboardPage() {
 
     if (loading) {
       return (
-        <div className="min-h-screen bg-[#f6f8fb] px-4 py-6 sm:px-6 lg:px-8">
+        <div className="min-h-screen px-4 py-6 sm:px-6 lg:px-8">
 
           <div className="mx-auto max-w-7xl">
 
@@ -477,7 +477,7 @@ export default function HODDashboardPage() {
     // =====================================================
 
     return (
-      <div className="min-h-screen bg-[#f6f8fb]">
+      <div className="min-h-screen">
 
         <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
 
