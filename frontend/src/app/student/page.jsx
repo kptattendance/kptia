@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Link from "next/link";
+import { fetchCurrentUser } from "../utils/currentUser";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -37,14 +38,7 @@ export default function StudentDashboard() {
 
       const token = await getToken();
 
-      const response = await axios.get(
-        `${API_URL}/api/users/me`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetchCurrentUser(token);
 
       const data =
         response.data?.data ||

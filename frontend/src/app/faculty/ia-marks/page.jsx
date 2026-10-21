@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
-import * as XLSX from "xlsx";
 import AttainmentDownloads from "../../components/AttainmentDownloads";
 import {
   cleanNumberInput,
@@ -1570,7 +1569,9 @@ const addTest = () => {
 // EXPORT IA MARKS TO EXCEL
 // ==================================================
 
-const exportIAMarksToExcel = () => {
+const exportIAMarksToExcel = async () => {
+  // The Excel library is loaded only when it is needed.
+  const XLSX = await import("xlsx");
   if (!students.length) {
     showAlert(
       "warning",

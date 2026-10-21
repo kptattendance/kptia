@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import FacultySidebar from "./components/FacultySidebar";
+import { fetchCurrentUser } from "../utils/currentUser";
 
 export default function FacultyLayout({ children }) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
@@ -34,14 +35,7 @@ export default function FacultyLayout({ children }) {
           return;
         }
 
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await fetchCurrentUser(token);
 
         const user = response.data?.data;
 

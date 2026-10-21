@@ -13,6 +13,7 @@ import {
   ClipboardCheck,
   FileText,
 } from "lucide-react";
+import { fetchCurrentUser } from "../utils/currentUser";
 
 export default function FacultyDashboard() {
   const { getToken } = useAuth();
@@ -39,14 +40,7 @@ export default function FacultyDashboard() {
       try {
         const token = await getToken();
 
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await fetchCurrentUser(token);
 
         setUser(response.data?.data);
       } catch (error) {

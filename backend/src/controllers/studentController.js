@@ -2286,9 +2286,14 @@ export const getStudents = async (
     if (
       search?.trim()
     ) {
+      // Searched as plain text: characters such as
+      // ( or * cannot break or slow down the search.
       const regex =
         new RegExp(
-          search.trim(),
+          search
+            .trim()
+            .slice(0, 100)
+            .replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
           "i"
         );
 
@@ -2436,6 +2441,24 @@ export const getStudents = async (
   {
     $project: {
       rollNumberSort: 0,
+
+      // Faculty need only what attendance and IA
+      // entry show; personal details are left out.
+      ...(requesterRole === "staff"
+        ? {
+            aadhaarNumber: 0,
+            caste: 0,
+            category: 0,
+            satsNumber: 0,
+            dob: 0,
+            fatherName: 0,
+            motherName: 0,
+            parentPhone: 0,
+            phone: 0,
+            clerkId: 0,
+            userId: 0,
+          }
+        : {}),
     },
   },
 ]);

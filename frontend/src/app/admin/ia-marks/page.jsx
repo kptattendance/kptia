@@ -14,6 +14,7 @@ import {
 import EntryStatusGrid, {
   getDepartmentLabel,
 } from "../components/EntryStatusGrid";
+import { escapeHtml } from "../../utils/escapeHtml";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -445,10 +446,10 @@ export default function AdminIAMarksPage() {
       title: "Delete IA Marks?",
       html: `
         <div style="font-size:14px;line-height:1.8;color:#64748b">
-          <strong style="color:#0f172a">${detailTitle}</strong>
+          <strong style="color:#0f172a">${escapeHtml(detailTitle)}</strong>
           <br>
-          IA ${detail.iaNumber} · ${detail.academicYear}
-          · ${detail.students.length} students
+          IA ${escapeHtml(detail.iaNumber)} · ${escapeHtml(detail.academicYear)}
+          · ${escapeHtml(detail.students.length)} students
           <br><br>
           The whole record will be removed and the faculty can enter it again.
           <strong style="color:#dc2626">This cannot be undone from the website.</strong>

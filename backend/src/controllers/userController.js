@@ -18,6 +18,25 @@ const canManage = (requesterRole, targetRole) => {
   return rolePermissions[requesterRole]?.includes(targetRole);
 };
 
+const normalizeDepartment = (value) =>
+  String(value || "").trim().toLowerCase();
+
+// A HOD may manage only users of their own department.
+const outsideHodDepartment = (requester, department) =>
+  String(requester?.role || "").toLowerCase() === "hod" &&
+  normalizeDepartment(requester.department) !==
+    normalizeDepartment(department);
+
+// Fields that can be changed through updateUser.
+// Anything else in the request (clerkId, _id, ...) is ignored.
+const EDITABLE_USER_FIELDS = [
+  "name",
+  "email",
+  "phone",
+  "department",
+  "role",
+];
+
 // Get Clerk users
 export const getClerkUsers = async (req, res) => {
   try {
@@ -314,6 +333,13 @@ export const createUser = async (req, res) => {
       });
     }
 
+    if (outsideHodDepartment(req.user, department)) {
+      return res.status(403).json({
+        success: false,
+        message: "HOD can create users only for their own department.",
+      });
+    }
+
     // Create Clerk user
     const clerkUser = await clerkClient.users.createUser({
       emailAddress: [email],
@@ -364,7 +390,17 @@ export const createUser = async (req, res) => {
 // READ all users
 export const getUsers = async (req, res) => {
   try {
-    const users = await User.find().sort({ createdAt: -1 });
+    // HOD: own department only
+    const filter =
+      String(req.user?.role || "").toLowerCase() === "hod"
+        ? {
+            department: normalizeDepartment(
+              req.user.department
+            ),
+          }
+        : {};
+
+    const users = await User.find(filter).sort({ createdAt: -1 });
     res.json(users);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -399,6 +435,13 @@ export const getUserById = async (req, res) => {
       });
     }
 
+    if (outsideHodDepartment(req.user, user.department)) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only view users of your own department.",
+      });
+    }
+
     res.json({ success: true, data: user });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -425,16 +468,78 @@ export const updateUser = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    if (targetUser.clerkId !== requesterId) {
+    const isSelf = targetUser.clerkId === requesterId;
+
+    if (!isSelf) {
       if (!canManage(clerkRole, targetUser.role)) {
         return res.status(403).json({
           success: false,
           message: "You do not have permission to update this user.",
         });
       }
+
+      if (outsideHodDepartment(req.user, targetUser.department)) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update users of your own department.",
+        });
+      }
     }
 
-    const updateData = { ...req.body };
+    // Only known fields are taken from the request.
+    const updateData = {};
+
+    EDITABLE_USER_FIELDS.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    });
+
+    if (updateData.role !== undefined) {
+      updateData.role = String(updateData.role).toLowerCase();
+    }
+
+    if (updateData.department !== undefined) {
+      updateData.department = normalizeDepartment(
+        updateData.department
+      );
+    }
+
+    // Nobody changes their own role or department,
+    // and a role can only be given by someone allowed
+    // to manage that role.
+    const roleChanged =
+      updateData.role !== undefined &&
+      updateData.role !== targetUser.role;
+
+    const departmentChanged =
+      updateData.department !== undefined &&
+      updateData.department !==
+        normalizeDepartment(targetUser.department);
+
+    if (isSelf && (roleChanged || departmentChanged)) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot change your own role or department.",
+      });
+    }
+
+    if (roleChanged && !canManage(clerkRole, updateData.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to give this role.",
+      });
+    }
+
+    if (
+      departmentChanged &&
+      outsideHodDepartment(req.user, updateData.department)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "HOD cannot move a user to another department.",
+      });
+    }
 
     if (
       updateData.role &&
@@ -559,6 +664,19 @@ export const deleteUser = async (req, res) => {
         success: false,
         message:
           "You do not have permission to delete this user.",
+      });
+    }
+
+    if (
+      outsideHodDepartment(
+        req.user,
+        targetUser.department
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You can only delete users of your own department.",
       });
     }
 

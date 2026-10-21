@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
-import * as XLSX from "xlsx";
 import Swal from "sweetalert2";
 import {
   cleanNumberInput,
@@ -25,6 +24,7 @@ import {
   ShieldCheck,
   AlertCircle,
 } from "lucide-react";
+import { escapeHtml } from "../../utils/escapeHtml";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -622,11 +622,11 @@ setStudentMaxClasses(savedMaxClasses);
                 ">
                   Attendance for
                   <strong style="color:#0f172a">
-                    ${monthName} ${year}
+                    ${escapeHtml(monthName)} ${escapeHtml(year)}
                   </strong>
                   has already been entered for
                   <strong style="color:#0f172a">
-                    ${batchLabel}
+                    ${escapeHtml(batchLabel)}
                   </strong>.
                   <br><br>
                   <strong style="color:#dc2626">
@@ -953,7 +953,9 @@ setStudentMaxClasses(savedMaxClasses);
 // EXPORT ATTENDANCE TO EXCEL
 // =====================================================
 
-const exportAttendanceToExcel = () => {
+const exportAttendanceToExcel = async () => {
+  // The Excel library is loaded only when it is needed.
+  const XLSX = await import("xlsx");
   if (!students.length) {
     Swal.fire({
       icon: "warning",
@@ -1540,25 +1542,25 @@ const handleClassesConductedChange = (value) => {
               background:#f8fafc;
             ">
               <strong style="color:#0f172a">
-                ${selectedSubject?.code || ""}
+                ${escapeHtml(selectedSubject?.code || "")}
               </strong>
               <br>
-              ${selectedSubject?.name || ""}
+              ${escapeHtml(selectedSubject?.name || "")}
             </div>
 
             <strong style="color:#0f172a">
-              ${monthName} ${year}
+              ${escapeHtml(monthName)} ${escapeHtml(year)}
             </strong>
 
             <br>
 
-            Semester ${semester}
+            Semester ${escapeHtml(semester)}
             ·
-            ${batchLabel}
+            ${escapeHtml(batchLabel)}
 
             <br>
 
-            ${students.length} students
+            ${escapeHtml(students.length)} students
 
             <br><br>
 
@@ -1688,7 +1690,7 @@ const handleClassesConductedChange = (value) => {
           ">
             Attendance has been saved successfully
             for <strong style="color:#0f172a">
-              ${batchLabel}
+              ${escapeHtml(batchLabel)}
             </strong>.
             <br>
             The record is now permanently locked.

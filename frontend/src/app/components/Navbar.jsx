@@ -12,6 +12,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { ArrowRight } from "lucide-react";
+import { fetchCurrentUser } from "../utils/currentUser";
 
 // The portals have their own navigation (PortalSidebar),
 // so this bar is shown only on the public pages.
@@ -46,14 +47,7 @@ export default function Navbar() {
 
         if (!token) return;
 
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await fetchCurrentUser(token);
 
         const role = response.data?.data?.role;
 

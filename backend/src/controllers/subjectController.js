@@ -430,7 +430,10 @@ export const getSubjects = async (req, res) => {
     }
 
     if (search) {
-      const searchValue = normalize(search);
+      // Searched as plain text, not as a pattern
+      const searchValue = normalize(search)
+        .slice(0, 100)
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
       filter.$or = [
         {

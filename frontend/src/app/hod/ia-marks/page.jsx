@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import * as XLSX from "xlsx";
 import AttainmentDownloads from "../../components/AttainmentDownloads";
 import {
   BarChart3,
@@ -464,7 +463,9 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
   // EXCEL DOWNLOAD
   // ---------------------------------------------------
 
-  const downloadExcel = () => {
+  const downloadExcel = async () => {
+    // The Excel library is loaded only when it is needed.
+    const XLSX = await import("xlsx");
     if (!tableData.length || !selectedIA) {
       return;
     }

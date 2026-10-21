@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth, UserButton } from "@clerk/nextjs";
 import axios from "axios";
+import { fetchCurrentUser } from "../utils/currentUser";
 import {
   Users,
   GraduationCap,
@@ -100,10 +101,7 @@ export default function HODDashboardPage() {
     // 1. GET CURRENT HOD
     // =================================================
 
-    const profileResponse = await axios.get(
-      `${API_URL}/api/users/me`,
-      config
-    );
+    const profileResponse = await fetchCurrentUser(token);
 
     const profileData =
       profileResponse.data?.data ||

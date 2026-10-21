@@ -3,6 +3,7 @@ import express from "express";
 import {
   saveAttendance,
   getAttendance,
+  getSemesterAttendance,
   unlockAttendance,
   getAdminAttendanceStatistics,
   getAdminAttendanceMonths,
@@ -20,6 +21,13 @@ router.post("/save", authenticateUser, saveAttendance);
 router.post("/unlock", authenticateUser, unlockAttendance);
 
 router.get("/", authenticateUser, getAttendance);
+
+// Every subject of a semester in one request
+router.get(
+  "/semester",
+  authenticateUser,
+  getSemesterAttendance
+);
 router.get(
   "/admin-statistics",
   authenticateUser,

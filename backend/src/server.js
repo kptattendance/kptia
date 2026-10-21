@@ -21,6 +21,20 @@ dotenv.config();
 
 const app = express();
 
+// Do not announce the server software
+app.disable("x-powered-by");
+
+// Basic security headers on every response
+app.use((req, res, next) => {
+  res.set({
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+  });
+
+  next();
+});
+
 const allowedOrigins = [
   "http://localhost:3000",
   "https://local.ia.kptmangaluru.in",
@@ -71,7 +85,43 @@ app.use(async (req, res, next) => {
 
 app.use(clerkMiddleware());
 
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
+
+// =====================================================
+// DATABASE OPERATOR GUARD
+//
+// Rejects request data with keys such as "$ne" or
+// "a.b", which could otherwise turn a value into a
+// database query operator.
+// =====================================================
+
+const hasUnsafeKey = (value, depth = 0) => {
+  if (depth > 20 || value === null || typeof value !== "object") {
+    return false;
+  }
+
+  return Object.entries(value).some(
+    ([key, inner]) =>
+      key.startsWith("$") ||
+      key.includes(".") ||
+      hasUnsafeKey(inner, depth + 1)
+  );
+};
+
+app.use((req, res, next) => {
+  if (
+    hasUnsafeKey(req.body) ||
+    hasUnsafeKey(req.query) ||
+    hasUnsafeKey(req.params)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid request data.",
+    });
+  }
+
+  next();
+});
 
 app.get("/", (req, res) => {
   res.json({
@@ -114,6 +164,32 @@ app.use(
   "/api/attainment",
   attainmentRoutes
 );
+// =====================================================
+// ERRORS NOT HANDLED BY A ROUTE
+//
+// For example an upload that is too large. The details
+// stay in the server log; the browser gets a short
+// message.
+// =====================================================
+
+// eslint-disable-next-line no-unused-vars
+app.use((error, req, res, next) => {
+  console.error("Unhandled error:", error?.message);
+
+  const tooLarge =
+    error?.code === "LIMIT_FILE_SIZE" ||
+    error?.type === "entity.too.large";
+
+  res.status(tooLarge ? 413 : 400).json({
+    success: false,
+    message: tooLarge
+      ? "The file or data sent is too large."
+      : error?.message?.startsWith("Only ")
+      ? error.message
+      : "The request could not be processed.",
+  });
+});
+
 connectDB()
   .then(() => {
     if (process.env.NODE_ENV !== "production") {

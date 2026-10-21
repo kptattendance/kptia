@@ -4,7 +4,19 @@ import { Readable } from "stream";
 
 // Multer memory storage (no files saved locally)
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB
+  },
+  fileFilter: (req, file, callback) => {
+    if (/^image\/(jpeg|png|webp|gif)$/.test(file.mimetype)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Only JPG, PNG, WEBP or GIF images can be uploaded."));
+    }
+  },
+});
 
 // Convert buffer → stream and upload to Cloudinary
 const uploadToCloudinary = (req, res, next) => {

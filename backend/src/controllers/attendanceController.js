@@ -443,8 +443,239 @@ export const saveAttendance = async (req, res) => {
 };
 
 // =====================================================
-// GET MONTHLY ATTENDANCE
+// ATTENDANCE OF ONE SUBJECT, AS SHOWN ON THE PAGES
 // =====================================================
+//
+// Combines the saved records of a subject + month
+// (one per batch selection) into one list of students.
+// Returns null when no record covers the requested
+// batches.
+//
+// Used by getAttendance (one subject) and
+// getSemesterAttendance (every subject at once).
+//
+// =====================================================
+
+const ATTENDANCE_VIEW_ROLES = [
+  "staff",
+  "hod",
+  "admin",
+  "principal",
+  "coe",
+  "exam_officer",
+];
+
+// "1,2" -> [1, 2]; nothing -> both batches
+const parseBatchNumbers = (batchNumbers) => {
+  const batches = String(batchNumbers || "")
+    .split(",")
+    .map((value) => Number(value))
+    .filter((value) => [1, 2].includes(value));
+
+  return batches.length > 0 ? batches : [1, 2];
+};
+
+const buildAttendanceView = (
+  records,
+  requestedBatches,
+  meta
+) => {
+  // Records created by the current system
+  // always have batchNumbers.
+  const matchingRecords = records.filter(
+    (record) =>
+      Array.isArray(record.batchNumbers) &&
+      record.batchNumbers.length > 0 &&
+      record.batchNumbers.some((batch) =>
+        requestedBatches.includes(Number(batch))
+      )
+  );
+
+  if (matchingRecords.length === 0) {
+    return null;
+  }
+
+  // Each student keeps the classes conducted of
+  // their own batch's record.
+  const studentMap = new Map();
+
+  for (const record of matchingRecords) {
+    const conducted = Number(
+      record.classesConducted || 0
+    );
+
+    for (const studentEntry of record.students || []) {
+      const populatedStudent = studentEntry.studentId;
+
+      if (!populatedStudent) {
+        continue;
+      }
+
+      // Never show a student from another batch
+      if (
+        !requestedBatches.includes(
+          Number(populatedStudent.batchNumber)
+        )
+      ) {
+        continue;
+      }
+
+      studentMap.set(String(populatedStudent._id), {
+        studentId: populatedStudent,
+
+        classesAttended: Number(
+          studentEntry.classesAttended || 0
+        ),
+
+        // The individual maximum if there is one,
+        // otherwise classes conducted.
+        classesEligible:
+          studentEntry.classesEligible !== undefined &&
+          studentEntry.classesEligible !== null
+            ? Number(studentEntry.classesEligible)
+            : conducted,
+
+        classesConducted: conducted,
+      });
+    }
+  }
+
+  // Header value: the highest classes conducted
+  // when the batches differ.
+  const classesConducted = Math.max(
+    0,
+    ...matchingRecords.map((record) =>
+      Number(record.classesConducted || 0)
+    )
+  );
+
+  // Locked unless every matching record has been
+  // unlocked by the HOD for correction.
+  const isLocked = matchingRecords.some(
+    (record) => record.isLocked !== false
+  );
+
+  return {
+    ...meta,
+    classesConducted,
+    batchNumbers: [
+      ...new Set(
+        matchingRecords.flatMap(
+          (record) => record.batchNumbers || []
+        )
+      ),
+    ].sort(),
+    students: Array.from(studentMap.values()),
+    isLocked,
+    lockedAt: matchingRecords[0]?.lockedAt || null,
+    lockedBy: matchingRecords[0]?.lockedBy || null,
+  };
+};
+
+// =====================================================
+// ATTENDANCE OF EVERY SUBJECT OF A SEMESTER
+// =====================================================
+//
+// GET /api/attendance/semester
+//   ?department&semester&month&year&batchNumbers
+//
+// One request instead of one per subject.
+// Returns { [subjectId]: view or null }.
+// HOD: own department only.
+//
+// =====================================================
+
+export const getSemesterAttendance = async (req, res) => {
+  try {
+    const role = String(req.user?.role || "").toLowerCase();
+
+    if (!ATTENDANCE_VIEW_ROLES.includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not authorized to view attendance.",
+      });
+    }
+
+    const { semester, month, year, batchNumbers } =
+      req.query;
+
+    const department =
+      role === "hod"
+        ? String(req.user?.department || "")
+            .trim()
+            .toLowerCase()
+        : String(req.query.department || "")
+            .trim()
+            .toLowerCase();
+
+    if (!department || !semester || !month || !year) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Attendance selection data is missing.",
+      });
+    }
+
+    const records = await Attendance.find({
+      department,
+      semester: Number(semester),
+      month: Number(month),
+      year: Number(year),
+    })
+      .populate(
+        "students.studentId",
+        "registerNumber name email department batchNumber imageUrl"
+      )
+      .lean();
+
+    const bySubject = new Map();
+
+    records.forEach((record) => {
+      const key = String(record.subjectId);
+
+      if (!bySubject.has(key)) {
+        bySubject.set(key, []);
+      }
+
+      bySubject.get(key).push(record);
+    });
+
+    const requestedBatches =
+      parseBatchNumbers(batchNumbers);
+
+    const data = {};
+
+    for (const [subjectId, subjectRecords] of bySubject) {
+      data[subjectId] = buildAttendanceView(
+        subjectRecords,
+        requestedBatches,
+        {
+          department,
+          semester: Number(semester),
+          subjectId,
+          month: Number(month),
+          year: Number(year),
+        }
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error(
+      "Get Semester Attendance Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch attendance.",
+    });
+  }
+};
 
 // =====================================================
 // GET MONTHLY ATTENDANCE
@@ -459,14 +690,7 @@ export const getAttendance = async (req, res) => {
     // -----------------------------------------
 
     if (
-      ![
-        "staff",
-        "hod",
-        "admin",
-        "principal",
-        "coe",
-        "exam_officer",
-      ].includes(
+      !ATTENDANCE_VIEW_ROLES.includes(
         String(req.user?.role || "").toLowerCase()
       )
     ) {
@@ -519,236 +743,32 @@ export const getAttendance = async (req, res) => {
         )
         .lean();
 
-    // -----------------------------------------
-    // NO ATTENDANCE
-    // -----------------------------------------
-
-    if (existingRecords.length === 0) {
-      return res.status(200).json({
-        success: true,
-        exists: false,
-        locked: false,
-        data: null,
-      });
-    }
-
-    // -----------------------------------------
-    // REQUESTED BATCHES
-    // -----------------------------------------
-
-    let requestedBatches = [];
-
-    if (batchNumbers) {
-      requestedBatches = String(batchNumbers)
-        .split(",")
-        .map((value) => Number(value))
-        .filter((value) =>
-          [1, 2].includes(value)
-        );
-    }
-
-    // If no batch is supplied, include all.
-    if (requestedBatches.length === 0) {
-      requestedBatches = [1, 2];
-    }
-
-    // -----------------------------------------
-    // FIND ALL RELEVANT ATTENDANCE RECORDS
-    // -----------------------------------------
-
-const matchingRecords =
-  existingRecords.filter((record) => {
-    // Records created by the current system
-    // must always have batchNumbers.
-
-    if (
-      !Array.isArray(record.batchNumbers) ||
-      record.batchNumbers.length === 0
-    ) {
-      return false;
-    }
-
-    return record.batchNumbers.some(
-      (batch) =>
-        requestedBatches.includes(
-          Number(batch)
-        )
-    );
-  });
-    // -----------------------------------------
-    // NO MATCHING RECORD
-    // -----------------------------------------
-
-    if (matchingRecords.length === 0) {
-      return res.status(200).json({
-        success: true,
-        exists: false,
-        locked: false,
-        data: null,
-      });
-    }
-
-    // -----------------------------------------
-    // COMBINE STUDENTS FROM ALL MATCHING
-    // BATCH RECORDS
-    //
-    // IMPORTANT:
-    // Each student keeps the classesConducted
-    // value belonging to that student's batch.
-    // -----------------------------------------
-
-    const studentMap = new Map();
-
-    for (const record of matchingRecords) {
-      const conducted =
-        Number(record.classesConducted || 0);
-
-      for (
-  const studentEntry of
-    record.students || []
-) {
-  const populatedStudent =
-    studentEntry.studentId;
-
-  if (!populatedStudent) {
-    continue;
-  }
-
-  // -------------------------------------------------
-  // NEVER SHOW A STUDENT FROM ANOTHER BATCH
-  // -------------------------------------------------
-
-  if (
-    !requestedBatches.includes(
-      Number(populatedStudent.batchNumber)
-    )
-  ) {
-    continue;
-  }
-
-  const studentId =
-    String(populatedStudent._id);
-        studentMap.set(
-          studentId,
-          {
-            studentId: populatedStudent,
-
-            classesAttended:
-              Number(
-                studentEntry.classesAttended || 0
-              ),
-
-            // Use the individual maximum if it
-            // exists. Otherwise use classesConducted.
-            classesEligible:
-              studentEntry.classesEligible !==
-                undefined &&
-              studentEntry.classesEligible !==
-                null
-                ? Number(
-                    studentEntry.classesEligible
-                  )
-                : conducted,
-
-            // IMPORTANT:
-            // Keep the classes conducted for
-            // THIS student's attendance record.
-            classesConducted: conducted,
-          }
-        );
+    const view = buildAttendanceView(
+      existingRecords,
+      parseBatchNumbers(batchNumbers),
+      {
+        department: department.toLowerCase(),
+        semester: Number(semester),
+        subjectId,
+        month: Number(month),
+        year: Number(year),
       }
-    }
-
-    // -----------------------------------------
-    // DETERMINE TOP-LEVEL CLASSES CONDUCTED
-    //
-    // If both batches have different values,
-    // use the highest value for the header.
-    // The individual student value above is
-    // what must be used for percentage.
-    // -----------------------------------------
-
-    const allConducted =
-      matchingRecords.map((record) =>
-        Number(
-          record.classesConducted || 0
-        )
-      );
-
-    const classesConducted =
-      allConducted.length > 0
-        ? Math.max(...allConducted)
-        : 0;
-
-    // -----------------------------------------
-    // RETURN COMBINED ATTENDANCE
-    // -----------------------------------------
-
-    const combinedStudents =
-      Array.from(
-        studentMap.values()
-      );
-
-    // Locked unless every matching record has been
-    // unlocked by the HOD for correction.
-    const isLocked = matchingRecords.some(
-      (record) => record.isLocked !== false
     );
+
+    if (!view) {
+      return res.status(200).json({
+        success: true,
+        exists: false,
+        locked: false,
+        data: null,
+      });
+    }
 
     return res.status(200).json({
       success: true,
       exists: true,
-      locked: isLocked,
-
-      data: {
-        // Keep the existing fields
-        // so current frontend continues
-        // to work.
-
-        department:
-          department.toLowerCase(),
-
-        semester:
-          Number(semester),
-
-        subjectId,
-
-        month:
-          Number(month),
-
-        year:
-          Number(year),
-
-        // Header value.
-        // Individual students have their
-        // own classesConducted below.
-        classesConducted,
-
-        // Combine all batches.
-        batchNumbers:
-          [
-            ...new Set(
-              matchingRecords.flatMap(
-                (record) =>
-                  record.batchNumbers ||
-                  []
-              )
-            ),
-          ].sort(),
-
-        students:
-          combinedStudents,
-
-        isLocked,
-
-        lockedAt:
-          matchingRecords[0]?.lockedAt ||
-          null,
-
-        lockedBy:
-          matchingRecords[0]?.lockedBy ||
-          null,
-      },
+      locked: view.isLocked,
+      data: view,
     });
   } catch (error) {
     console.error(

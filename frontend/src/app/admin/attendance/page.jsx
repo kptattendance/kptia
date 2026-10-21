@@ -14,6 +14,7 @@ import {
 import EntryStatusGrid, {
   getDepartmentLabel,
 } from "../components/EntryStatusGrid";
+import { escapeHtml } from "../../utils/escapeHtml";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -471,11 +472,11 @@ export default function AdminAttendancePage() {
       title: "Delete Attendance?",
       html: `
         <div style="font-size:14px;line-height:1.8;color:#64748b">
-          <strong style="color:#0f172a">${detailSubject.code}</strong>
-          · ${months[month - 1]} ${year}
-          · ${formatBatches(record.batchNumbers)}
+          <strong style="color:#0f172a">${escapeHtml(detailSubject.code)}</strong>
+          · ${escapeHtml(months[month - 1])} ${escapeHtml(year)}
+          · ${escapeHtml(formatBatches(record.batchNumbers))}
           <br>
-          ${record.students.length} students
+          ${escapeHtml(record.students.length)} students
           <br><br>
           The whole record will be removed and the faculty can enter it again.
           <strong style="color:#dc2626">This cannot be undone from the website.</strong>

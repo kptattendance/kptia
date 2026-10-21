@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
+import { fetchCurrentUser } from "../../utils/currentUser";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -60,10 +61,7 @@ export default function StudentAttendancePage() {
       };
 
       // Get logged-in student
-      const studentResponse = await axios.get(
-        `${API_URL}/api/users/me`,
-        { headers }
-      );
+      const studentResponse = await fetchCurrentUser(token);
 
       const studentData =
         studentResponse.data?.data ||

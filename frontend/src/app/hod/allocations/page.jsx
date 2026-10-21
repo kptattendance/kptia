@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
 import { RefreshCw, UserPlus, X } from "lucide-react";
+import { fetchCurrentUser } from "../../utils/currentUser";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -87,9 +88,7 @@ export default function HODCourseAllocationPage() {
 
         const [userResponse, facultyResponse] =
           await Promise.all([
-            axios.get(`${API_URL}/api/users/me`, {
-              headers,
-            }),
+            fetchCurrentUser(token),
             axios.get(
               `${API_URL}/api/allocations/faculty-options`,
               { headers }

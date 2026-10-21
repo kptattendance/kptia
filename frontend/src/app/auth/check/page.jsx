@@ -4,6 +4,7 @@ import { useAuth, useClerk } from "@clerk/nextjs";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { fetchCurrentUser } from "../../utils/currentUser";
 
 export default function AuthCheckPage() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
@@ -37,14 +38,7 @@ export default function AuthCheckPage() {
           );
         }
 
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await fetchCurrentUser(token);
 
         const user = response.data?.data;
 

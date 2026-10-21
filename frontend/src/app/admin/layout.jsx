@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import axios from "axios";
 
 import AdminSidebar from "./components/AdminSidebar";
+import { fetchCurrentUser } from "../utils/currentUser";
 
 export default function AdminLayout({ children }) {
   const { getToken } = useAuth();
@@ -18,14 +19,7 @@ export default function AdminLayout({ children }) {
       try {
         const token = await getToken();
 
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const response = await fetchCurrentUser(token);
 
         const user = response.data?.data;
 

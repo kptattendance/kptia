@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import * as XLSX from "xlsx";
+import { fetchCurrentUser } from "../../utils/currentUser";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -82,14 +83,7 @@ const [previewPhoto, setPreviewPhoto] = useState(null);
       const token = await getToken();
 
       // Get logged-in HOD
-      const meResponse = await axios.get(
-        `${API_URL}/api/users/me`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const meResponse = await fetchCurrentUser(token);
 
       const me =
         meResponse.data?.data || meResponse.data;

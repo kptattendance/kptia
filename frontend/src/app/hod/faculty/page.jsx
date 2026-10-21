@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import { fetchCurrentUser } from "../../utils/currentUser";
 
 const departments = [
   { value: "", label: "Select department" },
@@ -59,14 +60,7 @@ export default function HODFacultyPage() {
       const token = await getToken();
 
       // Get logged-in HOD details
-      const meResponse = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/users/me`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const meResponse = await fetchCurrentUser(token);
 
       const me = meResponse.data?.data || meResponse.data;
 

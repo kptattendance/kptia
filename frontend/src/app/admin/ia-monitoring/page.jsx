@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Swal from "sweetalert2";
 import axios from "axios";
+import { escapeHtml } from "../../utils/escapeHtml";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -716,35 +717,35 @@ subjectList =
             >
               <div>
                 <strong>Subject:</strong>
-                ${subject.name || "—"}
+                ${escapeHtml(subject.name || "—")}
               </div>
 
               <div>
                 <strong>Code:</strong>
-                ${subject.code || "—"}
+                ${escapeHtml(subject.code || "—")}
               </div>
 
               <div>
                 <strong>Department:</strong>
-                ${String(
+                ${escapeHtml(String(
                   subject.department || ""
-                ).toUpperCase()}
+                ).toUpperCase())}
               </div>
 
               <div>
                 <strong>Semester:</strong>
-                ${subject.semester || "—"}
+                ${escapeHtml(subject.semester || "—")}
               </div>
 
               <div>
                 <strong>Batch:</strong>
-                ${batch}
+                ${escapeHtml(batch)}
               </div>
             </div>
 
             <div>
               <strong>Students:</strong>
-              ${students.length}
+              ${escapeHtml(students.length)}
             </div>
 
             <div>
@@ -758,7 +759,7 @@ subjectList =
 
             <div>
               <strong>Entered By:</strong>
-              ${enteredBy}
+              ${escapeHtml(enteredBy)}
             </div>
           </div>
         `,

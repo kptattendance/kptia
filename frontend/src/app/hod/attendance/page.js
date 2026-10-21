@@ -1228,81 +1228,39 @@ setSubjects(nonBridgeSubjects);
           // 2. LOAD ATTENDANCE FOR ALL SUBJECTS
           // =================================================
 
+          // One request for every subject of the
+          // semester, instead of one per subject.
+          const semesterResponse =
+            await axios.get(
+              `${API_URL}/api/attendance/semester`,
+              {
+                headers: {
+                  Authorization:
+                    `Bearer ${token}`,
+                },
+
+                params: {
+                  department,
+                  semester: Number(semester),
+                  month: Number(month),
+                  year: Number(year),
+                  batchNumbers:
+                    batchSelection === "both"
+                      ? "1,2"
+                      : batchSelection,
+                },
+              }
+            );
+
+          const bySubject =
+            semesterResponse.data?.data || {};
+
           const attendanceMap = {};
 
-          await Promise.all(
-            nonBridgeSubjects.map(
-              async (subject) => {
-                try {
-                  const response =
-                    await axios.get(
-                      `${API_URL}/api/attendance`,
-                      {
-                        headers: {
-                          Authorization:
-                            `Bearer ${token}`,
-                        },
-
-                        params: {
-                          department,
-
-                          semester:
-                            Number(
-                              semester
-                            ),
-
-                          subjectId:
-                            subject._id,
-
-                          month:
-                            Number(month),
-
-                          year:
-                            Number(year),
-
-                          batchNumbers:
-                            batchSelection ===
-                            "both"
-                              ? "1,2"
-                              : batchSelection,
-                        },
-                      }
-                    );
-
-                  if (
-                    response.data
-                      ?.exists &&
-                    response.data
-                      ?.data
-                  ) {
-                    attendanceMap[
-                      String(
-                        subject._id
-                      )
-                    ] =
-                      response.data.data;
-                  } else {
-                    attendanceMap[
-                      String(
-                        subject._id
-                      )
-                    ] = null;
-                  }
-                } catch (subjectError) {
-                  console.error(
-                    `Attendance load failed for ${subject.code}:`,
-                    subjectError
-                  );
-
-                  attendanceMap[
-                    String(
-                      subject._id
-                    )
-                  ] = null;
-                }
-              }
-            )
-          );
+          nonBridgeSubjects.forEach((subject) => {
+            attendanceMap[String(subject._id)] =
+              bySubject[String(subject._id)] || null;
+          });
 
           setAttendanceData(
             attendanceMap
