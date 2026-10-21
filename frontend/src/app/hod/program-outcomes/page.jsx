@@ -129,7 +129,7 @@ export default function HODProgramOutcomesPage() {
         icon: "warning",
         title: "Statement Required",
         text: `Please enter the statement of PSO${emptyIndex + 1}, or remove it.`,
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
 
       return;
@@ -154,7 +154,7 @@ export default function HODProgramOutcomesPage() {
         icon: "success",
         title: "PSOs Saved",
         text: "Faculty can now map their course outcomes to these PSOs.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } catch (err) {
       console.error("Save PSOs error:", err);
@@ -165,7 +165,7 @@ export default function HODProgramOutcomesPage() {
         text:
           err.response?.data?.message ||
           "Failed to save program specific outcomes.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } finally {
       setSaving(false);

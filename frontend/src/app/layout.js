@@ -83,7 +83,7 @@ export const metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#3d52a0",
+  themeColor: "#283618",
 };
 
 const organizationSchema = {
@@ -99,8 +99,8 @@ export default function RootLayout({ children }) {
     <ClerkProvider
       appearance={{
         variables: {
-          colorPrimary: "#3d52a0",
-          colorText: "#1d2550",
+          colorPrimary: "#606c38",
+          colorText: "#283618",
           borderRadius: "0.75rem",
         },
       }}

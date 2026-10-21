@@ -369,7 +369,7 @@ const resetAttendanceArea = () => {
               ?.message ||
             "Unable to load subjects.",
           confirmButtonColor:
-            "#0f172a",
+            "#283618",
         });
       } finally {
         setLoadingSubjects(false);
@@ -605,7 +605,7 @@ setStudentMaxClasses(savedMaxClasses);
                   "The HOD has unlocked this attendance. Correct the entries and save to lock it again.",
 
                 confirmButtonColor:
-                  "#0f172a",
+                  "#283618",
               });
             } else {
             await Swal.fire({
@@ -618,14 +618,14 @@ setStudentMaxClasses(savedMaxClasses);
                 <div style="
                   font-size:14px;
                   line-height:1.8;
-                  color:#64748b;
+                  color:#6f6c52;
                 ">
                   Attendance for
-                  <strong style="color:#0f172a">
+                  <strong style="color:#283618">
                     ${escapeHtml(monthName)} ${escapeHtml(year)}
                   </strong>
                   has already been entered for
-                  <strong style="color:#0f172a">
+                  <strong style="color:#283618">
                     ${escapeHtml(batchLabel)}
                   </strong>.
                   <br><br>
@@ -639,7 +639,7 @@ setStudentMaxClasses(savedMaxClasses);
                 "View Attendance",
 
               confirmButtonColor:
-                "#0f172a",
+                "#283618",
             });
             }
           }
@@ -716,7 +716,7 @@ setStudentMaxClasses(savedMaxClasses);
               "Unable to load students or attendance.",
 
             confirmButtonColor:
-              "#0f172a",
+              "#283618",
           });
         } finally {
           setLoadingStudents(
@@ -961,7 +961,7 @@ const exportAttendanceToExcel = async () => {
       icon: "warning",
       title: "No Students",
       text: "There are no students available to export.",
-      confirmButtonColor: "#0f172a",
+      confirmButtonColor: "#283618",
     });
 
     return;
@@ -972,7 +972,7 @@ const exportAttendanceToExcel = async () => {
       icon: "warning",
       title: "Subject Not Selected",
       text: "Please select a subject first.",
-      confirmButtonColor: "#0f172a",
+      confirmButtonColor: "#283618",
     });
 
     return;
@@ -1297,7 +1297,7 @@ const handleClassesConductedChange = (value) => {
           "Attendance for this month, subject and selected batch has already been entered and cannot be modified.",
 
         confirmButtonColor:
-          "#0f172a",
+          "#283618",
       });
 
       return;
@@ -1328,7 +1328,7 @@ const handleClassesConductedChange = (value) => {
           "Please select department, semester, subject and student batch.",
 
         confirmButtonColor:
-          "#0f172a",
+          "#283618",
       });
 
       return;
@@ -1351,7 +1351,7 @@ const handleClassesConductedChange = (value) => {
           "No students are available for the selected batch.",
 
         confirmButtonColor:
-          "#0f172a",
+          "#283618",
       });
 
       return;
@@ -1379,7 +1379,7 @@ const handleClassesConductedChange = (value) => {
           "Please enter a valid number of classes conducted.",
 
         confirmButtonColor:
-          "#0f172a",
+          "#283618",
       });
 
       return;
@@ -1410,7 +1410,7 @@ const handleClassesConductedChange = (value) => {
             `Please enter attendance for ${student.name}.`,
 
           confirmButtonColor:
-            "#0f172a",
+            "#283618",
         });
 
         return;
@@ -1434,7 +1434,7 @@ const handleClassesConductedChange = (value) => {
             `Invalid attendance value for ${student.name}.`,
 
           confirmButtonColor:
-            "#0f172a",
+            "#283618",
         });
 
         return;
@@ -1453,7 +1453,7 @@ const handleClassesConductedChange = (value) => {
             `Attendance for ${student.name} cannot be negative.`,
 
           confirmButtonColor:
-            "#0f172a",
+            "#283618",
         });
 
         return;
@@ -1472,7 +1472,7 @@ const handleClassesConductedChange = (value) => {
           title: "Invalid Maximum Classes",
           text:
             `Please enter a valid maximum classes value for ${student.name}.`,
-          confirmButtonColor: "#0f172a",
+          confirmButtonColor: "#283618",
         });
 
         return;
@@ -1487,7 +1487,7 @@ const handleClassesConductedChange = (value) => {
           title: "Invalid Maximum Classes",
           text:
             `Maximum classes for ${student.name} cannot exceed classes conducted.`,
-          confirmButtonColor: "#0f172a",
+          confirmButtonColor: "#283618",
         });
 
         return;
@@ -1502,7 +1502,7 @@ const handleClassesConductedChange = (value) => {
           title: "Invalid Attendance",
           text:
             `Attendance for ${student.name} cannot exceed ${maxClasses} classes.`,
-          confirmButtonColor: "#0f172a",
+          confirmButtonColor: "#283618",
         });
 
         return;
@@ -1532,23 +1532,23 @@ const handleClassesConductedChange = (value) => {
           <div style="
             font-size:14px;
             line-height:1.9;
-            color:#64748b;
+            color:#6f6c52;
           ">
 
             <div style="
               padding:12px;
               margin-bottom:10px;
               border-radius:10px;
-              background:#f8fafc;
+              background:#fdfbf3;
             ">
-              <strong style="color:#0f172a">
+              <strong style="color:#283618">
                 ${escapeHtml(selectedSubject?.code || "")}
               </strong>
               <br>
               ${escapeHtml(selectedSubject?.name || "")}
             </div>
 
-            <strong style="color:#0f172a">
+            <strong style="color:#283618">
               ${escapeHtml(monthName)} ${escapeHtml(year)}
             </strong>
 
@@ -1580,10 +1580,10 @@ const handleClassesConductedChange = (value) => {
           "Cancel",
 
         confirmButtonColor:
-          "#0f172a",
+          "#283618",
 
         cancelButtonColor:
-          "#94a3b8",
+          "#9a9474",
 
         reverseButtons: true,
       });
@@ -1686,10 +1686,10 @@ const handleClassesConductedChange = (value) => {
           <div style="
             font-size:14px;
             line-height:1.7;
-            color:#64748b;
+            color:#6f6c52;
           ">
             Attendance has been saved successfully
-            for <strong style="color:#0f172a">
+            for <strong style="color:#283618">
               ${escapeHtml(batchLabel)}
             </strong>.
             <br>
@@ -1698,7 +1698,7 @@ const handleClassesConductedChange = (value) => {
         `,
 
         confirmButtonColor:
-          "#0f172a",
+          "#283618",
       });
     } catch (error) {
       console.error(
@@ -1733,7 +1733,7 @@ const handleClassesConductedChange = (value) => {
             "OK",
 
           confirmButtonColor:
-            "#0f172a",
+            "#283618",
         });
 
         return;
@@ -1753,7 +1753,7 @@ const handleClassesConductedChange = (value) => {
             : "Could not reach the server. Please check your internet connection and try again. Your entries are still on this page and are kept as a draft on this device."),
 
         confirmButtonColor:
-          "#0f172a",
+          "#283618",
       });
     } finally {
       setSaving(false);

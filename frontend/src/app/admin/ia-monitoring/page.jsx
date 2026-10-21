@@ -765,7 +765,7 @@ subjectList =
         `,
 
         confirmButtonText: "Close",
-        confirmButtonColor: "#111111",
+        confirmButtonColor: "#283618",
       });
     } catch (err) {
       console.error(err);
@@ -776,7 +776,7 @@ subjectList =
         text:
           err?.message ||
           "Failed to load IA record.",
-        confirmButtonColor: "#111111",
+        confirmButtonColor: "#283618",
       });
     }
   };

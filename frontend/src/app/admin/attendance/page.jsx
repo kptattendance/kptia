@@ -441,7 +441,7 @@ export default function AdminAttendancePage() {
       await Swal.fire({
         icon: "success",
         title: "Attendance Corrected",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } catch (err) {
       console.error(
@@ -455,7 +455,7 @@ export default function AdminAttendancePage() {
         text:
           err.response?.data?.message ||
           "Failed to correct attendance.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } finally {
       setSaving(false);
@@ -471,8 +471,8 @@ export default function AdminAttendancePage() {
       icon: "warning",
       title: "Delete Attendance?",
       html: `
-        <div style="font-size:14px;line-height:1.8;color:#64748b">
-          <strong style="color:#0f172a">${escapeHtml(detailSubject.code)}</strong>
+        <div style="font-size:14px;line-height:1.8;color:#6f6c52">
+          <strong style="color:#283618">${escapeHtml(detailSubject.code)}</strong>
           · ${escapeHtml(months[month - 1])} ${escapeHtml(year)}
           · ${escapeHtml(formatBatches(record.batchNumbers))}
           <br>
@@ -486,7 +486,7 @@ export default function AdminAttendancePage() {
       confirmButtonText: "Delete",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
-      cancelButtonColor: "#94a3b8",
+      cancelButtonColor: "#9a9474",
       reverseButtons: true,
     });
 
@@ -520,7 +520,7 @@ export default function AdminAttendancePage() {
         text:
           err.response?.data?.message ||
           "Failed to delete attendance.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     }
   };

@@ -7,7 +7,7 @@ export const showSuccess = (title, text = "") => {
     icon: "success",
     title,
     text,
-    confirmButtonColor: "#0f172a",
+    confirmButtonColor: "#283618",
   });
 };
 
@@ -16,7 +16,7 @@ export const showError = (title, text = "") => {
     icon: "error",
     title,
     text,
-    confirmButtonColor: "#0f172a",
+    confirmButtonColor: "#283618",
   });
 };
 
@@ -25,7 +25,7 @@ export const showWarning = (title, text = "") => {
     icon: "warning",
     title,
     text,
-    confirmButtonColor: "#0f172a",
+    confirmButtonColor: "#283618",
   });
 };
 
@@ -34,7 +34,7 @@ export const showInfo = (title, text = "") => {
     icon: "info",
     title,
     text,
-    confirmButtonColor: "#0f172a",
+    confirmButtonColor: "#283618",
   });
 };
 
@@ -50,8 +50,8 @@ export const showConfirm = (
     showCancelButton: true,
     confirmButtonText: confirmText,
     cancelButtonText: "Cancel",
-    confirmButtonColor: "#0f172a",
-    cancelButtonColor: "#94a3b8",
+    confirmButtonColor: "#283618",
+    cancelButtonColor: "#9a9474",
     reverseButtons: true,
   });
 };

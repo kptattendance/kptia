@@ -320,7 +320,7 @@ export default function HODMentorsPage() {
         icon: "success",
         title,
         text: response.data?.message,
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } catch (err) {
       console.error("Mentor action error:", err);
@@ -331,7 +331,7 @@ export default function HODMentorsPage() {
         text:
           err.response?.data?.message ||
           "Please try again.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } finally {
       setSaving(false);
@@ -360,7 +360,7 @@ export default function HODMentorsPage() {
       confirmButtonText: "Remove",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
-      cancelButtonColor: "#94a3b8",
+      cancelButtonColor: "#9a9474",
       reverseButtons: true,
     });
 

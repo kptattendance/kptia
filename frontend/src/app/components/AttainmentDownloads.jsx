@@ -89,7 +89,7 @@ export default function AttainmentDownloads({
           icon: "info",
           title: "No IA Marks Yet",
           text: "CO attainment can be downloaded once IA marks have been saved for this subject.",
-          confirmButtonColor: "#0f172a",
+          confirmButtonColor: "#283618",
         });
 
         return;
@@ -135,7 +135,7 @@ export default function AttainmentDownloads({
         text:
           err.response?.data?.message ||
           "The CO attainment report could not be prepared. Please try again.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } finally {
       setBusy("");

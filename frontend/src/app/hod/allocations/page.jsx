@@ -308,7 +308,7 @@ export default function HODCourseAllocationPage() {
         icon: "warning",
         title: "Select Faculty",
         text: `Please select a faculty for ${subject.code}.`,
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
 
       return;
@@ -357,7 +357,7 @@ export default function HODCourseAllocationPage() {
         text:
           err.response?.data?.message ||
           "Failed to save the course allocation.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } finally {
       setSavingSubjectId("");
@@ -380,7 +380,7 @@ export default function HODCourseAllocationPage() {
       confirmButtonText: "Remove",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
-      cancelButtonColor: "#94a3b8",
+      cancelButtonColor: "#9a9474",
       reverseButtons: true,
     });
 
@@ -410,7 +410,7 @@ export default function HODCourseAllocationPage() {
         text:
           err.response?.data?.message ||
           "Failed to remove the allocation.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     }
   };

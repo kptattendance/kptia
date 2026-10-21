@@ -1315,8 +1315,8 @@ const handleUnlockAttendance = async (subject) => {
     showCancelButton: true,
     confirmButtonText: "Unlock",
     cancelButtonText: "Cancel",
-    confirmButtonColor: "#0f172a",
-    cancelButtonColor: "#94a3b8",
+    confirmButtonColor: "#283618",
+    cancelButtonColor: "#9a9474",
     reverseButtons: true,
   });
 
@@ -1353,7 +1353,7 @@ const handleUnlockAttendance = async (subject) => {
       icon: "success",
       title: "Attendance Unlocked",
       text: "The faculty can now correct this attendance and save it again.",
-      confirmButtonColor: "#0f172a",
+      confirmButtonColor: "#283618",
     });
   } catch (unlockError) {
     console.error(
@@ -1367,7 +1367,7 @@ const handleUnlockAttendance = async (subject) => {
       text:
         unlockError.response?.data?.message ||
         "Failed to unlock attendance.",
-      confirmButtonColor: "#0f172a",
+      confirmButtonColor: "#283618",
     });
   }
 };

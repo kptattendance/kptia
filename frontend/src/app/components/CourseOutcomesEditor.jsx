@@ -354,7 +354,7 @@ export default function CourseOutcomesEditor({
           icon: "warning",
           title: "Statement Required",
           text: `Please enter the statement of CO${i + 1}.`,
-          confirmButtonColor: "#0f172a",
+          confirmButtonColor: "#283618",
         });
 
         return;
@@ -365,7 +365,7 @@ export default function CourseOutcomesEditor({
           icon: "warning",
           title: "Bloom's Level Required",
           text: `Please select the Bloom's level of CO${i + 1}.`,
-          confirmButtonColor: "#0f172a",
+          confirmButtonColor: "#283618",
         });
 
         return;
@@ -398,7 +398,7 @@ export default function CourseOutcomesEditor({
         icon: "success",
         title: "Course Outcomes Saved",
         text: "You can change them again at any time.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } catch (err) {
       console.error(
@@ -412,7 +412,7 @@ export default function CourseOutcomesEditor({
         text:
           err.response?.data?.message ||
           "Failed to save course outcomes.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } finally {
       setSaving(false);

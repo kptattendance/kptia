@@ -79,7 +79,7 @@ export default function Navbar() {
 
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#7091e6] to-[#3d52a0] text-base font-extrabold text-white shadow-lg shadow-[#3d52a0]/30">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#dda15e] to-[#bc6c25] text-base font-extrabold text-white shadow-lg shadow-[#bc6c25]/30">
             K
           </div>
 
@@ -121,7 +121,7 @@ export default function Navbar() {
             <SignInButton mode="modal">
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#3d52a0] to-[#7091e6] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#3d52a0]/25 transition hover:-translate-y-0.5 hover:shadow-xl"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#bc6c25] to-[#dda15e] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#bc6c25]/25 transition hover:-translate-y-0.5 hover:shadow-xl"
               >
                 Login
                 <ArrowRight size={15} />

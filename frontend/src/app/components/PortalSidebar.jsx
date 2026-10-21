@@ -64,7 +64,7 @@ export default function PortalSidebar({
 
   const brand = (
     <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#7091e6] to-[#3d52a0] text-base font-extrabold text-white shadow-lg shadow-[#3d52a0]/30 ring-1 ring-white/20">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#dda15e] to-[#bc6c25] text-base font-extrabold text-white shadow-lg shadow-[#bc6c25]/30 ring-1 ring-white/20">
         K
       </div>
 
@@ -117,14 +117,14 @@ export default function PortalSidebar({
       {/* PANEL */}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-hidden bg-gradient-to-b from-[#1c2650] via-[#2b3a70] to-[#3d52a0] text-white shadow-2xl transition-transform duration-300 ease-out lg:translate-x-0 lg:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-hidden bg-gradient-to-b from-[#1a240e] via-[#283618] to-[#3d4a22] text-white shadow-2xl transition-transform duration-300 ease-out lg:translate-x-0 lg:shadow-none ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
 
         {/* Soft light in the corner */}
-        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#7091e6]/30 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-[#adbbda]/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[#dda15e]/30 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-[#dda15e]/20 blur-3xl" />
 
         {/* BRAND */}
 
@@ -158,14 +158,14 @@ export default function PortalSidebar({
                 aria-current={active ? "page" : undefined}
                 className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
                   active
-                    ? "bg-white text-[#2b3a70] shadow-lg shadow-black/10"
+                    ? "bg-[#fefae0] text-[#283618] shadow-lg shadow-black/20"
                     : "text-white/75 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <span
                   className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
                     active
-                      ? "bg-gradient-to-br from-[#7091e6] to-[#3d52a0] text-white"
+                      ? "bg-gradient-to-br from-[#dda15e] to-[#bc6c25] text-white"
                       : "bg-white/10 text-white/80 group-hover:bg-white/15"
                   }`}
                 >

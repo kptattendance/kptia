@@ -50,8 +50,8 @@ export default function Home() {
     <main className="relative min-h-[calc(100vh-4rem)] overflow-hidden">
 
       {/* Background glow */}
-      <div className="pointer-events-none absolute -right-40 -top-40 h-[28rem] w-[28rem] rounded-full bg-[#7091e6]/25 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-40 -left-40 h-[28rem] w-[28rem] rounded-full bg-[#adbbda]/40 blur-3xl" />
+      <div className="pointer-events-none absolute -right-40 -top-40 h-[28rem] w-[28rem] rounded-full bg-[#dda15e]/25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -left-40 h-[28rem] w-[28rem] rounded-full bg-[#dda15e]/40 blur-3xl" />
 
       <section className="relative mx-auto max-w-7xl px-4 pb-20 pt-12 sm:px-6 sm:pt-20 lg:pt-24">
 
@@ -59,8 +59,8 @@ export default function Home() {
 
           {/* Badge */}
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white bg-white/70 px-4 py-2 shadow-sm backdrop-blur">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-[#7091e6]" />
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#3d52a0]">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-[#dda15e]" />
+            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#bc6c25]">
               Karnataka (Govt.) Polytechnic, Mangaluru
             </span>
           </div>
@@ -68,7 +68,7 @@ export default function Home() {
           {/* Heading */}
           <h1 className="text-4xl font-extrabold leading-[1.08] tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
             Attendance &amp; Internal Assessment,
-            <span className="block bg-gradient-to-r from-[#3d52a0] via-[#7091e6] to-[#8697c4] bg-clip-text text-transparent">
+            <span className="block bg-gradient-to-r from-[#606c38] via-[#bc6c25] to-[#dda15e] bg-clip-text text-transparent">
               beautifully simple.
             </span>
           </h1>
@@ -83,7 +83,7 @@ export default function Home() {
               <SignInButton mode="modal">
                 <button
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#3d52a0] to-[#7091e6] px-7 py-4 text-sm font-bold text-white shadow-xl shadow-[#3d52a0]/30 transition hover:-translate-y-0.5 hover:shadow-2xl"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#bc6c25] to-[#dda15e] px-7 py-4 text-sm font-bold text-white shadow-xl shadow-[#bc6c25]/30 transition hover:-translate-y-0.5 hover:shadow-2xl"
                 >
                   Login to continue
                   <ArrowRight size={17} />
@@ -94,7 +94,7 @@ export default function Home() {
             <Show when="signed-in">
               <Link
                 href="/auth/check"
-                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#3d52a0] to-[#7091e6] px-7 py-4 text-sm font-bold text-white shadow-xl shadow-[#3d52a0]/30 transition hover:-translate-y-0.5 hover:shadow-2xl"
+                className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#bc6c25] to-[#dda15e] px-7 py-4 text-sm font-bold text-white shadow-xl shadow-[#bc6c25]/30 transition hover:-translate-y-0.5 hover:shadow-2xl"
               >
                 Open my dashboard
                 <ArrowRight size={17} />
@@ -102,7 +102,7 @@ export default function Home() {
             </Show>
 
             <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-500">
-              <ShieldCheck size={17} className="text-[#7091e6]" />
+              <ShieldCheck size={17} className="text-[#dda15e]" />
               Secure college login
             </span>
           </div>
@@ -119,7 +119,7 @@ export default function Home() {
                 key={feature.title}
                 className="group rounded-3xl border border-white bg-white/70 p-6 shadow-sm backdrop-blur transition hover:-translate-y-1 hover:shadow-lg"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7091e6] to-[#3d52a0] text-white shadow-lg shadow-[#3d52a0]/25 transition group-hover:scale-105">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#dda15e] to-[#bc6c25] text-white shadow-lg shadow-[#bc6c25]/25 transition group-hover:scale-105">
                   <Icon size={22} />
                 </div>
 

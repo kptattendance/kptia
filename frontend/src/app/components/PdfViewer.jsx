@@ -94,7 +94,7 @@ function PdfPage({ pdf, pageNumber, aspectRatio, watermark }) {
 
           context.save();
           context.globalAlpha = 0.13;
-          context.fillStyle = "#0f172a";
+          context.fillStyle = "#283618";
           context.font = `600 ${fontSize}px sans-serif`;
           context.textAlign = "center";
 

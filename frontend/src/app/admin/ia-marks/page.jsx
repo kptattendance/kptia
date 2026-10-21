@@ -418,7 +418,7 @@ export default function AdminIAMarksPage() {
       await Swal.fire({
         icon: "success",
         title: "IA Marks Corrected",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } catch (err) {
       console.error("Correct IA error:", err);
@@ -429,7 +429,7 @@ export default function AdminIAMarksPage() {
         text:
           err.response?.data?.message ||
           "Failed to correct IA marks.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } finally {
       setSaving(false);
@@ -445,8 +445,8 @@ export default function AdminIAMarksPage() {
       icon: "warning",
       title: "Delete IA Marks?",
       html: `
-        <div style="font-size:14px;line-height:1.8;color:#64748b">
-          <strong style="color:#0f172a">${escapeHtml(detailTitle)}</strong>
+        <div style="font-size:14px;line-height:1.8;color:#6f6c52">
+          <strong style="color:#283618">${escapeHtml(detailTitle)}</strong>
           <br>
           IA ${escapeHtml(detail.iaNumber)} · ${escapeHtml(detail.academicYear)}
           · ${escapeHtml(detail.students.length)} students
@@ -459,7 +459,7 @@ export default function AdminIAMarksPage() {
       confirmButtonText: "Delete",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
-      cancelButtonColor: "#94a3b8",
+      cancelButtonColor: "#9a9474",
       reverseButtons: true,
     });
 
@@ -491,7 +491,7 @@ export default function AdminIAMarksPage() {
         text:
           err.response?.data?.message ||
           "Failed to delete IA marks.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     }
   };

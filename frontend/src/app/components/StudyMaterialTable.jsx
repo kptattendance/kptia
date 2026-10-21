@@ -75,7 +75,7 @@ export default function StudyMaterialTable({
       icon: "error",
       title,
       text: err.response?.data?.message || fallback,
-      confirmButtonColor: "#0f172a",
+      confirmButtonColor: "#283618",
     });
 
   // =====================================================
@@ -112,7 +112,7 @@ export default function StudyMaterialTable({
         icon: "warning",
         title: "PDF Only",
         text: "Please choose a PDF file.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
 
       return;
@@ -123,7 +123,7 @@ export default function StudyMaterialTable({
         icon: "warning",
         title: "File Too Large",
         text: `This file is ${formatSize(file.size)}. The limit is ${formatSize(maxFileSize)}. Please reduce its size and try again.`,
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
 
       return;
@@ -181,7 +181,7 @@ export default function StudyMaterialTable({
         icon: "success",
         title: "Uploaded",
         text: completeResponse.data?.message,
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } catch (err) {
       console.error(
@@ -211,8 +211,8 @@ export default function StudyMaterialTable({
       showCancelButton: true,
       confirmButtonText: "Approve",
       cancelButtonText: "Cancel",
-      confirmButtonColor: "#0f172a",
-      cancelButtonColor: "#94a3b8",
+      confirmButtonColor: "#283618",
+      cancelButtonColor: "#9a9474",
       reverseButtons: true,
     });
 
@@ -264,7 +264,7 @@ export default function StudyMaterialTable({
       confirmButtonText: "Reject",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
-      cancelButtonColor: "#94a3b8",
+      cancelButtonColor: "#9a9474",
       reverseButtons: true,
     });
 
@@ -306,7 +306,7 @@ export default function StudyMaterialTable({
       confirmButtonText: "Delete",
       cancelButtonText: "Cancel",
       confirmButtonColor: "#dc2626",
-      cancelButtonColor: "#94a3b8",
+      cancelButtonColor: "#9a9474",
       reverseButtons: true,
     });
 

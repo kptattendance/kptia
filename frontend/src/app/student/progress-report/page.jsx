@@ -164,7 +164,7 @@ export default function StudentProgressReportPage() {
         icon: "error",
         title: "Unable to Download",
         text: "The report could not be prepared. Please try again.",
-        confirmButtonColor: "#0f172a",
+        confirmButtonColor: "#283618",
       });
     } finally {
       setDownloading(false);

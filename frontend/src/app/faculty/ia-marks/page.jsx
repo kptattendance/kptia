@@ -115,7 +115,7 @@ export default function FacultyIAMarksPage() {
       title,
       text,
       confirmButtonText: "OK",
-      confirmButtonColor: "#4f46e5",
+      confirmButtonColor: "#606c38",
     });
   };
   // The academic year starts in July, so January to
