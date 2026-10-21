@@ -14,6 +14,7 @@ import {
   LockOpen,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
+import AttainmentDownloads from "../../../components/AttainmentDownloads";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -687,6 +688,18 @@ const downloadExcelReport = async () => {
             </div>
 
           </div>
+
+          {data?.records?.length > 0 && (
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <AttainmentDownloads
+                subjectId={subjectId}
+                academicYear={academicYear}
+                iaNumber={
+                  selectedIA ? Number(selectedIA) : undefined
+                }
+              />
+            </div>
+          )}
 
         </div>
 

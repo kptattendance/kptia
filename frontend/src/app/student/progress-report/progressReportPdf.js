@@ -1,5 +1,11 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  drawImageInBox,
+  drawLetterheadFooter,
+  drawLetterheadHeader,
+  LETTERHEAD_FOOTER_HEIGHT,
+} from "../../utils/letterheadPdf.js";
 
 // =====================================================
 // PROGRESS REPORT PDF
@@ -24,11 +30,6 @@ const DARK = [15, 23, 42];
 const GREY = [100, 116, 139];
 const LINE = [203, 213, 225];
 const RED = [220, 38, 38];
-
-// Letterhead colours
-const NAVY = [31, 56, 100];
-const MAROON = [153, 27, 52];
-const GOLD = [176, 124, 18];
 
 const MONTH_NAMES = [
   "Jan",
@@ -90,51 +91,6 @@ export const monthPercentage = (value) =>
       ) / 10
     : null;
 
-// Image format for jsPDF, from a data URL
-const imageFormat = (dataUrl) =>
-  dataUrl.startsWith("data:image/png")
-    ? "PNG"
-    : "JPEG";
-
-// Draws an image inside a box, keeping its shape.
-// Returns the height used.
-const drawImageInBox = (
-  doc,
-  dataUrl,
-  x,
-  y,
-  maxWidth,
-  maxHeight,
-  align = "left"
-) => {
-  const { width, height } =
-    doc.getImageProperties(dataUrl);
-
-  const scale = Math.min(
-    maxWidth / width,
-    maxHeight / height
-  );
-
-  const drawWidth = width * scale;
-  const drawHeight = height * scale;
-
-  const left =
-    align === "center"
-      ? x + (maxWidth - drawWidth) / 2
-      : x;
-
-  doc.addImage(
-    dataUrl,
-    imageFormat(dataUrl),
-    left,
-    y,
-    drawWidth,
-    drawHeight
-  );
-
-  return drawHeight;
-};
-
 export function buildProgressReportPdf(
   report,
   photoDataUrl,
@@ -153,99 +109,15 @@ export function buildProgressReportPdf(
   const { student } = report;
 
   // Space kept free at the bottom for the footer
-  const footerHeight = 24;
+  const footerHeight = LETTERHEAD_FOOTER_HEIGHT;
 
   const contentBottom = pageHeight - footerHeight - 2;
 
   // ---------------------------------------------------
   // LETTERHEAD
-  //
-  // Emblem of Karnataka in the middle, the college logos
-  // on the left and right, the name and address between.
   // ---------------------------------------------------
 
-  if (letterhead.centerLogo) {
-    drawImageInBox(
-      doc,
-      letterhead.centerLogo,
-      pageWidth / 2 - 8,
-      5,
-      16,
-      13,
-      "center"
-    );
-  }
-
-  if (letterhead.leftLogo) {
-    drawImageInBox(
-      doc,
-      letterhead.leftLogo,
-      MARGIN,
-      13,
-      24,
-      24,
-      "center"
-    );
-  }
-
-  if (letterhead.rightLogo) {
-    drawImageInBox(
-      doc,
-      letterhead.rightLogo,
-      pageWidth - MARGIN - 24,
-      13,
-      24,
-      24,
-      "center"
-    );
-  }
-
-  const centered = (text, top, size, color) => {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(size);
-    doc.setTextColor(...color);
-    doc.text(text, pageWidth / 2, top, {
-      align: "center",
-    });
-  };
-
-  centered("GOVERNMENT OF KARNATAKA", 22, 10.5, NAVY);
-
-  centered(
-    "DEPARTMENT OF TECHNICAL EDUCATION",
-    26.3,
-    8.5,
-    NAVY
-  );
-
-  centered(
-    "KARNATAKA (GOVT.) POLYTECHNIC, MANGALURU",
-    32.5,
-    14,
-    MAROON
-  );
-
-  centered(
-    "(First Autonomous Polytechnic in India from AICTE New Delhi)",
-    36.8,
-    8,
-    GOLD
-  );
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...GREY);
-
-  doc.text(
-    "Kadri Hills, Mangaluru \u2013 575004, Dakshina Kannada, Karnataka",
-    pageWidth / 2,
-    40.8,
-    { align: "center" }
-  );
-
-  doc.setDrawColor(...NAVY);
-  doc.setLineWidth(0.8);
-  doc.line(MARGIN, 43.5, pageWidth - MARGIN, 43.5);
+  drawLetterheadHeader(doc, letterhead);
 
   let y = 49;
 
@@ -728,65 +600,16 @@ export function buildProgressReportPdf(
 
   // ---------------------------------------------------
   // FOOTER ON EVERY PAGE
-  //
-  // Line, college name and address in Kannada, phone
-  // and e-mail. Above the line, a small note of when
-  // and for whom the report was made.
   // ---------------------------------------------------
 
-  const pageCount = doc.getNumberOfPages();
-
-  for (let page = 1; page <= pageCount; page++) {
-    doc.setPage(page);
-
-    const lineY = pageHeight - footerHeight + 4;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...GREY);
-
-    doc.text(
+  drawLetterheadFooter(
+    doc,
+    letterhead,
+    (page, pageCount) =>
       `${student.registerNumber}  |  Generated from ia.kptmangaluru.in on ${formatDate(
         report.generatedAt
-      )}${pageCount > 1 ? `  |  Page ${page} of ${pageCount}` : ""}`,
-      pageWidth / 2,
-      lineY - 1.5,
-      { align: "center" }
-    );
-
-    doc.setDrawColor(...NAVY);
-    doc.setLineWidth(0.8);
-    doc.line(MARGIN, lineY, pageWidth - MARGIN, lineY);
-
-    // Kannada lines, drawn by the browser as an image
-    // because PDF fonts cannot join Kannada letters.
-    let textY = lineY + 4.5;
-
-    if (letterhead.kannadaFooter) {
-      const used = drawImageInBox(
-        doc,
-        letterhead.kannadaFooter,
-        MARGIN,
-        lineY + 1.8,
-        contentWidth,
-        9,
-        "center"
-      );
-
-      textY = lineY + 1.8 + used + 3;
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...NAVY);
-
-    doc.text(
-      "Phone No. 0824 \u2013 3516910 / 2211636, E-Mail: kptmng@gmail.com",
-      pageWidth / 2,
-      textY,
-      { align: "center" }
-    );
-  }
+      )}${pageCount > 1 ? `  |  Page ${page} of ${pageCount}` : ""}`
+  );
 
   return doc;
 }

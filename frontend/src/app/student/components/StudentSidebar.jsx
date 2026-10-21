@@ -28,11 +28,7 @@ const menuItems = [
     href: "/student/progress-report",
     icon: "📄",
   },
-  {
-    name: "Profile",
-    href: "/student/profile",
-    icon: "👤",
-  },
+  
 ];
 
 export default function StudentSidebar() {

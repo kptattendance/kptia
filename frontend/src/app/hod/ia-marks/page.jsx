@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
+import AttainmentDownloads from "../../components/AttainmentDownloads";
 import {
   BarChart3,
   RefreshCw,
@@ -743,6 +744,17 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
 
         </div>
       </div>
+
+      {semester && (
+        <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <AttainmentDownloads
+            scope="semester"
+            academicYear={academicYear}
+            semester={semester}
+            department={department}
+          />
+        </div>
+      )}
 
 
       {/* =====================================================

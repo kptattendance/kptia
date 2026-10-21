@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
 import * as XLSX from "xlsx";
+import AttainmentDownloads from "../../components/AttainmentDownloads";
 import {
   cleanNumberInput,
   handleGridKeyDown,
@@ -3331,6 +3332,17 @@ for (const batch of batchesToSave) {
                       ✓ IA Frozen
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* CO attainment of the saved marks */}
+              {existingIA && (
+                <div className="border-t border-slate-100 bg-white p-4">
+                  <AttainmentDownloads
+                    subjectId={subjectId}
+                    academicYear={academicYear}
+                    iaNumber={Number(iaNumber)}
+                  />
                 </div>
               )}
             </div>
