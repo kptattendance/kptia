@@ -28,7 +28,10 @@ const coSchema = new mongoose.Schema(
       trim: true,
     },
 
-    // Bloom's taxonomy level
+    // Bloom's taxonomy levels (optional)
+    //
+    // One CO can cover more than one level,
+    // for example ["L2", "L4"].
     //
     // L1 = Remember
     // L2 = Understand
@@ -36,10 +39,17 @@ const coSchema = new mongoose.Schema(
     // L4 = Analyse
     // L5 = Evaluate
     // L6 = Create
-    bloomLevel: {
-      type: String,
-      required: true,
-      enum: ["L1", "L2", "L3", "L4", "L5", "L6"],
+    //
+    // Older records have a single bloomLevel
+    // string instead. The controller reads both.
+    bloomLevels: {
+      type: [
+        {
+          type: String,
+          enum: ["L1", "L2", "L3", "L4", "L5", "L6"],
+        },
+      ],
+      default: [],
     },
 
     // CO - PO / PSO MAPPING
@@ -165,6 +175,35 @@ const courseOutcomeSchema = new mongoose.Schema(
     updatedBy: {
       type: String,
       required: true,
+    },
+
+    // ------------------------------------------------------
+    // LOCKED
+    //
+    // The faculty enters the COs once and they are
+    // locked. The HOD can unlock them for correction,
+    // and saving again locks them again.
+    // ------------------------------------------------------
+
+    isLocked: {
+      type: Boolean,
+      default: true,
+    },
+
+    lockedAt: {
+      type: Date,
+    },
+
+    lockedBy: {
+      type: String,
+    },
+
+    unlockedAt: {
+      type: Date,
+    },
+
+    unlockedBy: {
+      type: String,
     },
   },
   {

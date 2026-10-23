@@ -4,7 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
-import { Plus, Save, Trash2 } from "lucide-react";
+import {
+  Lock,
+  LockOpen,
+  Plus,
+  Save,
+  Trash2,
+} from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -23,13 +29,14 @@ const departments = [
 
 const semesters = [1, 2, 3, 4, 5, 6];
 
+// Optional. One CO can cover more than one level.
 const bloomLevels = [
-  { value: "L1", label: "L1 - Remember" },
-  { value: "L2", label: "L2 - Understand" },
-  { value: "L3", label: "L3 - Apply" },
-  { value: "L4", label: "L4 - Analyse" },
-  { value: "L5", label: "L5 - Evaluate" },
-  { value: "L6", label: "L6 - Create" },
+  { value: "L1", label: "Remember" },
+  { value: "L2", label: "Understand" },
+  { value: "L3", label: "Apply" },
+  { value: "L4", label: "Analyse" },
+  { value: "L5", label: "Evaluate" },
+  { value: "L6", label: "Create" },
 ];
 
 const targetFields = [
@@ -65,7 +72,7 @@ const formatAcademicYear = (startYear) =>
 
 const emptyCO = () => ({
   statement: "",
-  bloomLevel: "",
+  bloomLevels: [],
   mapping: {},
   justification: "",
 });
@@ -79,6 +86,9 @@ const emptyCO = () => ({
 // fixedDepartment:
 //   HOD     -> own department, cannot be changed
 //   Faculty -> not passed, department is selected
+//
+// The faculty enters the COs once and they are
+// locked. The HOD can unlock them for correction.
 // =====================================================
 
 export default function CourseOutcomesEditor({
@@ -134,6 +144,13 @@ export default function CourseOutcomesEditor({
   const [canEdit, setCanEdit] = useState(false);
   const [editMessage, setEditMessage] = useState("");
 
+  const [isLocked, setIsLocked] = useState(false);
+  const [canUnlock, setCanUnlock] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+
+  // HOD only: subjectId -> { coCount, isLocked }
+  const [coStatus, setCoStatus] = useState({});
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -181,6 +198,67 @@ export default function CourseOutcomesEditor({
   }, [department, semester, getToken]);
 
   // =====================================================
+  // LOAD WHICH SUBJECTS HAVE COs (HOD)
+  // =====================================================
+
+  useEffect(() => {
+    const loadStatus = async () => {
+      if (!fixedDepartment || !semester) {
+        setCoStatus({});
+        return;
+      }
+
+      try {
+        const token = await getToken();
+
+        const response = await axios.get(
+          `${API_URL}/api/course-outcomes/status`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            params: {
+              academicYear,
+              semester: Number(semester),
+            },
+          }
+        );
+
+        const status = {};
+
+        (response.data?.data || []).forEach((item) => {
+          status[String(item.subjectId)] = item;
+        });
+
+        setCoStatus(status);
+      } catch (err) {
+        console.error("Load CO status error:", err);
+        setCoStatus({});
+      }
+    };
+
+    loadStatus();
+  }, [fixedDepartment, semester, academicYear, getToken]);
+
+  const getSubjectLabel = (subject) => {
+    const label = `${subject.code} - ${subject.name}`;
+
+    if (!fixedDepartment) {
+      return label;
+    }
+
+    const status = coStatus[String(subject._id)];
+
+    if (!status) {
+      return `${label} (not entered)`;
+    }
+
+    return status.isLocked
+      ? `${label} (entered, locked)`
+      : `${label} (unlocked for faculty)`;
+  };
+
+  // =====================================================
   // LOAD COURSE OUTCOMES
   // =====================================================
 
@@ -222,6 +300,9 @@ export default function CourseOutcomesEditor({
         setCanEdit(Boolean(result.canEdit));
         setEditMessage(result.editMessage || "");
 
+        setIsLocked(Boolean(result.isLocked));
+        setCanUnlock(Boolean(result.canUnlock));
+
         setTargets({
           ...result.defaultTargets,
           ...(record?.targets || {}),
@@ -231,7 +312,7 @@ export default function CourseOutcomesEditor({
           record?.cos?.length
             ? record.cos.map((co) => ({
                 statement: co.statement || "",
-                bloomLevel: co.bloomLevel || "",
+                bloomLevels: co.bloomLevels || [],
                 mapping: { ...(co.mapping || {}) },
                 justification:
                   co.justification || "",
@@ -305,6 +386,25 @@ export default function CourseOutcomesEditor({
     );
   };
 
+  const toggleBloomLevel = (index, level) => {
+    setCos((prev) =>
+      prev.map((co, coIndex) => {
+        if (coIndex !== index) {
+          return co;
+        }
+
+        const selected = co.bloomLevels || [];
+
+        return {
+          ...co,
+          bloomLevels: selected.includes(level)
+            ? selected.filter((item) => item !== level)
+            : [...selected, level],
+        };
+      })
+    );
+  };
+
   const addCO = () => {
     setCos((prev) =>
       prev.length >= MAX_COS
@@ -359,15 +459,24 @@ export default function CourseOutcomesEditor({
 
         return;
       }
+    }
 
-      if (!cos[i].bloomLevel) {
-        await Swal.fire({
-          icon: "warning",
-          title: "Bloom's Level Required",
-          text: `Please select the Bloom's level of CO${i + 1}.`,
-          confirmButtonColor: "#283618",
-        });
+    // The faculty cannot change the COs after
+    // saving, so confirm first.
+    if (!canUnlock) {
+      const confirmation = await Swal.fire({
+        icon: "question",
+        title: "Save and Lock?",
+        text: "After saving, the course outcomes are locked. You will need to ask your HOD to unlock them for any change.",
+        showCancelButton: true,
+        confirmButtonText: "Save",
+        cancelButtonText: "Cancel",
+        confirmButtonColor: "#283618",
+        cancelButtonColor: "#9a9474",
+        reverseButtons: true,
+      });
 
+      if (!confirmation.isConfirmed) {
         return;
       }
     }
@@ -377,7 +486,7 @@ export default function CourseOutcomesEditor({
 
       const token = await getToken();
 
-      await axios.put(
+      const response = await axios.put(
         `${API_URL}/api/course-outcomes`,
         {
           subjectId,
@@ -392,12 +501,32 @@ export default function CourseOutcomesEditor({
         }
       );
 
+      const locked = Boolean(response.data?.isLocked);
+
       setSource("saved");
+      setIsLocked(locked);
+
+      setCoStatus((prev) => ({
+        ...prev,
+        [subjectId]: {
+          coCount: cos.length,
+          isLocked: locked,
+        },
+      }));
+
+      if (!canUnlock) {
+        setCanEdit(false);
+        setEditMessage(
+          "These course outcomes are saved and locked. Ask your HOD to unlock them if changes are needed."
+        );
+      }
 
       await Swal.fire({
         icon: "success",
         title: "Course Outcomes Saved",
-        text: "You can change them again at any time.",
+        text: canUnlock
+          ? "The course outcomes are saved."
+          : "The course outcomes are saved and locked.",
         confirmButtonColor: "#283618",
       });
     } catch (err) {
@@ -416,6 +545,87 @@ export default function CourseOutcomesEditor({
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // =====================================================
+  // UNLOCK FOR CORRECTION (HOD / ADMIN)
+  //
+  // The saved COs are kept. The faculty can correct
+  // them and save again, which locks them again.
+  // =====================================================
+
+  const handleUnlock = async () => {
+    if (unlocking) {
+      return;
+    }
+
+    const confirmation = await Swal.fire({
+      icon: "question",
+      title: "Unlock Course Outcomes?",
+      text: "The faculty will be able to correct these course outcomes and save them again.",
+      showCancelButton: true,
+      confirmButtonText: "Unlock",
+      cancelButtonText: "Cancel",
+      confirmButtonColor: "#283618",
+      cancelButtonColor: "#9a9474",
+      reverseButtons: true,
+    });
+
+    if (!confirmation.isConfirmed) {
+      return;
+    }
+
+    try {
+      setUnlocking(true);
+
+      const token = await getToken();
+
+      await axios.post(
+        `${API_URL}/api/course-outcomes/unlock`,
+        {
+          subjectId,
+          academicYear,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      setIsLocked(false);
+
+      setCoStatus((prev) => ({
+        ...prev,
+        [subjectId]: {
+          ...prev[subjectId],
+          isLocked: false,
+        },
+      }));
+
+      await Swal.fire({
+        icon: "success",
+        title: "Course Outcomes Unlocked",
+        text: "The faculty can now correct them and save them again.",
+        confirmButtonColor: "#283618",
+      });
+    } catch (err) {
+      console.error(
+        "Unlock course outcomes error:",
+        err
+      );
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Unlock",
+        text:
+          err.response?.data?.message ||
+          "Failed to unlock course outcomes.",
+        confirmButtonColor: "#283618",
+      });
+    } finally {
+      setUnlocking(false);
     }
   };
 
@@ -446,7 +656,9 @@ export default function CourseOutcomesEditor({
         </h1>
 
         <p className="mt-2 text-sm text-slate-500">
-          Define the course outcomes of a subject, map them to the program outcomes and fix the attainment targets.
+          {fixedDepartment
+            ? "Faculty enter the course outcomes of their subjects. Saved course outcomes are locked; unlock them here when a faculty member needs to correct them."
+            : "Define the course outcomes of your subject, map them to the program outcomes and fix the attainment targets. Once saved they are locked, and only your HOD can unlock them."}
         </p>
       </div>
 
@@ -553,7 +765,7 @@ export default function CourseOutcomesEditor({
                   key={subject._id}
                   value={subject._id}
                 >
-                  {subject.code} - {subject.name}
+                  {getSubjectLabel(subject)}
                 </option>
               ))}
             </select>
@@ -598,6 +810,46 @@ export default function CourseOutcomesEditor({
             </div>
           )}
 
+          {source === "saved" && canUnlock && (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm leading-6 text-slate-700">
+              {isLocked ? (
+                <>
+                  <span className="inline-flex items-center gap-2">
+                    <Lock size={16} />
+                    Saved and locked. The faculty cannot change these course outcomes until you unlock them.
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleUnlock}
+                    disabled={unlocking}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <LockOpen size={16} />
+                    {unlocking
+                      ? "Unlocking..."
+                      : "Unlock for Faculty"}
+                  </button>
+                </>
+              ) : (
+                <span className="inline-flex items-center gap-2 font-semibold text-sky-700">
+                  <LockOpen size={16} />
+                  Unlocked for correction. The faculty can change and save them, which locks them again.
+                </span>
+              )}
+            </div>
+          )}
+
+          {source === "saved" &&
+            !canUnlock &&
+            canEdit &&
+            !isLocked && (
+              <div className="mb-6 flex items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50 px-5 py-4 text-sm font-medium leading-6 text-sky-800">
+                <LockOpen size={16} />
+                Your HOD has unlocked these course outcomes for correction. Saving will lock them again.
+              </div>
+            )}
+
           {!canEdit && (
             <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-100 px-5 py-4 text-sm leading-6 text-slate-700">
               View only. {editMessage}
@@ -636,7 +888,7 @@ export default function CourseOutcomesEditor({
               {cos.map((co, index) => (
                 <div
                   key={index}
-                  className="grid gap-4 px-5 py-5 lg:grid-cols-[64px_minmax(0,1fr)_200px_40px]"
+                  className="grid gap-4 px-5 py-5 lg:grid-cols-[64px_minmax(0,1fr)_260px_40px]"
                 >
 
                   <div className="flex h-9 w-14 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">
@@ -675,31 +927,41 @@ export default function CourseOutcomesEditor({
                     />
                   </div>
 
-                  <select
-                    value={co.bloomLevel}
-                    disabled={!canEdit}
-                    onChange={(e) =>
-                      updateCO(
-                        index,
-                        "bloomLevel",
-                        e.target.value
-                      )
-                    }
-                    className={`${selectClass} h-fit`}
-                  >
-                    <option value="">
-                      Bloom&apos;s level
-                    </option>
+                  <div>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Bloom&apos;s levels (optional)
+                    </p>
 
-                    {bloomLevels.map((level) => (
-                      <option
-                        key={level.value}
-                        value={level.value}
-                      >
-                        {level.label}
-                      </option>
-                    ))}
-                  </select>
+                    <div className="flex flex-wrap gap-1.5">
+                      {bloomLevels.map((level) => {
+                        const selected = (
+                          co.bloomLevels || []
+                        ).includes(level.value);
+
+                        return (
+                          <button
+                            key={level.value}
+                            type="button"
+                            disabled={!canEdit}
+                            aria-pressed={selected}
+                            onClick={() =>
+                              toggleBloomLevel(
+                                index,
+                                level.value
+                              )
+                            }
+                            className={`rounded-lg border px-2 py-1 text-xs font-medium transition disabled:cursor-not-allowed ${
+                              selected
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            {level.value} {level.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
                   {canEdit && cos.length > 1 ? (
                     <button

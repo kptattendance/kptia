@@ -4,6 +4,7 @@ import {
   getCourseOutcomes,
   saveCourseOutcomes,
   getCourseOutcomeStatus,
+  unlockCourseOutcomes,
   getProgram,
   saveProgram,
 } from "../controllers/courseOutcomeController.js";
@@ -22,6 +23,9 @@ router.put("/program/:department", saveProgram);
 
 // Which subjects of a semester have COs defined
 router.get("/status", getCourseOutcomeStatus);
+
+// Unlock the COs of one subject for correction
+router.post("/unlock", unlockCourseOutcomes);
 
 // COs of one subject
 router.get("/", getCourseOutcomes);

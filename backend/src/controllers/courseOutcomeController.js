@@ -67,15 +67,21 @@ const getPsos = async (department) => {
 // HOD                   -> own department
 // Faculty               -> allocated to the subject, or
 //                          the subject is not allocated
-//                          to anyone yet
+//                          to anyone yet, and the COs are
+//                          not saved yet or were unlocked
+//                          by the HOD
 //
 // Returns an error message, or null when allowed.
 // --------------------------------------------------
 
+const LOCKED_MESSAGE =
+  "These course outcomes are saved and locked. Ask your HOD to unlock them if changes are needed.";
+
 const getEditError = async (
   req,
   subject,
-  academicYear
+  academicYear,
+  record
 ) => {
   const role = getRole(req);
 
@@ -92,15 +98,58 @@ const getEditError = async (
   }
 
   if (role === "staff") {
-    return getAllocationError({
-      user: req.user,
-      subjectId: subject._id,
-      academicYear,
-      batchNumbers: [],
-    });
+    const allocationError =
+      await getAllocationError({
+        user: req.user,
+        subjectId: subject._id,
+        academicYear,
+        batchNumbers: [],
+      });
+
+    if (allocationError) {
+      return allocationError;
+    }
+
+    return record && record.isLocked !== false
+      ? LOCKED_MESSAGE
+      : null;
   }
 
   return "You are not authorized to edit course outcomes.";
+};
+
+// --------------------------------------------------
+// BLOOM'S LEVELS OF A CO
+//
+// Older records have a single bloomLevel string,
+// newer ones a bloomLevels array.
+// --------------------------------------------------
+
+const getBloomLevels = (co = {}) => {
+  if (Array.isArray(co.bloomLevels)) {
+    return co.bloomLevels;
+  }
+
+  return co.bloomLevel ? [co.bloomLevel] : [];
+};
+
+const withBloomLevels = (record) => {
+  if (!record) {
+    return record;
+  }
+
+  return {
+    ...record,
+    cos: (record.cos || []).map(
+      ({ bloomLevel, ...co }) => ({
+        ...co,
+        bloomLevels: getBloomLevels({
+          ...co,
+          bloomLevel,
+        }),
+      })
+    ),
+  };
 };
 
 // --------------------------------------------------
@@ -152,13 +201,11 @@ const validateCOs = (cos, allowedOutcomes) => {
       };
     }
 
-    if (!BLOOM_LEVELS.includes(co.bloomLevel)) {
-      return {
-        valid: false,
-        message:
-          `${code}: Please select the Bloom's level.`,
-      };
-    }
+    // Optional, and a CO can have more than
+    // one level. Unknown values are dropped.
+    const bloomLevels = BLOOM_LEVELS.filter(
+      (level) => getBloomLevels(co).includes(level)
+    );
 
     const mapping = {};
 
@@ -191,7 +238,7 @@ const validateCOs = (cos, allowedOutcomes) => {
     cleaned.push({
       code,
       statement,
-      bloomLevel: co.bloomLevel,
+      bloomLevels,
       mapping,
       justification: String(
         co.justification || ""
@@ -323,7 +370,7 @@ export const getCourseOutcomes = async (
       });
     }
 
-    const [record, psos, editError] =
+    const [record, psos] =
       await Promise.all([
         CourseOutcome.findOne({
           subjectId,
@@ -331,13 +378,20 @@ export const getCourseOutcomes = async (
         }).lean(),
 
         getPsos(subjectDepartment),
-
-        getEditError(
-          req,
-          subject,
-          academicYear
-        ),
       ]);
+
+    const editError = await getEditError(
+      req,
+      subject,
+      academicYear,
+      record
+    );
+
+    // A HOD of another department was
+    // already turned away above.
+    const canUnlock = ["hod", "admin"].includes(
+      role
+    );
 
     let template = null;
 
@@ -354,14 +408,18 @@ export const getCourseOutcomes = async (
 
     return res.status(200).json({
       success: true,
-      data: record,
-      template,
+      data: withBloomLevels(record),
+      template: withBloomLevels(template),
       subject,
       pos: PROGRAM_OUTCOMES,
       psos,
       defaultTargets: DEFAULT_TARGETS,
       canEdit: !editError,
       editMessage: editError,
+      isLocked: record
+        ? record.isLocked !== false
+        : false,
+      canUnlock,
     });
   } catch (error) {
     console.error(
@@ -417,10 +475,18 @@ export const saveCourseOutcomes = async (
       });
     }
 
+    const existing = await CourseOutcome.findOne({
+      subjectId,
+      academicYear,
+    })
+      .select("isLocked")
+      .lean();
+
     const editError = await getEditError(
       req,
       subject,
-      academicYear
+      academicYear,
+      existing
     );
 
     if (editError) {
@@ -429,6 +495,8 @@ export const saveCourseOutcomes = async (
         message: editError,
       });
     }
+
+    const isFaculty = getRole(req) === "staff";
 
     const subjectDepartment =
       normalizeDepartment(subject.department);
@@ -464,12 +532,32 @@ export const saveCourseOutcomes = async (
       });
     }
 
-    const record =
-      await CourseOutcome.findOneAndUpdate(
-        {
-          subjectId,
-          academicYear,
-        },
+    // Saving by the faculty locks the COs.
+    // HOD / Admin edits keep the lock as it is,
+    // and a new record starts locked.
+    const lock = {
+      isLocked: true,
+      lockedAt: new Date(),
+      lockedBy: req.user.id,
+    };
+
+    const filter = {
+      subjectId,
+      academicYear,
+    };
+
+    // The faculty can only overwrite a record
+    // that is still unlocked, in case the HOD
+    // or another save locked it meanwhile.
+    if (isFaculty && existing) {
+      filter.isLocked = false;
+    }
+
+    let record;
+
+    try {
+      record = await CourseOutcome.findOneAndUpdate(
+        filter,
         {
           $set: {
             department: subjectDepartment,
@@ -477,7 +565,11 @@ export const saveCourseOutcomes = async (
             cos: coValidation.cos,
             targets: targetValidation.targets,
             updatedBy: req.user.id,
+            ...(isFaculty ? lock : {}),
           },
+          ...(isFaculty
+            ? {}
+            : { $setOnInsert: lock }),
         },
         {
           upsert: true,
@@ -485,12 +577,24 @@ export const saveCourseOutcomes = async (
           runValidators: true,
         }
       );
+    } catch (error) {
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: LOCKED_MESSAGE,
+        });
+      }
+
+      throw error;
+    }
 
     return res.status(200).json({
       success: true,
-      message:
-        `Course outcomes of ${subject.code} saved.`,
-      data: record,
+      message: isFaculty
+        ? `Course outcomes of ${subject.code} saved and locked.`
+        : `Course outcomes of ${subject.code} saved.`,
+      data: withBloomLevels(record.toObject()),
+      isLocked: record.isLocked !== false,
     });
   } catch (error) {
     console.error(
@@ -565,7 +669,7 @@ export const getCourseOutcomeStatus = async (
     const records = await CourseOutcome.find(
       filter
     )
-      .select("subjectId cos.code updatedAt")
+      .select("subjectId cos.code isLocked updatedAt")
       .lean();
 
     return res.status(200).json({
@@ -573,6 +677,7 @@ export const getCourseOutcomeStatus = async (
       data: records.map((record) => ({
         subjectId: record.subjectId,
         coCount: record.cos?.length || 0,
+        isLocked: record.isLocked !== false,
         updatedAt: record.updatedAt,
       })),
     });
@@ -586,6 +691,110 @@ export const getCourseOutcomeStatus = async (
       success: false,
       message:
         "Failed to fetch course outcome status.",
+    });
+  }
+};
+
+// ==================================================
+// UNLOCK COURSE OUTCOMES FOR CORRECTION
+//
+// HOD (own department) or Admin.
+//
+// The COs are kept as they are. The faculty can
+// then correct them and save again, which locks
+// them again.
+// ==================================================
+
+export const unlockCourseOutcomes = async (
+  req,
+  res
+) => {
+  try {
+    const role = getRole(req);
+
+    if (!["hod", "admin"].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only HOD or Admin can unlock course outcomes.",
+      });
+    }
+
+    const {
+      subjectId,
+      academicYear,
+    } = req.body;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(subjectId) ||
+      !isAcademicYear(academicYear)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Subject and academic year are required.",
+      });
+    }
+
+    const filter = {
+      subjectId,
+      academicYear,
+    };
+
+    if (role === "hod") {
+      const hodDepartment = normalizeDepartment(
+        req.user?.department
+      );
+
+      if (!hodDepartment) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "HOD department is not assigned.",
+        });
+      }
+
+      filter.department = hodDepartment;
+    }
+
+    const record =
+      await CourseOutcome.findOneAndUpdate(
+        filter,
+        {
+          $set: {
+            isLocked: false,
+            unlockedAt: new Date(),
+            unlockedBy: req.user.id,
+          },
+        },
+        {
+          returnDocument: "after",
+        }
+      ).select("isLocked");
+
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "No saved course outcomes were found for this subject.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Course outcomes unlocked. The faculty can now correct and save them again.",
+    });
+  } catch (error) {
+    console.error(
+      "Unlock Course Outcomes Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Failed to unlock course outcomes.",
     });
   }
 };
