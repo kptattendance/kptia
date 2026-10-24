@@ -190,6 +190,18 @@ const validateStudents = async (
     };
   }
 
+  // Bridge courses are taught only to Batch 2.
+  if (
+    normalizedSubjectCategory === "BRIDGE" &&
+    parsedBatchNumber !== 2
+  ) {
+    return {
+      valid: false,
+      message:
+        "Bridge course IA marks are entered only for Batch 2.",
+    };
+  }
+
   // --------------------------------------------------
   // DUPLICATE STUDENTS
   // --------------------------------------------------

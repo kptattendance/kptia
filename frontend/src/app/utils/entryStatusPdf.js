@@ -9,7 +9,8 @@ import {
 import {
   buildEntryCells,
   getCellKey,
-  getElectivesNotTaken,
+  getElectiveGroupKey,
+  getElectiveGroupsWithEntries,
   isBridge,
   isElective,
   sumEntryCells,
@@ -101,28 +102,36 @@ const gridCell = (cell) => {
   };
 };
 
-const batchCell = (entered) => ({
-  content: entered ? "Entered" : "Pending",
-  styles: {
-    textColor: entered ? [22, 101, 52] : [185, 28, 28],
-    fontStyle: entered ? "normal" : "bold",
-  },
-});
+// entered: true / false, or null when the batch does
+// not take the subject (Batch 1 of a bridge course)
+const batchCell = (entered) =>
+  entered === null
+    ? {
+        content: "Not applicable",
+        styles: { textColor: GREY },
+      }
+    : {
+        content: entered ? "Entered" : "Pending",
+        styles: {
+          textColor: entered ? [22, 101, 52] : [185, 28, 28],
+          fontStyle: entered ? "normal" : "bold",
+        },
+      };
 
 // =====================================================
 // PENDING SUBJECTS
 //
-// Regular subjects with a batch not entered, and
-// electives:
-// - an elective group with nothing entered is one row
-//   naming all of its electives
-// - an elective that is entered for one batch only
-//   is its own row
-// - electives not taken are left out
+// Regular subjects with a batch not entered, bridge
+// courses with Batch 2 not entered, and electives:
+// - an elective group with anything entered is done
+//   and left out completely
+// - an elective group with nothing entered lists each
+//   of its electives, as any of them may be taken
 // =====================================================
 
 const getPendingRows = (subjects, semesters, departments) => {
-  const notTaken = getElectivesNotTaken(subjects);
+  const groupsWithEntries =
+    getElectiveGroupsWithEntries(subjects);
 
   const departmentOrder = departments.map(
     (department) => department.value
@@ -131,9 +140,11 @@ const getPendingRows = (subjects, semesters, departments) => {
   const relevant = subjects
     .filter(
       (subject) =>
-        !isBridge(subject) &&
         semesters.includes(Number(subject.semester)) &&
-        !notTaken.has(String(subject.subjectId))
+        !(
+          isElective(subject) &&
+          groupsWithEntries.has(getElectiveGroupKey(subject))
+        )
     )
     .sort((a, b) => {
       const departmentA = departmentOrder.indexOf(
@@ -155,41 +166,17 @@ const getPendingRows = (subjects, semesters, departments) => {
 
   const rows = [];
 
-  // Elective groups with nothing entered, by group key
-  const emptyGroups = new Map();
-
   relevant.forEach((subject) => {
-    const batch1 = Boolean(subject.batch1?.entered);
+    const bridge = isBridge(subject);
+
+    // Bridge courses are taught only to Batch 2.
+    const batch1 = bridge
+      ? null
+      : Boolean(subject.batch1?.entered);
+
     const batch2 = Boolean(subject.batch2?.entered);
 
-    if (batch1 && batch2) {
-      return;
-    }
-
-    if (isElective(subject) && !batch1 && !batch2) {
-      const groupKey = `${getCellKey(subject)}_${String(
-        subject.electiveGroup || "ELECTIVE"
-      ).toUpperCase()}`;
-
-      if (!emptyGroups.has(groupKey)) {
-        const row = {
-          subject,
-          code: [],
-          name: [],
-          batch1: false,
-          batch2: false,
-          elective: true,
-        };
-
-        emptyGroups.set(groupKey, row);
-        rows.push(row);
-      }
-
-      const row = emptyGroups.get(groupKey);
-
-      row.code.push(subject.code);
-      row.name.push(subject.name || subject.subject || "");
-
+    if (batch1 !== false && batch2) {
       return;
     }
 
@@ -200,6 +187,7 @@ const getPendingRows = (subjects, semesters, departments) => {
       batch1,
       batch2,
       elective: isElective(subject),
+      bridge,
     });
   });
 
@@ -447,7 +435,7 @@ export function buildEntryStatusPdf(
       title,
       subtitle,
       summaryText: `${summary.entered} of ${summary.total} subject-batches entered`,
-      note: "Each cell counts subject-batches: a subject with Batch 1 and Batch 2 counts as two. Bridge courses are not counted. Electives of one group count as one subject, the one the class has taken.",
+      note: "Each cell counts subject-batches: a subject with Batch 1 and Batch 2 counts as two. Bridge courses are taught only to Batch 2 and count as one. Electives of one group count as one subject, the one the class has taken.",
       cells,
       semesters,
       departments,
@@ -476,11 +464,13 @@ export function buildEntryStatusPdf(
           String(row.subject.department || "").toUpperCase(),
           row.subject.semester,
           row.code.join("\n"),
-          row.elective && row.code.length > 1
-            ? `Elective (any one): ${row.name.join(" / ")}`
-            : `${row.name.join(" / ")}${
-                row.elective ? " (Elective)" : ""
-              }`,
+          `${row.name.join(" / ")}${
+            row.elective
+              ? " (Elective)"
+              : row.bridge
+              ? " (Bridge)"
+              : ""
+          }`,
           batchCell(row.batch1),
           batchCell(row.batch2),
         ]),

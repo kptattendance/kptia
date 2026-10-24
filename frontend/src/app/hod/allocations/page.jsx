@@ -17,6 +17,16 @@ const batchOptions = [
   { value: "2", label: "Batch 2" },
 ];
 
+// Bridge courses are taught only to Batch 2.
+const isBridge = (subject) =>
+  String(subject?.subjectCategory || "").toUpperCase() ===
+  "BRIDGE";
+
+const getBatchOptions = (subject) =>
+  isBridge(subject)
+    ? batchOptions.filter((option) => option.value === "2")
+    : batchOptions;
+
 // The academic year starts in July.
 const getCurrentAcademicStartYear = () => {
   const today = new Date();
@@ -314,7 +324,9 @@ export default function HODCourseAllocationPage() {
       return;
     }
 
-    const batch = chosen.batch || "both";
+    const batch = isBridge(subject)
+      ? "2"
+      : chosen.batch || "both";
 
     try {
       setSavingSubjectId(subjectId);
@@ -684,7 +696,11 @@ export default function HODCourseAllocationPage() {
                     </select>
 
                     <select
-                      value={chosen.batch || "both"}
+                      value={
+                        isBridge(subject)
+                          ? "2"
+                          : chosen.batch || "both"
+                      }
                       onChange={(e) =>
                         updateSelection(
                           subjectId,
@@ -694,7 +710,7 @@ export default function HODCourseAllocationPage() {
                       }
                       className={`${selectClass} sm:w-40`}
                     >
-                      {batchOptions.map((option) => (
+                      {getBatchOptions(subject).map((option) => (
                         <option
                           key={option.value}
                           value={option.value}

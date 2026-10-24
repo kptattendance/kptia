@@ -2288,6 +2288,15 @@ for (const batch of batchesToSave) {
   // RENDER
   // ==================================================
 
+  // Bridge courses are taught only to Batch 2.
+  const isBridgeSubject =
+    String(
+      subjects.find(
+        (subject) =>
+          String(subject._id) === String(subjectId)
+      )?.subjectCategory || ""
+    ).toUpperCase() === "BRIDGE";
+
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
 <div className="mx-auto w-full max-w-[1600px] min-w-0">
@@ -2475,7 +2484,11 @@ for (const batch of batchesToSave) {
                 disabled={!subjectId}
                 onChange={(e) => {
                   setIaNumber(e.target.value);
-                  setBatchNumber("");
+                  setBatchNumber(
+                    isBridgeSubject && e.target.value
+                      ? "2"
+                      : ""
+                  );
                   setExistingIA(null);
                   setTests([]);
                   setStudents([]);
@@ -2517,9 +2530,13 @@ for (const batch of batchesToSave) {
                 <option value="">
                   Select Batch
                 </option>
-                <option value="1">Batch 1</option>
+                {!isBridgeSubject && (
+                  <option value="1">Batch 1</option>
+                )}
                 <option value="2">Batch 2</option>
-                <option value="both">Both Batches</option>
+                {!isBridgeSubject && (
+                  <option value="both">Both Batches</option>
+                )}
               </select>
             </div>
 

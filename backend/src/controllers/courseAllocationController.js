@@ -403,13 +403,26 @@ export const saveAllocation = async (
     const subject = await Subject.findById(
       subjectId
     )
-      .select("code name semester department")
+      .select("code name semester department subjectCategory")
       .lean();
 
     if (!subject) {
       return res.status(404).json({
         success: false,
         message: "Subject not found.",
+      });
+    }
+
+    // Bridge courses are taught only to Batch 2.
+    if (
+      String(subject.subjectCategory || "").toUpperCase() ===
+        "BRIDGE" &&
+      selectedBatches.some((batch) => batch !== 2)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A bridge course can be allocated only for Batch 2.",
       });
     }
 

@@ -162,9 +162,8 @@ export default function AdminIAMarksPage() {
   // =====================================================
   // GRID CELLS
   //
-  // Bridge courses are only for lateral students and
-  // may have no students in a batch, so they are shown
-  // in the subject list but not counted here.
+  // Bridge courses are taught only to Batch 2, so they
+  // count as one subject-batch.
   //
   // Electives of one group count as one subject, the
   // one the class has taken (see entryCounts.js).
@@ -507,6 +506,19 @@ export default function AdminIAMarksPage() {
   const renderBatch = (subject, batchNumber) => {
     const batch = subject[`batch${batchNumber}`];
 
+    // Bridge courses are taught only to Batch 2.
+    if (
+      subject.subjectCategory === "BRIDGE" &&
+      batchNumber === 1 &&
+      !batch?.entered
+    ) {
+      return (
+        <span className="text-xs text-slate-400">
+          Not applicable
+        </span>
+      );
+    }
+
     if (!batch?.entered) {
       return (
         <span className="inline-flex rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
@@ -709,7 +721,7 @@ export default function AdminIAMarksPage() {
             </h2>
 
             <p className="mt-0.5 text-xs text-slate-500">
-              IA {iaNumber}, {academicYear}. Bridge courses are for lateral students only and are not counted above. Electives of one group count as one subject, the one that has marks entered.
+              IA {iaNumber}, {academicYear}. Bridge courses are taught only to Batch 2 and count as one subject-batch. Electives of one group count as one subject, the one that has marks entered.
             </p>
           </div>
 

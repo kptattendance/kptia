@@ -4,8 +4,8 @@
 // Counts entered subject-batches: a subject with
 // Batch 1 and Batch 2 counts as two.
 //
-// Bridge courses are for lateral students only and
-// are not counted.
+// Bridge courses are taught only to Batch 2, so they
+// count as one subject-batch: Batch 2.
 //
 // Electives of one elective group are alternatives,
 // and the class takes only one of them. So the group
@@ -53,6 +53,28 @@ const hasEntry = (subject) =>
   );
 
 // =====================================================
+// ELECTIVE GROUPS WITH ENTRIES
+//
+// Group keys of elective groups where any elective has
+// any batch entered. Such a group counts as done: the
+// class has taken that elective and it has been entered.
+// =====================================================
+
+export const getElectiveGroupsWithEntries = (subjects = []) => {
+  const groups = new Set();
+
+  subjects.forEach((subject) => {
+    if (isElective(subject) && hasEntry(subject)) {
+      groups.add(getGroupKey(subject));
+    }
+  });
+
+  return groups;
+};
+
+export const getElectiveGroupKey = getGroupKey;
+
+// =====================================================
 // ELECTIVES NOT TAKEN
 //
 // An elective with nothing entered while another
@@ -62,13 +84,8 @@ const hasEntry = (subject) =>
 // =====================================================
 
 export const getElectivesNotTaken = (subjects = []) => {
-  const groupsWithEntries = new Set();
-
-  subjects.forEach((subject) => {
-    if (isElective(subject) && hasEntry(subject)) {
-      groupsWithEntries.add(getGroupKey(subject));
-    }
-  });
+  const groupsWithEntries =
+    getElectiveGroupsWithEntries(subjects);
 
   const notTaken = new Set();
 
@@ -98,6 +115,15 @@ export const buildEntryCells = (subjects = []) => {
 
   subjects.forEach((subject) => {
     if (isBridge(subject)) {
+      units.set(
+        `${getCellKey(subject)}_${String(subject.subjectId)}`,
+        {
+          cellKey: getCellKey(subject),
+          batch2Only: true,
+          batch2: Boolean(subject.batch2?.entered),
+        }
+      );
+
       return;
     }
 
@@ -111,6 +137,7 @@ export const buildEntryCells = (subjects = []) => {
       cellKey: getCellKey(subject),
       batch1: false,
       batch2: false,
+      elective: isElective(subject),
     };
 
     unit.batch1 =
@@ -132,10 +159,21 @@ export const buildEntryCells = (subjects = []) => {
       };
     }
 
+    if (unit.batch2Only) {
+      cells[unit.cellKey].total += 1;
+      cells[unit.cellKey].entered += unit.batch2 ? 1 : 0;
+      return;
+    }
+
     cells[unit.cellKey].total += 2;
 
-    cells[unit.cellKey].entered +=
-      (unit.batch1 ? 1 : 0) + (unit.batch2 ? 1 : 0);
+    // An elective group with any entry counts as fully entered
+    const done =
+      unit.elective && (unit.batch1 || unit.batch2);
+
+    cells[unit.cellKey].entered += done
+      ? 2
+      : (unit.batch1 ? 1 : 0) + (unit.batch2 ? 1 : 0);
   });
 
   return cells;
