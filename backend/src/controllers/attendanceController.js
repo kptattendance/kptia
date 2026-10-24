@@ -1556,7 +1556,7 @@ export const getAdminAttendanceStatistics = async (
     const subjects =
       await Subject.find(subjectQuery)
         .select(
-          "_id code name sequence semester department subjectCategory"
+          "_id code name sequence semester department subjectCategory electiveGroup"
         )
         .sort({
           department: 1,
@@ -1682,6 +1682,9 @@ export const getAdminAttendanceStatistics = async (
           category:
             subject.subjectCategory ||
             "REGULAR",
+
+          electiveGroup:
+            subject.electiveGroup || null,
 
           department:
             subject.department || "",

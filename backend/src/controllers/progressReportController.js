@@ -310,7 +310,17 @@ export const getMyProgressReport = async (
     let overallAttended = 0;
     let overallEligible = 0;
 
-    const rows = subjects.map((subject) => {
+    // Electives are alternatives: only the ones the
+    // student is enrolled in, that is, has attendance
+    // or IA marks for, are shown.
+    const studentSubjects = subjects.filter(
+      (subject) =>
+        subject.subjectCategory !== "ELECTIVE" ||
+        attendanceBySubject.has(String(subject._id)) ||
+        iaBySubject.has(String(subject._id))
+    );
+
+    const rows = studentSubjects.map((subject) => {
       const subjectKey = String(subject._id);
 
       const monthly =

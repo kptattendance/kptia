@@ -5,6 +5,10 @@ import { useAuth } from "@clerk/nextjs";
 import Swal from "sweetalert2";
 import axios from "axios";
 import { escapeHtml } from "../../utils/escapeHtml";
+import {
+  buildEntryCells,
+  sumEntryCells,
+} from "../../utils/entryCounts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -856,23 +860,16 @@ subjectList =
   // IA SUMMARY
   // =========================================================
 
-  const iaEnteredCount = useMemo(() => {
-    return iaRows.reduce((count, subject) => {
-      let total = count;
+  // Counted like the IA Marks page: bridge courses are
+  // left out and an elective group counts as one subject.
+  const iaCounts = useMemo(
+    () => sumEntryCells(buildEntryCells(iaRows)),
+    [iaRows]
+  );
 
-      if (subject.batch1?.entered) {
-        total += 1;
-      }
+  const iaEnteredCount = iaCounts.entered;
 
-      if (subject.batch2?.entered) {
-        total += 1;
-      }
-
-      return total;
-    }, 0);
-  }, [iaRows]);
-
-  const iaTotalPossible = iaRows.length * 2;
+  const iaTotalPossible = iaCounts.total;
 
   const iaCompletionPercentage =
     iaTotalPossible > 0

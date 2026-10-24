@@ -14,7 +14,13 @@ import {
 import EntryStatusGrid, {
   getDepartmentLabel,
 } from "../components/EntryStatusGrid";
+import EntryStatusDownload from "../components/EntryStatusDownload";
 import { escapeHtml } from "../../utils/escapeHtml";
+import {
+  buildEntryCells,
+  getElectivesNotTaken,
+  sumEntryCells,
+} from "../../utils/entryCounts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -159,47 +165,30 @@ export default function AdminIAMarksPage() {
   // Bridge courses are only for lateral students and
   // may have no students in a batch, so they are shown
   // in the subject list but not counted here.
+  //
+  // Electives of one group count as one subject, the
+  // one the class has taken (see entryCounts.js).
   // =====================================================
 
-  const cells = useMemo(() => {
-    const result = {};
+  const allSubjects = useMemo(
+    () => rows.flatMap((row) => row.subjects || []),
+    [rows]
+  );
 
-    rows.forEach((row) => {
-      const cell = {
-        entered: 0,
-        total: 0,
-      };
+  const cells = useMemo(
+    () => buildEntryCells(allSubjects),
+    [allSubjects]
+  );
 
-      row.subjects.forEach((subject) => {
-        if (subject.subjectCategory === "BRIDGE") {
-          return;
-        }
+  const electivesNotTaken = useMemo(
+    () => getElectivesNotTaken(allSubjects),
+    [allSubjects]
+  );
 
-        cell.total += 2;
-
-        cell.entered +=
-          (subject.batch1?.entered ? 1 : 0) +
-          (subject.batch2?.entered ? 1 : 0);
-      });
-
-      result[`${row.department}_${row.semester}`] =
-        cell;
-    });
-
-    return result;
-  }, [rows]);
-
-  const summary = useMemo(() => {
-    let entered = 0;
-    let total = 0;
-
-    Object.values(cells).forEach((cell) => {
-      entered += cell.entered;
-      total += cell.total;
-    });
-
-    return { entered, total };
-  }, [cells]);
+  const summary = useMemo(
+    () => sumEntryCells(cells),
+    [cells]
+  );
 
   const selectedSubjects = useMemo(() => {
     if (!selected) {
@@ -665,11 +654,24 @@ export default function AdminIAMarksPage() {
       {/* SUMMARY */}
 
       {!error && (
-        <p className="mb-3 text-sm font-semibold text-slate-700">
-          {loading
-            ? "Loading IA status..."
-            : `IA ${iaNumber}, ${academicYear}: ${summary.entered} of ${summary.total} subject-batches entered`}
-        </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-slate-700">
+            {loading
+              ? "Loading IA status..."
+              : `IA ${iaNumber}, ${academicYear}: ${summary.entered} of ${summary.total} subject-batches entered`}
+          </p>
+
+          <EntryStatusDownload
+            title={`IA ${iaNumber} ENTRY STATUS`}
+            subtitle={`Academic Year ${academicYear}  |  ${
+              term === "odd" ? "Odd" : "Even"
+            } semesters`}
+            fileName={`IA${iaNumber}_Entry_Status_${academicYear}_${term}.pdf`}
+            subjects={allSubjects}
+            semesters={terms[term]}
+            disabled={loading || allSubjects.length === 0}
+          />
+        </div>
       )}
 
       {/* GRID */}
@@ -698,7 +700,7 @@ export default function AdminIAMarksPage() {
             </h2>
 
             <p className="mt-0.5 text-xs text-slate-500">
-              IA {iaNumber}, {academicYear}. Bridge courses are for lateral students only and are not counted above.
+              IA {iaNumber}, {academicYear}. Bridge courses are for lateral students only and are not counted above. Electives of one group count as one subject, the one that has marks entered.
             </p>
           </div>
 
@@ -725,6 +727,16 @@ export default function AdminIAMarksPage() {
                           "BRIDGE" && (
                           <span className="ml-2 rounded-md bg-slate-100 px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide text-slate-500">
                             Bridge
+                          </span>
+                        )}
+                        {subject.subjectCategory ===
+                          "ELECTIVE" && (
+                          <span className="ml-2 rounded-md bg-slate-100 px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide text-slate-500">
+                            {electivesNotTaken.has(
+                              String(subject.subjectId)
+                            )
+                              ? "Elective · not taken"
+                              : "Elective"}
                           </span>
                         )}
                       </p>

@@ -14,7 +14,13 @@ import {
 import EntryStatusGrid, {
   getDepartmentLabel,
 } from "../components/EntryStatusGrid";
+import EntryStatusDownload from "../components/EntryStatusDownload";
 import { escapeHtml } from "../../utils/escapeHtml";
+import {
+  buildEntryCells,
+  getElectivesNotTaken,
+  sumEntryCells,
+} from "../../utils/entryCounts";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -240,50 +246,27 @@ export default function AdminAttendancePage() {
 
   // =====================================================
   // GRID CELLS
+  //
+  // Electives of one group count as one subject, the
+  // one the class has taken (see entryCounts.js).
   // =====================================================
 
-  const cells = useMemo(() => {
-    const result = {};
+  const cells = useMemo(
+    () => buildEntryCells(subjects),
+    [subjects]
+  );
 
-    subjects.forEach((subject) => {
-      const key = `${String(
-        subject.department || ""
-      ).toLowerCase()}_${subject.semester}`;
-
-      if (!result[key]) {
-        result[key] = {
-          entered: 0,
-          total: 0,
-        };
-      }
-
-      result[key].total += 2;
-
-      result[key].entered +=
-        (subject.batch1?.entered ? 1 : 0) +
-        (subject.batch2?.entered ? 1 : 0);
-    });
-
-    return result;
-  }, [subjects]);
+  const electivesNotTaken = useMemo(
+    () => getElectivesNotTaken(subjects),
+    [subjects]
+  );
 
   const semesters = terms[term];
 
-  const summary = useMemo(() => {
-    let entered = 0;
-    let total = 0;
-
-    Object.entries(cells).forEach(([key, cell]) => {
-      const semester = Number(key.split("_")[1]);
-
-      if (semesters.includes(semester)) {
-        entered += cell.entered;
-        total += cell.total;
-      }
-    });
-
-    return { entered, total };
-  }, [cells, semesters]);
+  const summary = useMemo(
+    () => sumEntryCells(cells, semesters),
+    [cells, semesters]
+  );
 
   const selectedSubjects = useMemo(() => {
     if (!selected) {
@@ -671,11 +654,24 @@ export default function AdminAttendancePage() {
       {/* SUMMARY */}
 
       {!error && (
-        <p className="mb-3 text-sm font-semibold text-slate-700">
-          {loading
-            ? "Loading attendance status..."
-            : `${months[month - 1]} ${year}: ${summary.entered} of ${summary.total} subject-batches entered`}
-        </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-slate-700">
+            {loading
+              ? "Loading attendance status..."
+              : `${months[month - 1]} ${year}: ${summary.entered} of ${summary.total} subject-batches entered`}
+          </p>
+
+          <EntryStatusDownload
+            title="ATTENDANCE ENTRY STATUS"
+            subtitle={`${months[month - 1]} ${year}  |  ${
+              term === "odd" ? "Odd" : "Even"
+            } semesters`}
+            fileName={`Attendance_Entry_Status_${months[month - 1]}_${year}_${term}.pdf`}
+            subjects={subjects}
+            semesters={semesters}
+            disabled={loading || subjects.length === 0}
+          />
+        </div>
       )}
 
       {/* GRID */}
@@ -704,7 +700,7 @@ export default function AdminAttendancePage() {
             </h2>
 
             <p className="mt-0.5 text-xs text-slate-500">
-              {months[month - 1]} {year}. Classes conducted and average attendance are shown for each batch.
+              {months[month - 1]} {year}. Classes conducted and average attendance are shown for each batch. Electives of one group count as one subject, the one that has attendance entered.
             </p>
           </div>
 
@@ -736,6 +732,16 @@ export default function AdminAttendancePage() {
                     <td className="px-5 py-3">
                       <p className="font-mono text-xs font-bold text-slate-700">
                         {subject.code}
+                        {subject.category ===
+                          "ELECTIVE" && (
+                          <span className="ml-2 rounded-md bg-slate-100 px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide text-slate-500">
+                            {electivesNotTaken.has(
+                              String(subject.subjectId)
+                            )
+                              ? "Elective · not taken"
+                              : "Elective"}
+                          </span>
+                        )}
                       </p>
 
                       <p className="mt-0.5 text-sm font-semibold text-slate-900">
