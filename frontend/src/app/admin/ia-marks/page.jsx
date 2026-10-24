@@ -170,8 +170,17 @@ export default function AdminIAMarksPage() {
   // one the class has taken (see entryCounts.js).
   // =====================================================
 
+  // The department and semester are on the row,
+  // not on each subject.
   const allSubjects = useMemo(
-    () => rows.flatMap((row) => row.subjects || []),
+    () =>
+      rows.flatMap((row) =>
+        (row.subjects || []).map((subject) => ({
+          ...subject,
+          department: row.department,
+          semester: row.semester,
+        }))
+      ),
     [rows]
   );
 

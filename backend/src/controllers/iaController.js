@@ -2381,6 +2381,9 @@ if (requestedDepartment !== "all") {
               "REGULAR"
           ).toUpperCase(),
 
+        electiveGroup:
+          subject.electiveGroup || null,
+
         batch1: {
           entered:
             Boolean(batch1Record),

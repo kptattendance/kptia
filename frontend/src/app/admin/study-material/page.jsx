@@ -7,6 +7,7 @@ import { RefreshCw } from "lucide-react";
 import EntryStatusGrid, {
   getDepartmentLabel,
 } from "../components/EntryStatusGrid";
+import EntryStatusDownload from "../components/EntryStatusDownload";
 import StudyMaterialTable from "../../components/StudyMaterialTable";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -343,15 +344,28 @@ export default function AdminStudyMaterialPage() {
       {/* SUMMARY */}
 
       {!error && (
-        <p className="mb-3 text-sm font-semibold text-slate-700">
-          {loading && rows.length === 0
-            ? "Loading study material..."
-            : `${academicYear}: ${summary.approved} of ${summary.total} subjects have approved study material${
-                summary.pending > 0
-                  ? ` · ${summary.pending} waiting for HOD approval`
-                  : ""
-              }`}
-        </p>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-slate-700">
+            {loading && rows.length === 0
+              ? "Loading study material..."
+              : `${academicYear}: ${summary.approved} of ${summary.total} subjects have approved study material${
+                  summary.pending > 0
+                    ? ` · ${summary.pending} waiting for HOD approval`
+                    : ""
+                }`}
+          </p>
+
+          <EntryStatusDownload
+            title="STUDY MATERIAL STATUS"
+            subtitle={`Academic Year ${academicYear}  |  ${
+              term === "odd" ? "Odd" : "Even"
+            } semesters`}
+            fileName={`Study_Material_Status_${academicYear}_${term}.pdf`}
+            materialRows={rows}
+            semesters={semesters}
+            disabled={loading || rows.length === 0}
+          />
+        </div>
       )}
 
       {/* GRID */}

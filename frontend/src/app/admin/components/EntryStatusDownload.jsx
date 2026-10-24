@@ -10,6 +10,9 @@ import { departments } from "./EntryStatusGrid";
 //
 // The PDF code and the letterhead are loaded only when
 // the button is clicked.
+//
+// IA marks / attendance -> subjects
+// Study material        -> materialRows
 // =====================================================
 
 export default function EntryStatusDownload({
@@ -17,6 +20,7 @@ export default function EntryStatusDownload({
   subtitle,
   fileName,
   subjects,
+  materialRows,
   semesters,
   disabled,
 }) {
@@ -30,7 +34,7 @@ export default function EntryStatusDownload({
     try {
       setDownloading(true);
 
-      const [{ buildEntryStatusPdf }, { loadLetterhead }] =
+      const [reports, { loadLetterhead }] =
         await Promise.all([
           import("../../utils/entryStatusPdf"),
           import("../../utils/letterheadAssets"),
@@ -38,16 +42,29 @@ export default function EntryStatusDownload({
 
       const letterhead = await loadLetterhead();
 
-      buildEntryStatusPdf(
-        {
-          title,
-          subtitle,
-          subjects,
-          semesters,
-          departments,
-        },
-        letterhead
-      ).save(fileName);
+      const doc = materialRows
+        ? reports.buildStudyMaterialStatusPdf(
+            {
+              title,
+              subtitle,
+              rows: materialRows,
+              semesters,
+              departments,
+            },
+            letterhead
+          )
+        : reports.buildEntryStatusPdf(
+            {
+              title,
+              subtitle,
+              subjects,
+              semesters,
+              departments,
+            },
+            letterhead
+          );
+
+      doc.save(fileName);
     } catch (err) {
       console.error("Entry status PDF error:", err);
 

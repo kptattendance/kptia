@@ -207,26 +207,30 @@ const getPendingRows = (subjects, semesters, departments) => {
 };
 
 // =====================================================
-// BUILD
+// SHARED BUILD
 //
-// title     e.g. "IA 1 ENTRY STATUS"
-// subtitle  e.g. "Academic Year 2026-27  |  Odd semesters"
-// subjects  the subjects of the page, with batch1 /
-//           batch2 entered flags
-// semesters the semester columns
-// departments [{ value, label }]
+// Letterhead, title, the department x semester grid
+// and a list of what is pending.
+//
+// cells        { "cs_3": { entered, total } }
+// summaryText  line under the subtitle
+// note         small print under the grid
+// pending      { title, head, body, columnStyles }
 // =====================================================
 
-export function buildEntryStatusPdf(
+const buildStatusPdf = (
   {
     title,
     subtitle,
-    subjects,
+    summaryText,
+    note,
+    cells,
     semesters,
     departments,
+    pending,
   },
-  letterhead = {}
-) {
+  letterhead
+) => {
   const doc = new jsPDF({
     unit: "mm",
     format: "a4",
@@ -234,11 +238,9 @@ export function buildEntryStatusPdf(
   });
 
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
 
   drawLetterheadHeader(doc, letterhead);
-
-  const cells = buildEntryCells(subjects);
-  const summary = sumEntryCells(cells, semesters);
 
   // ---------------------------------------------------
   // TITLE
@@ -259,12 +261,9 @@ export function buildEntryStatusPdf(
 
   y += 4.6;
   doc.setTextColor(...GREY);
-  doc.text(
-    `${summary.entered} of ${summary.total} subject-batches entered`,
-    pageWidth / 2,
-    y,
-    { align: "center" }
-  );
+  doc.text(summaryText, pageWidth / 2, y, {
+    align: "center",
+  });
 
   y += 5;
 
@@ -327,7 +326,7 @@ export function buildEntryStatusPdf(
         ...semesters.map((semester) =>
           gridCell(sumEntryCells(cells, [semester]))
         ),
-        gridCell(summary),
+        gridCell(sumEntryCells(cells, semesters)),
       ],
     ],
   });
@@ -338,26 +337,18 @@ export function buildEntryStatusPdf(
   doc.setFontSize(7.5);
   doc.setTextColor(...GREY);
 
-  const note = doc.splitTextToSize(
-    "Each cell counts subject-batches: a subject with Batch 1 and Batch 2 counts as two. Bridge courses are not counted. Electives of one group count as one subject, the one the class has taken.",
+  const noteLines = doc.splitTextToSize(
+    note,
     pageWidth - MARGIN * 2
   );
 
-  doc.text(note, MARGIN, y);
+  doc.text(noteLines, MARGIN, y);
 
-  y += note.length * 3.4 + 4;
+  y += noteLines.length * 3.4 + 4;
 
   // ---------------------------------------------------
-  // PENDING SUBJECTS
+  // PENDING
   // ---------------------------------------------------
-
-  const pending = getPendingRows(
-    subjects,
-    semesters,
-    departments
-  );
-
-  const pageHeight = doc.internal.pageSize.getHeight();
 
   if (y + 20 > pageHeight - LETTERHEAD_FOOTER_HEIGHT - 2) {
     doc.addPage();
@@ -367,11 +358,11 @@ export function buildEntryStatusPdf(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...DARK);
-  doc.text("Pending Entries", MARGIN, y);
+  doc.text(pending.title, MARGIN, y);
 
   y += 2;
 
-  if (pending.length === 0) {
+  if (pending.body.length === 0) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(...GREY);
@@ -394,18 +385,75 @@ export function buildEntryStatusPdf(
         cellPadding: 1.3,
       },
 
-      columnStyles: {
-        0: { cellWidth: 8 },
-        1: { cellWidth: 14 },
-        2: { cellWidth: 10 },
-        3: { cellWidth: 28 },
-        4: { halign: "left" },
-        5: { cellWidth: 18 },
-        6: { cellWidth: 18 },
-      },
+      columnStyles: pending.columnStyles,
 
-      head: [
-        [
+      head: [pending.head],
+
+      body: pending.body,
+    });
+  }
+
+  drawLetterheadFooter(doc, letterhead, footerNote);
+
+  return doc;
+};
+
+const departmentSorter = (departments) => {
+  const order = departments.map(
+    (department) => department.value
+  );
+
+  return (a, b) =>
+    order.indexOf(String(a.department || "").toLowerCase()) -
+      order.indexOf(String(b.department || "").toLowerCase()) ||
+    Number(a.semester) - Number(b.semester) ||
+    String(a.sequence || a.code || "").localeCompare(
+      String(b.sequence || b.code || "")
+    );
+};
+
+// =====================================================
+// IA MARKS / ATTENDANCE
+//
+// title     e.g. "IA 1 ENTRY STATUS"
+// subtitle  e.g. "Academic Year 2026-27  |  Odd semesters"
+// subjects  the subjects of the page, with batch1 /
+//           batch2 entered flags
+// semesters the semester columns
+// departments [{ value, label }]
+// =====================================================
+
+export function buildEntryStatusPdf(
+  {
+    title,
+    subtitle,
+    subjects,
+    semesters,
+    departments,
+  },
+  letterhead = {}
+) {
+  const cells = buildEntryCells(subjects);
+  const summary = sumEntryCells(cells, semesters);
+
+  const pending = getPendingRows(
+    subjects,
+    semesters,
+    departments
+  );
+
+  return buildStatusPdf(
+    {
+      title,
+      subtitle,
+      summaryText: `${summary.entered} of ${summary.total} subject-batches entered`,
+      note: "Each cell counts subject-batches: a subject with Batch 1 and Batch 2 counts as two. Bridge courses are not counted. Electives of one group count as one subject, the one the class has taken.",
+      cells,
+      semesters,
+      departments,
+      pending: {
+        title: "Pending Entries",
+        head: [
           "#",
           "Dept",
           "Sem",
@@ -414,25 +462,152 @@ export function buildEntryStatusPdf(
           "Batch 1",
           "Batch 2",
         ],
-      ],
+        columnStyles: {
+          0: { cellWidth: 8 },
+          1: { cellWidth: 14 },
+          2: { cellWidth: 10 },
+          3: { cellWidth: 28 },
+          4: { halign: "left" },
+          5: { cellWidth: 18 },
+          6: { cellWidth: 18 },
+        },
+        body: pending.map((row, index) => [
+          index + 1,
+          String(row.subject.department || "").toUpperCase(),
+          row.subject.semester,
+          row.code.join("\n"),
+          row.elective && row.code.length > 1
+            ? `Elective (any one): ${row.name.join(" / ")}`
+            : `${row.name.join(" / ")}${
+                row.elective ? " (Elective)" : ""
+              }`,
+          batchCell(row.batch1),
+          batchCell(row.batch2),
+        ]),
+      },
+    },
+    letterhead
+  );
+}
 
-      body: pending.map((row, index) => [
-        index + 1,
-        String(row.subject.department || "").toUpperCase(),
-        row.subject.semester,
-        row.code.join("\n"),
-        row.elective && row.code.length > 1
-          ? `Elective (any one): ${row.name.join(" / ")}`
-          : `${row.name.join(" / ")}${
-              row.elective ? " (Elective)" : ""
-            }`,
-        batchCell(row.batch1),
-        batchCell(row.batch2),
-      ]),
-    });
+// =====================================================
+// STUDY MATERIAL
+//
+// Counted like the page: subjects with approved study
+// material out of all subjects.
+//
+// rows  [{ subject: { code, name, department,
+//          semester }, material: { approved, pending,
+//          rejection } }]
+// =====================================================
+
+const materialStatus = (material) => {
+  if (material?.pending) {
+    return {
+      content: "Waiting for HOD approval",
+      styles: { textColor: [180, 83, 9], fontStyle: "bold" },
+    };
   }
 
-  drawLetterheadFooter(doc, letterhead, footerNote);
+  if (material?.rejection) {
+    return {
+      content: "Rejected, to be uploaded again",
+      styles: { textColor: [185, 28, 28], fontStyle: "bold" },
+    };
+  }
 
-  return doc;
+  return {
+    content: "Not uploaded",
+    styles: { textColor: [185, 28, 28], fontStyle: "bold" },
+  };
+};
+
+export function buildStudyMaterialStatusPdf(
+  {
+    title,
+    subtitle,
+    rows,
+    semesters,
+    departments,
+  },
+  letterhead = {}
+) {
+  const inTerm = rows.filter((row) =>
+    semesters.includes(Number(row.subject.semester))
+  );
+
+  const cells = {};
+
+  inTerm.forEach((row) => {
+    const key = getCellKey(row.subject);
+
+    if (!cells[key]) {
+      cells[key] = { entered: 0, total: 0 };
+    }
+
+    cells[key].total += 1;
+
+    if (row.material?.approved) {
+      cells[key].entered += 1;
+    }
+  });
+
+  const summary = sumEntryCells(cells, semesters);
+
+  const waiting = inTerm.filter(
+    (row) => row.material?.pending
+  ).length;
+
+  const pending = inTerm
+    .filter((row) => !row.material?.approved)
+    .map((row) => row.subject)
+    .sort(departmentSorter(departments));
+
+  const materialOf = new Map(
+    inTerm.map((row) => [row.subject, row.material])
+  );
+
+  return buildStatusPdf(
+    {
+      title,
+      subtitle,
+      summaryText: `${summary.entered} of ${summary.total} subjects have approved study material${
+        waiting > 0
+          ? `  |  ${waiting} waiting for HOD approval`
+          : ""
+      }`,
+      note: "Each cell shows subjects with approved study material out of all subjects.",
+      cells,
+      semesters,
+      departments,
+      pending: {
+        title: "Subjects Without Approved Study Material",
+        head: [
+          "#",
+          "Dept",
+          "Sem",
+          "Code",
+          "Subject",
+          "Status",
+        ],
+        columnStyles: {
+          0: { cellWidth: 8 },
+          1: { cellWidth: 14 },
+          2: { cellWidth: 10 },
+          3: { cellWidth: 28 },
+          4: { halign: "left" },
+          5: { cellWidth: 40 },
+        },
+        body: pending.map((subject, index) => [
+          index + 1,
+          String(subject.department || "").toUpperCase(),
+          subject.semester,
+          subject.code,
+          subject.name,
+          materialStatus(materialOf.get(subject)),
+        ]),
+      },
+    },
+    letterhead
+  );
 }
