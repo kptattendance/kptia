@@ -524,8 +524,14 @@ export default function AdminAttendancePage() {
   const smallButtonClass =
     "inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
 
-  const renderBatch = (batch) =>
-    batch?.entered ? (
+  // notTaken: another elective of this semester has
+  // been taken instead.
+  const renderBatch = (batch, notTaken = false) =>
+    !batch?.entered && notTaken ? (
+      <span className="text-xs text-slate-400">
+        Not taken
+      </span>
+    ) : batch?.entered ? (
       <div>
         <span className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
           Entered
@@ -750,11 +756,21 @@ export default function AdminAttendancePage() {
                     </td>
 
                     <td className="px-4 py-3">
-                      {renderBatch(subject.batch1)}
+                      {renderBatch(
+                        subject.batch1,
+                        electivesNotTaken.has(
+                          String(subject.subjectId)
+                        )
+                      )}
                     </td>
 
                     <td className="px-4 py-3">
-                      {renderBatch(subject.batch2)}
+                      {renderBatch(
+                        subject.batch2,
+                        electivesNotTaken.has(
+                          String(subject.subjectId)
+                        )
+                      )}
                     </td>
 
                     <td className="px-4 py-3 text-right">

@@ -7,17 +7,16 @@
 // Bridge courses are taught only to Batch 2, so they
 // count as one subject-batch: Batch 2.
 //
-// Electives of one elective group are alternatives,
-// and the class takes only one of them. So the group
-// counts as ONE subject: a batch is entered when it
-// is entered in any elective of the group. The other
-// electives of the group are "not taken" and are not
-// counted.
+// The electives of a department + semester are
+// alternatives (for example 25CH340PA / 25CH340PB),
+// and the class takes only one of them. So they count
+// as ONE subject: once any of them has an entry, the
+// others are "not taken" and are not counted.
 //
 // A subject is
 // {
 //   subjectId, department, semester,
-//   subjectCategory (or category), electiveGroup,
+//   subjectCategory (or category),
 //   batch1: { entered }, batch2: { entered }
 // }
 // =====================================================
@@ -40,12 +39,11 @@ export const getCellKey = (subject) =>
     subject.semester
   )}`;
 
-// Electives without a group are treated as one
-// group per department + semester.
+// All electives of a department + semester form one
+// choice. The electiveGroup field is not used: it holds
+// the option letter (A, B), not a shared group.
 const getGroupKey = (subject) =>
-  `${getCellKey(subject)}_${String(
-    subject.electiveGroup || "ELECTIVE"
-  ).toUpperCase()}`;
+  `${getCellKey(subject)}_ELECTIVE`;
 
 const hasEntry = (subject) =>
   Boolean(

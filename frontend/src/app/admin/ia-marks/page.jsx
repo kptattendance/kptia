@@ -519,6 +519,18 @@ export default function AdminIAMarksPage() {
       );
     }
 
+    // Another elective of this semester has been taken.
+    if (
+      !batch?.entered &&
+      electivesNotTaken.has(String(subject.subjectId))
+    ) {
+      return (
+        <span className="text-xs text-slate-400">
+          Not taken
+        </span>
+      );
+    }
+
     if (!batch?.entered) {
       return (
         <span className="inline-flex rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">

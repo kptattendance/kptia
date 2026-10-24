@@ -1787,6 +1787,80 @@ const students = useMemo(() => {
         Number(month)
     )?.label || "";
 
+  // =====================================================
+  // PDF REPORT (portrait, below 75% in red)
+  //
+  // The PDF code and the letterhead are loaded only when
+  // the button is clicked.
+  // =====================================================
+
+  const [downloadingPdf, setDownloadingPdf] =
+    useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (downloadingPdf) {
+      return;
+    }
+
+    if (!filteredStudents.length) {
+      await Swal.fire({
+        icon: "info",
+        title: "No Attendance Data",
+        text: "There is no student attendance to download for this selection.",
+        confirmButtonColor: "#283618",
+      });
+
+      return;
+    }
+
+    try {
+      setDownloadingPdf(true);
+
+      const [reports, { loadLetterhead }] =
+        await Promise.all([
+          import("../../utils/attendanceReportPdf"),
+          import("../../utils/letterheadAssets"),
+        ]);
+
+      const letterhead = await loadLetterhead();
+
+      reports
+        .buildAttendanceReportPdf(
+          {
+            departmentLabel,
+            semester,
+            monthLabel,
+            year,
+            batchLabel:
+              batchSelection === "both"
+                ? "Batch 1 & Batch 2"
+                : `Batch ${batchSelection}`,
+            students: filteredStudents,
+            subjects,
+          },
+          letterhead
+        )
+        .save(
+          reports.attendanceReportFileName({
+            department,
+            semester,
+            monthLabel,
+            year,
+          })
+        );
+    } catch (err) {
+      console.error("Attendance PDF error:", err);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Download",
+        text: "The PDF could not be prepared. Please try again.",
+        confirmButtonColor: "#283618",
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const moveTableHorizontally = (direction) => {
   const container = tableScrollRef.current;
@@ -2205,6 +2279,17 @@ const students = useMemo(() => {
     >
       <Download size={16} />
       Download Excel
+    </button>
+
+    {/* PDF DOWNLOAD */}
+    <button
+      type="button"
+      onClick={handleDownloadPdf}
+      disabled={loading || downloadingPdf}
+      className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <Download size={16} />
+      {downloadingPdf ? "Preparing PDF..." : "Download PDF"}
     </button>
 
   </div>
