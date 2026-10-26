@@ -16,6 +16,7 @@ import courseOutcomeRoutes from "./routes/courseOutcomeRoutes.js";
 import studyMaterialRoutes from "./routes/studyMaterialRoutes.js";
 import mentorRoutes from "./routes/mentorRoutes.js";
 import attainmentRoutes from "./routes/attainmentRoutes.js";
+import myEntryRoutes from "./routes/myEntryRoutes.js";
 
 dotenv.config();
 
@@ -163,6 +164,10 @@ app.use(
 app.use(
   "/api/attainment",
   attainmentRoutes
+);
+app.use(
+  "/api/my-entries",
+  myEntryRoutes
 );
 // =====================================================
 // ERRORS NOT HANDLED BY A ROUTE
