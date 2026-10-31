@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import EntryStatusGrid, {
   getDepartmentLabel,
 } from "../admin/components/EntryStatusGrid";
@@ -12,13 +12,14 @@ import {
   isElective,
   sumEntryCells,
 } from "../utils/entryCounts";
+import { showSubjectStatusAlert } from "../utils/subjectStatusAlert";
 
 // =====================================================
 // ENTRY STATUS SECTION
 //
 // One titled department x semester grid. Clicking a cell
-// lists its subjects with each batch entered or not.
-// Marks are never shown.
+// opens a pop-up with its subjects and whether each
+// batch is entered. Marks are never shown.
 //
 // subjects: [{ subjectId, code, name, department,
 //              semester, subjectCategory, myBatches,
@@ -33,15 +34,6 @@ const MATERIAL_LABELS = {
   rejected: "Rejected, to upload again",
 };
 
-const badge = {
-  entered:
-    "bg-emerald-50 text-emerald-700",
-  pending:
-    "bg-red-50 text-red-700",
-  muted:
-    "text-slate-400",
-};
-
 export default function EntryStatusSection({
   title,
   subjects,
@@ -50,9 +42,6 @@ export default function EntryStatusSection({
   onlyWithSubjects = false,
 }) {
   const material = mode === "material";
-
-  // { department, semester }
-  const [selected, setSelected] = useState(null);
 
   const cells = useMemo(
     () => buildEntryCells(subjects),
@@ -69,80 +58,95 @@ export default function EntryStatusSection({
     [cells, semesters]
   );
 
-  const selectedSubjects = useMemo(
-    () =>
-      selected
-        ? subjects
-            .filter(
-              (subject) =>
-                subject.department === selected.department &&
-                Number(subject.semester) === selected.semester
-            )
-            .sort((a, b) =>
-              String(a.sequence || a.code).localeCompare(
-                String(b.sequence || b.code)
-              )
-            )
-        : [],
-    [subjects, selected]
-  );
-
-  const renderMaterial = (subject) => {
+  // { label, tone } of a subject's study material
+  const getMaterialStatus = (subject) => {
     if (subject.materialStatus === "approved") {
-      return (
-        <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold ${badge.entered}`}>
-          Approved
-        </span>
-      );
+      return { label: "Approved", tone: "done" };
     }
 
     if (notTaken.has(String(subject.subjectId))) {
-      return (
-        <span className={`text-xs ${badge.muted}`}>
-          Not taken
-        </span>
-      );
+      return { label: "Not taken", tone: "muted" };
     }
 
-    return (
-      <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold ${badge.pending}`}>
-        {MATERIAL_LABELS[subject.materialStatus] ||
-          "Not uploaded"}
-      </span>
-    );
+    return {
+      label:
+        MATERIAL_LABELS[subject.materialStatus] ||
+        "Not uploaded",
+      tone:
+        subject.materialStatus === "pending"
+          ? "warn"
+          : "pending",
+    };
   };
 
-  const renderBatch = (subject, batch) => {
+  // { label, tone } of one batch of a subject
+  const getBatchStatus = (subject, batch) => {
     // Batch 1 of a bridge course
     if (!getCountedBatches(subject).includes(batch)) {
-      return (
-        <span className={`text-xs ${badge.muted}`}>
-          Not applicable
-        </span>
-      );
+      return { label: "Not applicable", tone: "muted" };
     }
 
     if (subject[`batch${batch}`]?.entered) {
-      return (
-        <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold ${badge.entered}`}>
-          Entered
-        </span>
-      );
+      return { label: "Entered", tone: "done" };
     }
 
     if (notTaken.has(String(subject.subjectId))) {
-      return (
-        <span className={`text-xs ${badge.muted}`}>
-          Not taken
-        </span>
-      );
+      return { label: "Not taken", tone: "muted" };
     }
 
-    return (
-      <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold ${badge.pending}`}>
-        Not entered
-      </span>
-    );
+    return { label: "Not entered", tone: "pending" };
+  };
+
+  const handleSelect = (department, semester) => {
+    const rows = subjects
+      .filter(
+        (subject) =>
+          subject.department === department &&
+          Number(subject.semester) === semester
+      )
+      .sort((a, b) =>
+        String(a.sequence || a.code).localeCompare(
+          String(b.sequence || b.code)
+        )
+      )
+      .map((subject) => ({
+        code: subject.code,
+        name: subject.name,
+        tags: [
+          ...(isElective(subject)
+            ? [{ label: "Elective" }]
+            : []),
+          ...(isBridge(subject) ? [{ label: "Bridge" }] : []),
+          ...(subject.myBatches?.length > 0
+            ? [
+                {
+                  label:
+                    subject.myBatches.length === 1
+                      ? `Yours · Batch ${subject.myBatches[0]}`
+                      : "Yours",
+                  dark: true,
+                },
+              ]
+            : []),
+        ],
+        cells: material
+          ? [
+              {
+                heading: "Study material",
+                ...getMaterialStatus(subject),
+              },
+            ]
+          : [1, 2].map((batch) => ({
+              heading: `Batch ${batch}`,
+              ...getBatchStatus(subject, batch),
+            })),
+      }));
+
+    showSubjectStatusAlert({
+      title: `${getDepartmentLabel(department)} · Semester ${semester}`,
+      subtitle: title,
+      rows,
+    });
   };
 
   return (
@@ -164,101 +168,14 @@ export default function EntryStatusSection({
         cells={cells}
         semesters={semesters}
         onlyWithSubjects={onlyWithSubjects}
-        selectedKey={
-          selected
-            ? `${selected.department}_${selected.semester}`
-            : ""
-        }
-        onSelect={(department, semester) =>
-          setSelected((current) =>
-            current?.department === department &&
-            current?.semester === semester
-              ? null
-              : { department, semester }
-          )
-        }
+        selectedKey=""
+        onSelect={handleSelect}
         note={
           material
             ? "Each cell counts subjects whose study material the HOD has approved. Electives of a semester count as one subject, the one taken. Tap a cell to see its subjects."
             : "Each cell counts subject-batches. Electives of a semester count as one subject, the one taken. Bridge courses count Batch 2 only. Tap a cell to see its subjects."
         }
       />
-
-      {/* SUBJECTS OF THE SELECTED CELL */}
-
-      {selected && (
-        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
-          <div className="border-b border-slate-100 px-5 py-3">
-            <h3 className="text-sm font-semibold text-slate-900">
-              {getDepartmentLabel(selected.department)} · Semester {selected.semester}
-            </h3>
-          </div>
-
-          <div className="divide-y divide-slate-100">
-            {selectedSubjects.map((subject) => (
-              <div
-                key={subject.subjectId}
-                className={`grid gap-2 px-5 py-3 sm:items-center ${
-                  material
-                    ? "sm:grid-cols-[minmax(0,1fr)_220px]"
-                    : "sm:grid-cols-[minmax(0,1fr)_140px_140px]"
-                } ${subject.myBatches?.length ? "bg-amber-50/40" : ""}`}
-              >
-                <div>
-                  <p className="font-mono text-xs font-bold text-slate-700">
-                    {subject.code}
-                    {(isElective(subject) || isBridge(subject)) && (
-                      <span className="ml-2 rounded-md bg-slate-100 px-2 py-0.5 font-sans text-[10px] uppercase tracking-wide text-slate-500">
-                        {isElective(subject) ? "Elective" : "Bridge"}
-                      </span>
-                    )}
-                    {subject.myBatches?.length > 0 && (
-                      <span className="ml-2 rounded-md bg-slate-900 px-2 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wide text-white">
-                        Yours
-                        {subject.myBatches.length === 1 &&
-                          ` · Batch ${subject.myBatches[0]}`}
-                      </span>
-                    )}
-                  </p>
-
-                  <p className="mt-0.5 text-sm font-semibold text-slate-900">
-                    {subject.name}
-                  </p>
-                </div>
-
-                {material && (
-                  <div className="flex items-center gap-2 sm:block">
-                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:mb-1 sm:block">
-                      Study material
-                    </span>
-                    {renderMaterial(subject)}
-                  </div>
-                )}
-
-                {!material && (
-                <>
-                <div className="flex items-center gap-2 sm:block">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:mb-1 sm:block">
-                    Batch 1
-                  </span>
-                  {renderBatch(subject, 1)}
-                </div>
-
-                <div className="flex items-center gap-2 sm:block">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:mb-1 sm:block">
-                    Batch 2
-                  </span>
-                  {renderBatch(subject, 2)}
-                </div>
-                </>
-                )}
-              </div>
-            ))}
-          </div>
-
-        </div>
-      )}
 
     </section>
   );

@@ -9,6 +9,10 @@ import EntryStatusGrid, {
 } from "../components/EntryStatusGrid";
 import EntryStatusDownload from "../components/EntryStatusDownload";
 import StudyMaterialTable from "../../components/StudyMaterialTable";
+import {
+  CELL_DETAILS_ID,
+  showSubjectStatusAlert,
+} from "../../utils/subjectStatusAlert";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -226,6 +230,61 @@ export default function AdminStudyMaterialPage() {
   }, [rows, selected]);
 
   // =====================================================
+  // SELECT A CELL: pop-up with its subjects, and the
+  // table with upload / approve under the grid
+  // =====================================================
+
+  const handleSelect = (department, semester) => {
+    setSelected({ department, semester });
+
+    showSubjectStatusAlert({
+      title: `${getDepartmentLabel(department)} · Semester ${semester}`,
+      subtitle: `Study material, ${academicYear}`,
+      detailsText: "Show details",
+      rows: rows
+        .filter(
+          (row) =>
+            row.subject.department === department &&
+            row.subject.semester === semester
+        )
+        .map((row) => ({
+          code: row.subject.code,
+          name: row.subject.name,
+          tags:
+            row.subject.subjectCategory &&
+            row.subject.subjectCategory !== "REGULAR"
+              ? [
+                  {
+                    label:
+                      row.subject.subjectCategory === "BRIDGE"
+                        ? "Bridge"
+                        : "Elective",
+                  },
+                ]
+              : [],
+          cells: [
+            {
+              heading: "Study material",
+              ...(row.material?.approved
+                ? { label: "Approved", tone: "done" }
+                : row.material?.pending
+                ? {
+                    label: "Waiting for HOD approval",
+                    tone: "warn",
+                  }
+                : row.material?.rejection
+                ? {
+                    label: "Rejected, to upload again",
+                    tone: "pending",
+                  }
+                : { label: "Not uploaded", tone: "pending" }),
+            },
+          ],
+        })),
+    });
+  };
+
+  // =====================================================
   // UI
   // =====================================================
 
@@ -379,9 +438,7 @@ export default function AdminStudyMaterialPage() {
               ? `${selected.department}_${selected.semester}`
               : ""
           }
-          onSelect={(department, semester) =>
-            setSelected({ department, semester })
-          }
+          onSelect={handleSelect}
           note="Each cell shows subjects with approved study material out of all subjects. Click a cell to see its subjects."
         />
       )}
@@ -389,7 +446,10 @@ export default function AdminStudyMaterialPage() {
       {/* SUBJECTS OF THE SELECTED CELL */}
 
       {selected && (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div
+          id={CELL_DETAILS_ID}
+          className="mt-6 scroll-mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
 
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="text-base font-semibold text-slate-900">

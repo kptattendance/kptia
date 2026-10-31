@@ -17,6 +17,10 @@ import EntryStatusGrid, {
 import EntryStatusDownload from "../components/EntryStatusDownload";
 import { escapeHtml } from "../../utils/escapeHtml";
 import {
+  CELL_DETAILS_ID,
+  showSubjectStatusAlert,
+} from "../../utils/subjectStatusAlert";
+import {
   buildEntryCells,
   getElectivesNotTaken,
   sumEntryCells,
@@ -289,6 +293,42 @@ export default function AdminAttendancePage() {
   const handleSelect = (department, semester) => {
     setSelected({ department, semester });
     closeDetail();
+
+    const cellSubjects = subjects.filter(
+      (subject) =>
+        String(subject.department || "").toLowerCase() ===
+          department &&
+        Number(subject.semester) === semester
+    );
+
+    showSubjectStatusAlert({
+      title: `${getDepartmentLabel(department)} · Semester ${semester}`,
+      subtitle: `Attendance, ${months[month - 1]} ${year}`,
+      detailsText: "Show details",
+      rows: cellSubjects.map((subject) => ({
+        code: subject.code,
+        name: subject.subject,
+        tags:
+          subject.category === "ELECTIVE"
+            ? [{ label: "Elective" }]
+            : [],
+        cells: [1, 2].map((batchNumber) => {
+          const batch = subject[`batch${batchNumber}`];
+
+          return {
+            heading: `Batch ${batchNumber}`,
+            ...(batch?.entered
+              ? {
+                  label: `Entered · ${batch.conducted} classes`,
+                  tone: "done",
+                }
+              : electivesNotTaken.has(String(subject.subjectId))
+              ? { label: "Not taken", tone: "muted" }
+              : { label: "Not entered", tone: "pending" }),
+          };
+        }),
+      })),
+    });
   };
 
   // =====================================================
@@ -698,7 +738,10 @@ export default function AdminAttendancePage() {
       {/* SUBJECTS OF THE SELECTED CELL */}
 
       {selected && (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div
+          id={CELL_DETAILS_ID}
+          className="mt-6 scroll-mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
 
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="text-base font-semibold text-slate-900">

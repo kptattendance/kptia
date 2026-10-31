@@ -17,6 +17,10 @@ import EntryStatusGrid, {
 import EntryStatusDownload from "../components/EntryStatusDownload";
 import { escapeHtml } from "../../utils/escapeHtml";
 import {
+  CELL_DETAILS_ID,
+  showSubjectStatusAlert,
+} from "../../utils/subjectStatusAlert";
+import {
   buildEntryCells,
   getElectivesNotTaken,
   sumEntryCells,
@@ -223,9 +227,65 @@ export default function AdminIAMarksPage() {
     setEditing(null);
   };
 
+  // { label, tone } of one batch, for the pop-up
+  const getBatchStatus = (subject, batchNumber) => {
+    const batch = subject[`batch${batchNumber}`];
+
+    if (batch?.entered) {
+      return batch.locked
+        ? { label: "Entered", tone: "done" }
+        : { label: "Unlocked for correction", tone: "warn" };
+    }
+
+    if (
+      subject.subjectCategory === "BRIDGE" &&
+      batchNumber === 1
+    ) {
+      return { label: "Not applicable", tone: "muted" };
+    }
+
+    if (electivesNotTaken.has(String(subject.subjectId))) {
+      return { label: "Not taken", tone: "muted" };
+    }
+
+    return { label: "Not entered", tone: "pending" };
+  };
+
   const handleSelect = (department, semester) => {
     setSelected({ department, semester });
     closeDetail();
+
+    const cellSubjects =
+      rows.find(
+        (row) =>
+          row.department === department &&
+          Number(row.semester) === semester
+      )?.subjects || [];
+
+    showSubjectStatusAlert({
+      title: `${getDepartmentLabel(department)} · Semester ${semester}`,
+      subtitle: `IA ${iaNumber}, ${academicYear}`,
+      detailsText: "Show details",
+      rows: cellSubjects.map((subject) => ({
+        code: subject.code,
+        name: subject.name,
+        tags:
+          subject.subjectCategory === "REGULAR"
+            ? []
+            : [
+                {
+                  label:
+                    subject.subjectCategory === "BRIDGE"
+                      ? "Bridge"
+                      : "Elective",
+                },
+              ],
+        cells: [1, 2].map((batchNumber) => ({
+          heading: `Batch ${batchNumber}`,
+          ...getBatchStatus(subject, batchNumber),
+        })),
+      })),
+    });
   };
 
   // =====================================================
@@ -725,7 +785,10 @@ export default function AdminIAMarksPage() {
       {/* SUBJECTS OF THE SELECTED CELL */}
 
       {selected && (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div
+          id={CELL_DETAILS_ID}
+          className="mt-6 scroll-mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+        >
 
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="text-base font-semibold text-slate-900">
