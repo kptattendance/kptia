@@ -1,7 +1,7 @@
 import express from "express";
 
 import {
-  getMyEntryStatus,
+  getEntryGrid,
   getMyIASheet,
 } from "../controllers/myEntryController.js";
 
@@ -11,8 +11,8 @@ const router = express.Router();
 
 router.use(authenticateUser);
 
-// What the faculty has entered for their subjects
-router.get("/status", getMyEntryStatus);
+// Department x semester grids: entered or not
+router.get("/grid", getEntryGrid);
 
 // Every IA of a subject side by side
 router.get("/ia-sheet", getMyIASheet);

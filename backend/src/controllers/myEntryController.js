@@ -6,10 +6,11 @@ import Subject from "../models/Subject.js";
 import { getAllocationError } from "./courseAllocationController.js";
 
 // ==========================================================
-// MY ENTRIES (faculty)
+// MY ENTRIES (faculty and HOD)
 //
-// What the faculty has entered for the subjects allocated
-// to them, so they can see what is still pending, and one
+// Whether IA marks and attendance are entered, for the
+// Entry Status grids (a faculty sees the subjects
+// allocated to them, a HOD every subject), and one
 // consolidated IA sheet per subject.
 // ==========================================================
 
@@ -39,181 +40,190 @@ const getAcademicYearMonths = (academicYear) => {
 };
 
 // ==========================================================
-// STATUS OF MY SUBJECTS
+// ENTRY GRID
 //
-// GET /api/my-entries/status?academicYear=2026-27
+// GET /api/my-entries/grid?academicYear=2026-27&term=odd
 //
-// For every subject allocated to the user:
-//   ia:         { "1": { "1": { entered, locked } } }
-//               IA number -> batch -> status
-//   attendance: { "2026-07": { "1": { entered, locked } } }
-//               month -> batch -> status
-// Only the batches allocated to the user are reported.
+// What the department x semester grids of the faculty
+// and HOD Entry Status pages need. Only whether IA marks
+// and attendance are entered, never the marks.
+//
+// Faculty: the subjects and batches allocated to them.
+// HOD / Admin / Principal: every subject of the term.
+//
+// subjects:   [{ subjectId, code, name, sequence,
+//                department, semester, subjectCategory,
+//                batchNumbers }]
+// ia:         { [subjectId]: { [iaNumber]: [batches] } }
+// attendance: { [subjectId]: { "2026-10": [batches] } }
 // ==========================================================
 
-export const getMyEntryStatus = async (req, res) => {
+const TERM_SEMESTERS = {
+  odd: [1, 3, 5],
+  even: [2, 4, 6],
+};
+
+export const getEntryGrid = async (req, res) => {
   try {
-    if (!["staff", "hod"].includes(getRole(req))) {
+    const role = getRole(req);
+
+    if (
+      !["staff", "hod", "admin", "principal"].includes(role)
+    ) {
       return res.status(403).json({
         success: false,
-        message: "Only faculty can view this.",
+        message: "You are not authorized to view this.",
       });
     }
 
-    const { academicYear } = req.query;
+    const { academicYear, term } = req.query;
 
-    if (!isAcademicYear(academicYear)) {
+    if (
+      !isAcademicYear(academicYear) ||
+      !TERM_SEMESTERS[term]
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Academic year is required.",
+        message: "Academic year and term are required.",
       });
     }
 
-    const allocations = await CourseAllocation.find({
-      academicYear,
-      facultyClerkId: req.user.id,
-    })
-      .populate(
-        "subjectId",
-        "code name semester department subjectCategory sequence"
-      )
-      .lean();
+    const semesters = TERM_SEMESTERS[term];
 
-    // One entry per subject, with every batch the user
-    // is allocated for it.
+    // subjectId -> subject with its batches
     const subjectMap = new Map();
 
-    allocations.forEach((allocation) => {
-      const subject = allocation.subjectId;
-
-      if (!subject?._id) {
-        return;
-      }
-
+    const addSubject = (subject, batchNumbers) => {
       const key = String(subject._id);
 
       if (!subjectMap.has(key)) {
         subjectMap.set(key, {
-          subject: {
-            _id: subject._id,
-            code: subject.code,
-            name: subject.name,
-            semester: subject.semester,
-            department: normalizeDepartment(
-              subject.department
-            ),
-            subjectCategory:
-              subject.subjectCategory || "REGULAR",
-            sequence: subject.sequence || "",
-          },
+          subjectId: subject._id,
+          code: subject.code,
+          name: subject.name,
+          sequence: subject.sequence || "",
+          department: normalizeDepartment(
+            subject.department
+          ),
+          semester: Number(subject.semester),
+          subjectCategory:
+            subject.subjectCategory || "REGULAR",
           batchNumbers: new Set(),
-          ia: {},
-          attendance: {},
         });
       }
 
-      (allocation.batchNumbers || []).forEach((batch) =>
+      batchNumbers.forEach((batch) =>
         subjectMap.get(key).batchNumbers.add(Number(batch))
       );
-    });
+    };
+
+    const subjectFields =
+      "code name sequence semester department subjectCategory";
+
+    if (role === "staff") {
+      const allocations = await CourseAllocation.find({
+        academicYear,
+        facultyClerkId: req.user.id,
+        semester: { $in: semesters },
+      })
+        .populate("subjectId", subjectFields)
+        .lean();
+
+      allocations.forEach((allocation) => {
+        if (allocation.subjectId?._id) {
+          addSubject(
+            allocation.subjectId,
+            allocation.batchNumbers || []
+          );
+        }
+      });
+    } else {
+      const subjects = await Subject.find({
+        semester: { $in: semesters },
+      })
+        .select(subjectFields)
+        .lean();
+
+      subjects.forEach((subject) =>
+        addSubject(subject, [1, 2])
+      );
+    }
 
     const subjectIds = [...subjectMap.keys()].map(
       (id) => new mongoose.Types.ObjectId(id)
     );
 
-    if (subjectIds.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-      });
-    }
-
     const [iaRecords, attendanceRecords] =
-      await Promise.all([
-        IAMarks.find({
-          academicYear,
-          subjectId: { $in: subjectIds },
-        })
-          .select("subjectId iaNumber batchNumber isLocked")
-          .lean(),
+      subjectIds.length === 0
+        ? [[], []]
+        : await Promise.all([
+            IAMarks.find({
+              academicYear,
+              subjectId: { $in: subjectIds },
+            })
+              .select("subjectId iaNumber batchNumber")
+              .lean(),
 
-        Attendance.find({
-          subjectId: { $in: subjectIds },
-          $or: getAcademicYearMonths(academicYear),
-        })
-          .select("subjectId month year batchNumbers isLocked")
-          .lean(),
-      ]);
+            Attendance.find({
+              subjectId: { $in: subjectIds },
+              $or: getAcademicYearMonths(academicYear),
+            })
+              .select("subjectId month year batchNumbers")
+              .lean(),
+          ]);
+
+    const ia = {};
 
     iaRecords.forEach((record) => {
-      const item = subjectMap.get(String(record.subjectId));
-      const batch = Number(record.batchNumber);
+      const key = String(record.subjectId);
 
-      if (!item || !item.batchNumbers.has(batch)) {
-        return;
-      }
+      ia[key] = ia[key] || {};
+      ia[key][record.iaNumber] =
+        ia[key][record.iaNumber] || [];
 
-      const iaKey = String(record.iaNumber);
-
-      item.ia[iaKey] = item.ia[iaKey] || {};
-
-      item.ia[iaKey][batch] = {
-        entered: true,
-        locked: record.isLocked !== false,
-      };
+      ia[key][record.iaNumber].push(
+        Number(record.batchNumber)
+      );
     });
 
-    attendanceRecords.forEach((record) => {
-      const item = subjectMap.get(String(record.subjectId));
+    const attendance = {};
 
-      if (!item) {
-        return;
-      }
+    attendanceRecords.forEach((record) => {
+      const key = String(record.subjectId);
 
       const monthKey = `${record.year}-${String(
         record.month
       ).padStart(2, "0")}`;
 
-      (record.batchNumbers || []).forEach((rawBatch) => {
-        const batch = Number(rawBatch);
+      attendance[key] = attendance[key] || {};
+      attendance[key][monthKey] =
+        attendance[key][monthKey] || [];
 
-        if (!item.batchNumbers.has(batch)) {
-          return;
-        }
-
-        item.attendance[monthKey] =
-          item.attendance[monthKey] || {};
-
-        item.attendance[monthKey][batch] = {
-          entered: true,
-          locked: record.isLocked !== false,
-        };
-      });
-    });
-
-    const data = [...subjectMap.values()]
-      .map((item) => ({
-        ...item,
-        batchNumbers: [...item.batchNumbers].sort(),
-      }))
-      .sort(
-        (a, b) =>
-          a.subject.semester - b.subject.semester ||
-          String(a.subject.sequence).localeCompare(
-            String(b.subject.sequence)
-          )
+      attendance[key][monthKey].push(
+        ...(record.batchNumbers || []).map(Number)
       );
+    });
 
     return res.status(200).json({
       success: true,
-      data,
+      data: {
+        academicYear,
+        semesters,
+        allSubjects: role !== "staff",
+        subjects: [...subjectMap.values()].map((item) => ({
+          ...item,
+          batchNumbers: [...item.batchNumbers].sort(),
+        })),
+        ia,
+        attendance,
+      },
     });
   } catch (error) {
-    console.error("My Entry Status Error:", error);
+    console.error("Entry Grid Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Failed to fetch your entry status.",
+      message: "Failed to fetch the entry status.",
     });
   }
 };

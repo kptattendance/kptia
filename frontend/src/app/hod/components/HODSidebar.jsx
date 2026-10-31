@@ -10,6 +10,7 @@ import {
   Layers,
   LayoutDashboard,
   Library,
+  ListChecks,
   Target,
   Users,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import PortalSidebar from "../../components/PortalSidebar";
 
 const menuItems = [
   { name: "Dashboard", href: "/hod", icon: LayoutDashboard },
+  { name: "Entry Status", href: "/hod/entry-status", icon: ListChecks },
   { name: "Subjects", href: "/hod/subjects", icon: BookOpen },
   { name: "Faculty", href: "/hod/faculty", icon: Users },
   { name: "Course Allocation", href: "/hod/allocations", icon: Layers },
