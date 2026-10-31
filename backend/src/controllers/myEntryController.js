@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Attendance from "../models/Attendance.js";
 import CourseAllocation from "../models/CourseAllocation.js";
 import IAMarks from "../models/IAMarks.js";
+import StudyMaterial from "../models/StudyMaterial.js";
 import Subject from "../models/Subject.js";
 import { getAllocationError } from "./courseAllocationController.js";
 
@@ -45,17 +46,20 @@ const getAcademicYearMonths = (academicYear) => {
 // GET /api/my-entries/grid?academicYear=2026-27&term=odd
 //
 // What the department x semester grids of the faculty
-// and HOD Entry Status pages need. Only whether IA marks
-// and attendance are entered, never the marks.
+// and HOD Entry Status pages need: whether IA marks,
+// attendance and study material are entered for every
+// subject of the term, never the marks.
 //
-// Faculty: the subjects and batches allocated to them.
-// HOD / Admin / Principal: every subject of the term.
+// Everyone sees every subject. myBatches are the batches
+// of a subject allocated to the user (empty if none).
 //
 // subjects:   [{ subjectId, code, name, sequence,
 //                department, semester, subjectCategory,
-//                batchNumbers }]
+//                myBatches }]
 // ia:         { [subjectId]: { [iaNumber]: [batches] } }
 // attendance: { [subjectId]: { "2026-10": [batches] } }
+// material:   { [subjectId]: "approved" | "pending" |
+//                             "rejected" }
 // ==========================================================
 
 const TERM_SEMESTERS = {
@@ -90,72 +94,43 @@ export const getEntryGrid = async (req, res) => {
 
     const semesters = TERM_SEMESTERS[term];
 
-    // subjectId -> subject with its batches
-    const subjectMap = new Map();
+    const [subjects, myAllocations] = await Promise.all([
+      Subject.find({
+        semester: { $in: semesters },
+      })
+        .select(
+          "code name sequence semester department subjectCategory"
+        )
+        .lean(),
 
-    const addSubject = (subject, batchNumbers) => {
-      const key = String(subject._id);
-
-      if (!subjectMap.has(key)) {
-        subjectMap.set(key, {
-          subjectId: subject._id,
-          code: subject.code,
-          name: subject.name,
-          sequence: subject.sequence || "",
-          department: normalizeDepartment(
-            subject.department
-          ),
-          semester: Number(subject.semester),
-          subjectCategory:
-            subject.subjectCategory || "REGULAR",
-          batchNumbers: new Set(),
-        });
-      }
-
-      batchNumbers.forEach((batch) =>
-        subjectMap.get(key).batchNumbers.add(Number(batch))
-      );
-    };
-
-    const subjectFields =
-      "code name sequence semester department subjectCategory";
-
-    if (role === "staff") {
-      const allocations = await CourseAllocation.find({
+      CourseAllocation.find({
         academicYear,
         facultyClerkId: req.user.id,
-        semester: { $in: semesters },
       })
-        .populate("subjectId", subjectFields)
-        .lean();
+        .select("subjectId batchNumbers")
+        .lean(),
+    ]);
 
-      allocations.forEach((allocation) => {
-        if (allocation.subjectId?._id) {
-          addSubject(
-            allocation.subjectId,
-            allocation.batchNumbers || []
-          );
-        }
-      });
-    } else {
-      const subjects = await Subject.find({
-        semester: { $in: semesters },
-      })
-        .select(subjectFields)
-        .lean();
+    // subjectId -> batches allocated to the user
+    const myBatches = new Map();
 
-      subjects.forEach((subject) =>
-        addSubject(subject, [1, 2])
+    myAllocations.forEach((allocation) => {
+      const key = String(allocation.subjectId);
+
+      const batches = myBatches.get(key) || new Set();
+
+      (allocation.batchNumbers || []).forEach((batch) =>
+        batches.add(Number(batch))
       );
-    }
 
-    const subjectIds = [...subjectMap.keys()].map(
-      (id) => new mongoose.Types.ObjectId(id)
-    );
+      myBatches.set(key, batches);
+    });
 
-    const [iaRecords, attendanceRecords] =
+    const subjectIds = subjects.map((subject) => subject._id);
+
+    const [iaRecords, attendanceRecords, materials] =
       subjectIds.length === 0
-        ? [[], []]
+        ? [[], [], []]
         : await Promise.all([
             IAMarks.find({
               academicYear,
@@ -169,6 +144,15 @@ export const getEntryGrid = async (req, res) => {
               $or: getAcademicYearMonths(academicYear),
             })
               .select("subjectId month year batchNumbers")
+              .lean(),
+
+            // Same record the Study Material page uses
+            StudyMaterial.find({
+              academicYear,
+              week: 0,
+              subjectId: { $in: subjectIds },
+            })
+              .select("subjectId approved pending rejection")
               .lean(),
           ]);
 
@@ -204,18 +188,41 @@ export const getEntryGrid = async (req, res) => {
       );
     });
 
+    const material = {};
+
+    materials.forEach((record) => {
+      material[String(record.subjectId)] = record.approved
+        ? "approved"
+        : record.pending
+        ? "pending"
+        : record.rejection?.remark
+        ? "rejected"
+        : undefined;
+    });
+
     return res.status(200).json({
       success: true,
       data: {
         academicYear,
         semesters,
-        allSubjects: role !== "staff",
-        subjects: [...subjectMap.values()].map((item) => ({
-          ...item,
-          batchNumbers: [...item.batchNumbers].sort(),
+        subjects: subjects.map((subject) => ({
+          subjectId: subject._id,
+          code: subject.code,
+          name: subject.name,
+          sequence: subject.sequence || "",
+          department: normalizeDepartment(
+            subject.department
+          ),
+          semester: Number(subject.semester),
+          subjectCategory:
+            subject.subjectCategory || "REGULAR",
+          myBatches: [
+            ...(myBatches.get(String(subject._id)) || []),
+          ].sort(),
         })),
         ia,
         attendance,
+        material,
       },
     });
   } catch (error) {

@@ -21,9 +21,17 @@ import {
 // Marks are never shown.
 //
 // subjects: [{ subjectId, code, name, department,
-//              semester, subjectCategory, batchNumbers,
+//              semester, subjectCategory, myBatches,
 //              batch1: { entered }, batch2: { entered } }]
+//
+// mode "material": one status per subject (study
+// material) instead of Batch 1 / Batch 2.
 // =====================================================
+
+const MATERIAL_LABELS = {
+  pending: "Waiting for HOD approval",
+  rejected: "Rejected, to upload again",
+};
 
 const badge = {
   entered:
@@ -38,8 +46,11 @@ export default function EntryStatusSection({
   title,
   subjects,
   semesters,
+  mode = "batches",
   onlyWithSubjects = false,
 }) {
+  const material = mode === "material";
+
   // { department, semester }
   const [selected, setSelected] = useState(null);
 
@@ -76,13 +87,37 @@ export default function EntryStatusSection({
     [subjects, selected]
   );
 
+  const renderMaterial = (subject) => {
+    if (subject.materialStatus === "approved") {
+      return (
+        <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold ${badge.entered}`}>
+          Approved
+        </span>
+      );
+    }
+
+    if (notTaken.has(String(subject.subjectId))) {
+      return (
+        <span className={`text-xs ${badge.muted}`}>
+          Not taken
+        </span>
+      );
+    }
+
+    return (
+      <span className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold ${badge.pending}`}>
+        {MATERIAL_LABELS[subject.materialStatus] ||
+          "Not uploaded"}
+      </span>
+    );
+  };
+
   const renderBatch = (subject, batch) => {
+    // Batch 1 of a bridge course
     if (!getCountedBatches(subject).includes(batch)) {
       return (
         <span className={`text-xs ${badge.muted}`}>
-          {isBridge(subject)
-            ? "Not applicable"
-            : "Not yours"}
+          Not applicable
         </span>
       );
     }
@@ -119,7 +154,9 @@ export default function EntryStatusSection({
         </h2>
 
         <p className="text-sm font-semibold text-slate-600">
-          {summary.entered} of {summary.total} subject-batches entered
+          {material
+            ? `${summary.entered} of ${summary.total} subjects approved`
+            : `${summary.entered} of ${summary.total} subject-batches entered`}
         </p>
       </div>
 
@@ -140,7 +177,11 @@ export default function EntryStatusSection({
               : { department, semester }
           )
         }
-        note="Each cell counts subject-batches. Electives of a semester count as one subject, the one taken. Bridge courses count Batch 2 only. Tap a cell to see its subjects."
+        note={
+          material
+            ? "Each cell counts subjects whose study material the HOD has approved. Electives of a semester count as one subject, the one taken. Tap a cell to see its subjects."
+            : "Each cell counts subject-batches. Electives of a semester count as one subject, the one taken. Bridge courses count Batch 2 only. Tap a cell to see its subjects."
+        }
       />
 
       {/* SUBJECTS OF THE SELECTED CELL */}
@@ -158,7 +199,11 @@ export default function EntryStatusSection({
             {selectedSubjects.map((subject) => (
               <div
                 key={subject.subjectId}
-                className="grid gap-2 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_140px_140px] sm:items-center"
+                className={`grid gap-2 px-5 py-3 sm:items-center ${
+                  material
+                    ? "sm:grid-cols-[minmax(0,1fr)_220px]"
+                    : "sm:grid-cols-[minmax(0,1fr)_140px_140px]"
+                } ${subject.myBatches?.length ? "bg-amber-50/40" : ""}`}
               >
                 <div>
                   <p className="font-mono text-xs font-bold text-slate-700">
@@ -168,6 +213,13 @@ export default function EntryStatusSection({
                         {isElective(subject) ? "Elective" : "Bridge"}
                       </span>
                     )}
+                    {subject.myBatches?.length > 0 && (
+                      <span className="ml-2 rounded-md bg-slate-900 px-2 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wide text-white">
+                        Yours
+                        {subject.myBatches.length === 1 &&
+                          ` · Batch ${subject.myBatches[0]}`}
+                      </span>
+                    )}
                   </p>
 
                   <p className="mt-0.5 text-sm font-semibold text-slate-900">
@@ -175,6 +227,17 @@ export default function EntryStatusSection({
                   </p>
                 </div>
 
+                {material && (
+                  <div className="flex items-center gap-2 sm:block">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:mb-1 sm:block">
+                      Study material
+                    </span>
+                    {renderMaterial(subject)}
+                  </div>
+                )}
+
+                {!material && (
+                <>
                 <div className="flex items-center gap-2 sm:block">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:mb-1 sm:block">
                     Batch 1
@@ -188,6 +251,8 @@ export default function EntryStatusSection({
                   </span>
                   {renderBatch(subject, 2)}
                 </div>
+                </>
+                )}
               </div>
             ))}
           </div>

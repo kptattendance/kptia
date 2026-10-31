@@ -31,27 +31,31 @@ const getCurrentTerm = () => {
   };
 };
 
-// Last month and this month, if they belong to this
-// academic year: [{ key: "2026-10", label }]
+// Every month of the academic year up to this month:
+// [{ key: "2026-10", label }]
 const getAttendanceMonths = (academicYear) => {
   const startYear = Number(academicYear.slice(0, 4));
 
-  const firstMonth = new Date(startYear, 6, 1);
-
   const today = new Date();
 
-  return [-1, 0]
-    .map(
-      (offset) =>
-        new Date(today.getFullYear(), today.getMonth() + offset, 1)
-    )
-    .filter((date) => date >= firstMonth)
-    .map((date) => ({
+  const months = [];
+
+  for (let offset = 0; offset < 12; offset++) {
+    const date = new Date(startYear, 6 + offset, 1);
+
+    if (date > today) {
+      break;
+    }
+
+    months.push({
       key: `${date.getFullYear()}-${String(
         date.getMonth() + 1
       ).padStart(2, "0")}`,
       label: `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`,
-    }));
+    });
+  }
+
+  return months;
 };
 
 // Subjects with batch1 / batch2 entered flags from a
@@ -71,12 +75,12 @@ const withEntries = (subjects, getBatches) =>
 // ENTRY STATUS BOARD
 //
 // The grids of the faculty and HOD Entry Status pages,
-// one after the other, for the current term:
-// each IA, then attendance of last month and this month.
+// one after the other, for the current term: every IA,
+// attendance of every month so far, and study material.
 //
-// A faculty sees the subjects and batches allocated to
-// them, and can download the consolidated IA sheet of
-// each. A HOD sees every subject.
+// Everyone sees every subject; the subjects allocated to
+// the user are marked "Yours", and a faculty can
+// download the consolidated IA sheet of each of them.
 // =====================================================
 
 export default function EntryStatusBoard({
@@ -174,15 +178,36 @@ export default function EntryStatusBoard({
       });
     });
 
+    // Study material: one per subject, done when the
+    // HOD has approved it.
+    result.push({
+      key: "study-material",
+      title: "Study Material",
+      mode: "material",
+      subjects: data.subjects.map((subject) => {
+        const status =
+          data.material[String(subject.subjectId)] || "";
+
+        return {
+          ...subject,
+          batchNumbers: [1],
+          materialStatus: status,
+          batch1: { entered: status === "approved" },
+          batch2: { entered: status === "approved" },
+        };
+      }),
+    });
+
     return result;
   }, [data, academicYear]);
 
-  // Faculty: their subjects with at least one IA entered
+  // The user's subjects with at least one IA entered
   const sheetSubjects = useMemo(
     () =>
-      data && !data.allSubjects
+      data
         ? data.subjects.filter(
             (subject) =>
+              subject.myBatches.length > 0 &&
               Object.keys(data.ia[String(subject.subjectId)] || {})
                 .length > 0
           )
@@ -214,9 +239,9 @@ export default function EntryStatusBoard({
               subjectId: subject.subjectId,
               academicYear,
               batch:
-                subject.batchNumbers.length === 2
+                subject.myBatches.length === 2
                   ? "both"
-                  : subject.batchNumbers[0],
+                  : subject.myBatches[0],
             },
           }),
           import("../utils/iaSheetPdf"),
@@ -259,10 +284,8 @@ export default function EntryStatusBoard({
         </h1>
 
         <p className="mt-2 text-sm text-slate-500">
-          {academicYear} · {term === "odd" ? "Odd" : "Even"} semesters.{" "}
-          {data && !data.allSubjects
-            ? "The subjects and batches allocated to you."
-            : "Every subject of the term."}{" "}
+          {academicYear} · {term === "odd" ? "Odd" : "Even"} semesters.
+          Every subject of the term; the subjects allocated to you are marked Yours.
           Shows only whether data is entered, never the marks.
         </p>
       </div>
@@ -281,7 +304,7 @@ export default function EntryStatusBoard({
 
       {!loading && data && data.subjects.length === 0 && (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center text-sm text-slate-500">
-          No subjects are allocated to you for this term yet. Your HOD allocates subjects from the Course Allocation page.
+          No subjects are set up for this term yet.
         </div>
       )}
 
@@ -294,7 +317,7 @@ export default function EntryStatusBoard({
             title={section.title}
             subjects={section.subjects}
             semesters={data.semesters}
-            onlyWithSubjects={!data.allSubjects}
+            mode={section.mode}
           />
         ))}
 
@@ -328,9 +351,9 @@ export default function EntryStatusBoard({
                   <p className="mt-0.5 text-xs text-slate-500">
                     {subject.department.toUpperCase()} · Semester{" "}
                     {subject.semester} ·{" "}
-                    {subject.batchNumbers.length === 2
+                    {subject.myBatches.length === 2
                       ? "Batch 1 & Batch 2"
-                      : `Batch ${subject.batchNumbers[0]}`}
+                      : `Batch ${subject.myBatches[0]}`}
                   </p>
                 </div>
 
