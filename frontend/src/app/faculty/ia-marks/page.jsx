@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
 import AttainmentDownloads from "../../components/AttainmentDownloads";
+import IAAllView from "../../components/IAAllView";
 import {
   cleanNumberInput,
   handleGridKeyDown,
@@ -96,7 +97,60 @@ const emptyStudentCO = () => ({
   CO6: "",
 });
 
+// =====================================================
+// IA MARKS PAGE
+//
+// Two tabs: Enter Marks (the entry screen below, kept
+// mounted so nothing typed is lost when switching) and
+// View All IAs (every IA of a subject side by side).
+// =====================================================
+
 export default function FacultyIAMarksPage() {
+  const [tab, setTab] = useState("enter");
+
+  const tabClass = (value) =>
+    `rounded-lg px-4 py-2 text-sm font-semibold transition ${
+      tab === value
+        ? "bg-white text-slate-900 shadow-sm"
+        : "text-slate-500 hover:text-slate-900"
+    }`;
+
+  return (
+    <>
+      <div className="mx-auto w-full max-w-[1600px] px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pt-8">
+        <div className="inline-flex rounded-xl bg-slate-100 p-1">
+          <button
+            type="button"
+            onClick={() => setTab("enter")}
+            className={tabClass("enter")}
+          >
+            Enter Marks
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTab("view")}
+            className={tabClass("view")}
+          >
+            View All IAs
+          </button>
+        </div>
+      </div>
+
+      <div className={tab === "enter" ? "" : "hidden"}>
+        <IAMarksEntry />
+      </div>
+
+      {tab === "view" && (
+        <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
+          <IAAllView />
+        </div>
+      )}
+    </>
+  );
+}
+
+function IAMarksEntry() {
   const { getToken } = useAuth();
     // --------------------------------------------------
   // HORIZONTAL TABLE DRAG SCROLL

@@ -38,9 +38,6 @@ export default function StudentAcademicPage() {
   const [selectedSemester, setSelectedSemester] =
     useState("all");
 
-  const [selectedIA, setSelectedIA] =
-    useState("all");
-
   // ==========================================================
   // LOAD DATA
   // ==========================================================
@@ -159,19 +156,10 @@ export default function StudentAcademicPage() {
       );
     }
 
-    if (selectedIA !== "all") {
-      result = result.filter(
-        (item) =>
-          Number(item.iaNumber) ===
-          Number(selectedIA)
-      );
-    }
-
     return result;
   }, [
     iaMarks,
     selectedSemester,
-    selectedIA,
   ]);
 
   // ==========================================================
@@ -207,24 +195,6 @@ export default function StudentAcademicPage() {
     iaMarks,
     academic,
   ]);
-
-  // ==========================================================
-  // IA NUMBERS
-  // ==========================================================
-
-  const iaNumbers = useMemo(() => {
-    const values = new Set();
-
-    iaMarks.forEach((item) => {
-      if (item.iaNumber !== undefined) {
-        values.add(Number(item.iaNumber));
-      }
-    });
-
-    return [...values].sort(
-      (a, b) => a - b
-    );
-  }, [iaMarks]);
 
   // ==========================================================
   // ATTENDANCE SUMMARY
@@ -272,43 +242,97 @@ export default function StudentAcademicPage() {
   }, [filteredAttendance]);
 
   // ==========================================================
-  // IA SUMMARY
+  // IA TABLES
+  //
+  // One table per academic year + semester: subjects down
+  // the side, IAs across the top, then the total.
+  //
+  // [{ key, academicYear, semester, iaNumbers,
+  //    subjects: [{ key, name, code,
+  //                 ias: { [iaNumber]: { marks, max,
+  //                                      absent } },
+  //                 marks, max }] }]
   // ==========================================================
 
-  const iaSummary = useMemo(() => {
-    if (filteredIA.length === 0) {
-      return {
-        total: 0,
-        max: 0,
-        percentage: 0,
+  const iaTables = useMemo(() => {
+    const tables = new Map();
+
+    filteredIA.forEach((ia) => {
+      const tableKey = `${ia.academicYear}_${ia.semester}`;
+
+      if (!tables.has(tableKey)) {
+        tables.set(tableKey, {
+          key: tableKey,
+          academicYear: ia.academicYear,
+          semester: Number(ia.semester),
+          iaNumbers: new Set(),
+          subjects: new Map(),
+        });
+      }
+
+      const table = tables.get(tableKey);
+
+      const subjectKey = String(
+        ia.subjectId?._id || ia.subjectId
+      );
+
+      if (!table.subjects.has(subjectKey)) {
+        table.subjects.set(subjectKey, {
+          key: subjectKey,
+          name:
+            ia.subjectId?.name ||
+            ia.subjectId?.code ||
+            "Unknown Subject",
+          code: ia.subjectId?.code || "",
+          ias: {},
+          marks: 0,
+          max: 0,
+        });
+      }
+
+      const subject = table.subjects.get(subjectKey);
+
+      const tests = ia.tests || [];
+
+      const max = Number(ia.totalMaxMarks || 0);
+      const marks = Number(ia.totalMarks || 0);
+
+      subject.ias[ia.iaNumber] = {
+        marks,
+        max,
+        // Absent for every test of the IA
+        absent:
+          tests.length > 0 &&
+          tests.every(
+            (test) =>
+              test.status === "ABSENT" ||
+              test.marks === null
+          ),
       };
-    }
 
-    const total = filteredIA.reduce(
-      (sum, item) =>
-        sum + Number(item.totalMarks || 0),
-      0
-    );
+      subject.marks += marks;
+      subject.max += max;
 
-    const max = filteredIA.reduce(
-      (sum, item) =>
-        sum +
-        Number(item.totalMaxMarks || 0),
-      0
-    );
+      table.iaNumbers.add(Number(ia.iaNumber));
+    });
 
-    const percentage =
-      max > 0
-        ? Number(
-            ((total / max) * 100).toFixed(2)
-          )
-        : 0;
-
-    return {
-      total,
-      max,
-      percentage,
-    };
+    return [...tables.values()]
+      .sort(
+        (a, b) =>
+          String(b.academicYear).localeCompare(
+            String(a.academicYear)
+          ) || b.semester - a.semester
+      )
+      .map((table) => ({
+        ...table,
+        iaNumbers: [...table.iaNumbers].sort(
+          (a, b) => a - b
+        ),
+        subjects: [...table.subjects.values()].sort(
+          (a, b) =>
+            String(a.code).localeCompare(String(b.code))
+        ),
+      }));
   }, [filteredIA]);
 
   // ==========================================================
@@ -521,31 +545,6 @@ export default function StudentAcademicPage() {
                 ))}
               </select>
 
-              {activeTab === "ia" && (
-                <select
-                  value={selectedIA}
-                  onChange={(e) =>
-                    setSelectedIA(
-                      e.target.value
-                    )
-                  }
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-400 focus:bg-white"
-                >
-                  <option value="all">
-                    All IAs
-                  </option>
-
-                  {iaNumbers.map((number) => (
-                    <option
-                      key={number}
-                      value={number}
-                    >
-                      IA {number}
-                    </option>
-                  ))}
-                </select>
-              )}
-
             </div>
 
           </div>
@@ -734,6 +733,10 @@ export default function StudentAcademicPage() {
 
           {/* ==================================================
               IA TAB
+
+              One table per semester: subjects down the
+              side, every IA across the top, then the
+              total. On a phone each subject is a card.
           ================================================== */}
 
           {activeTab === "ia" && (
@@ -745,242 +748,143 @@ export default function StudentAcademicPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  View IA-wise marks and individual test
-                  performance.
+                  Every IA of every subject side by side. Green is 50% or more, red is below 50%.
                 </p>
               </div>
 
-              {filteredIA.length === 0 ? (
+              {iaTables.length === 0 ? (
                 <EmptyState
                   icon="★"
                   title="No IA Marks"
-                  text="IA marks have not been entered for the selected filters."
+                  text="IA marks have not been entered for the selected semester."
                 />
               ) : (
-                <div className="space-y-5">
+                <div className="space-y-6">
+                  {iaTables.map((table) => (
+                    <div
+                      key={table.key}
+                      className="overflow-hidden rounded-2xl border border-slate-200"
+                    >
 
-                  {filteredIA.map((ia) => {
+                      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+                        <span className="rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-bold text-violet-700">
+                          Semester {table.semester}
+                        </span>
 
-                    const percentage =
-                      ia.totalMaxMarks > 0
-                        ? Number(
-                            (
-                              (ia.totalMarks /
-                                ia.totalMaxMarks) *
-                              100
-                            ).toFixed(2)
-                          )
-                        : 0;
-
-                    const good =
-                      percentage >= 50;
-
-                    return (
-                      <div
-                        key={ia._id}
-                        className="overflow-hidden rounded-2xl border border-slate-200"
-                      >
-
-                        {/* IA HEADER */}
-
-                        <div className="flex flex-col gap-4 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-
-                          <div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-
-                              <span className="rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-bold text-blue-700">
-                                IA {ia.iaNumber}
-                              </span>
-
-                              <span className="rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-bold text-violet-700">
-                                Semester{" "}
-                                {ia.semester}
-                              </span>
-
-                              <span className="rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">
-                                Batch{" "}
-                                {ia.batchNumber}
-                              </span>
-
-                            </div>
-
-                            <h3 className="mt-3 text-base font-bold text-slate-900">
-                              {getSubjectName(
-                                ia.subjectId
-                              )}
-                            </h3>
-
-                            {getSubjectCode(
-                              ia.subjectId
-                            ) && (
-                              <p className="mt-0.5 text-xs text-slate-400">
-                                {getSubjectCode(
-                                  ia.subjectId
-                                )}
-                              </p>
-                            )}
-
-                          </div>
-
-                          <div className="flex items-center gap-3">
-
-                            <div className="text-right">
-
-                              <p className="text-xs font-medium text-slate-400">
-                                Total
-                              </p>
-
-                              <p className="text-2xl font-bold text-slate-900">
-                                {ia.totalMarks}
-                                <span className="text-sm font-medium text-slate-400">
-                                  {" "}
-                                  /{" "}
-                                  {ia.totalMaxMarks}
-                                </span>
-                              </p>
-
-                            </div>
-
-                            <div
-                              className={`flex h-14 w-14 items-center justify-center rounded-2xl text-sm font-bold ${
-                                good
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-red-100 text-red-700"
-                              }`}
-                            >
-                              {percentage}%
-                            </div>
-
-                          </div>
-
-                        </div>
-
-                        {/* TESTS */}
-
-                        <div className="overflow-x-auto">
-
-                          <table className="min-w-[700px] w-full text-left">
-
-                            <thead>
-
-                              <tr className="border-b border-slate-100">
-
-                                <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-                                  Test
-                                </th>
-
-                                <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
-                                  Maximum
-                                </th>
-
-                                <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
-                                  Marks
-                                </th>
-
-                                <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-400">
-                                  Status
-                                </th>
-
-                              </tr>
-
-                            </thead>
-
-                            <tbody className="divide-y divide-slate-100">
-
-                              {(ia.tests || []).map(
-                                (test, index) => {
-
-                                  const absent =
-                                    test.status ===
-                                      "ABSENT" ||
-                                    test.marks === null;
-
-                                  return (
-                                    <tr
-                                      key={`${ia._id}-${index}`}
-                                      className="hover:bg-slate-50"
-                                    >
-
-                                      <td className="px-4 py-4">
-
-                                        <div className="font-semibold text-slate-800">
-                                          {test.testName ||
-                                            `Test ${
-                                              index + 1
-                                            }`}
-                                        </div>
-
-                                      </td>
-
-                                      <td className="px-4 py-4 text-center text-sm text-slate-500">
-                                        {test.maxMarks}
-                                      </td>
-
-                                      <td className="px-4 py-4 text-center">
-
-                                        <span
-                                          className={`text-sm font-bold ${
-                                            absent
-                                              ? "text-slate-400"
-                                              : "text-slate-900"
-                                          }`}
-                                        >
-                                          {absent
-                                            ? "—"
-                                            : test.marks}
-                                        </span>
-
-                                      </td>
-
-                                      <td className="px-4 py-4 text-center">
-
-                                        <span
-                                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                                            absent
-                                              ? "bg-red-50 text-red-600"
-                                              : "bg-emerald-50 text-emerald-700"
-                                          }`}
-                                        >
-                                          {absent
-                                            ? "Absent"
-                                            : "Present"}
-                                        </span>
-
-                                      </td>
-
-                                    </tr>
-                                  );
-                                }
-                              )}
-
-                            </tbody>
-
-                          </table>
-
-                        </div>
-
-                        {/* IA FOOTER */}
-
-                        <div className="flex flex-col gap-2 border-t border-slate-100 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-                          <span className="text-xs text-slate-400">
-                            Academic Year:{" "}
-                            {ia.academicYear || "—"}
-                          </span>
-
-                          {ia.isLocked && (
-                            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
-                              🔒 Frozen
-                            </span>
-                          )}
-
-                        </div>
-
+                        <span className="text-xs font-medium text-slate-500">
+                          Academic Year {table.academicYear || "—"}
+                        </span>
                       </div>
-                    );
-                  })}
 
+                      {/* PHONE: one card per subject */}
+
+                      <div className="divide-y divide-slate-100 sm:hidden">
+                        {table.subjects.map((subject) => (
+                          <div key={subject.key} className="px-4 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {subject.name}
+                                </p>
+
+                                {subject.code && (
+                                  <p className="font-mono text-xs text-slate-400">
+                                    {subject.code}
+                                  </p>
+                                )}
+                              </div>
+
+                              <IAScore
+                                marks={subject.marks}
+                                max={subject.max}
+                                strong
+                              />
+                            </div>
+
+                            <div className="mt-2 grid grid-cols-3 gap-2">
+                              {table.iaNumbers.map((iaNumber) => (
+                                <div
+                                  key={iaNumber}
+                                  className="rounded-lg bg-slate-50 px-2 py-1.5 text-center"
+                                >
+                                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                                    IA {iaNumber}
+                                  </p>
+
+                                  <IAScore {...subject.ias[iaNumber]} />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* LARGER SCREENS: table */}
+
+                      <div className="hidden overflow-x-auto sm:block">
+                        <table className="w-full text-left">
+
+                          <thead>
+                            <tr className="border-b border-slate-100">
+                              <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                                Subject
+                              </th>
+
+                              {table.iaNumbers.map((iaNumber) => (
+                                <th
+                                  key={iaNumber}
+                                  className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-400"
+                                >
+                                  IA {iaNumber}
+                                </th>
+                              ))}
+
+                              <th className="bg-slate-50 px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
+                                Total
+                              </th>
+                            </tr>
+                          </thead>
+
+                          <tbody className="divide-y divide-slate-100">
+                            {table.subjects.map((subject) => (
+                              <tr key={subject.key} className="hover:bg-slate-50">
+                                <td className="px-4 py-3">
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    {subject.name}
+                                  </p>
+
+                                  {subject.code && (
+                                    <p className="font-mono text-xs text-slate-400">
+                                      {subject.code}
+                                    </p>
+                                  )}
+                                </td>
+
+                                {table.iaNumbers.map((iaNumber) => (
+                                  <td
+                                    key={iaNumber}
+                                    className="px-4 py-3 text-center"
+                                  >
+                                    <IAScore {...subject.ias[iaNumber]} />
+                                  </td>
+                                ))}
+
+                                <td className="bg-slate-50 px-4 py-3 text-center">
+                                  <IAScore
+                                    marks={subject.marks}
+                                    max={subject.max}
+                                    strong
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+
+                        </table>
+                      </div>
+
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -1028,5 +932,48 @@ function EmptyState({
       </p>
 
     </div>
+  );
+}
+
+// ==========================================================
+// IA SCORE
+//
+// "15 / 20" in green (50% or more) or red, "AB" when the
+// student was absent for the whole IA, "—" when there are
+// no marks.
+// ==========================================================
+
+function IAScore({ marks, max, absent, strong = false }) {
+  if (absent) {
+    return (
+      <span className="text-sm font-bold text-red-600">
+        AB
+      </span>
+    );
+  }
+
+  if (marks === undefined || !max) {
+    return (
+      <span className="text-sm text-slate-300">—</span>
+    );
+  }
+
+  const good = marks / max >= 0.5;
+
+  return (
+    <span
+      className={`inline-flex items-baseline gap-0.5 whitespace-nowrap rounded-md px-2 py-0.5 ${
+        strong ? "text-base font-bold" : "text-sm font-semibold"
+      } ${
+        good
+          ? "bg-emerald-50 text-emerald-700"
+          : "bg-red-50 text-red-700"
+      }`}
+    >
+      {Number.isInteger(marks) ? marks : marks.toFixed(1)}
+      <span className="text-xs font-medium opacity-70">
+        /{max}
+      </span>
+    </span>
   );
 }
