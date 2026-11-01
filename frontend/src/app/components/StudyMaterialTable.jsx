@@ -435,20 +435,21 @@ export default function StudyMaterialTable({
 
       <div className="overflow-x-auto">
 
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[860px] text-sm">
 
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              <th className="px-5 py-3">Subject</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Uploaded by</th>
-              <th className="px-4 py-3" />
+            <tr className="bg-[#283618] text-left text-[11px] font-bold uppercase tracking-wider text-[#fefae0]">
+              <th className="w-14 px-3 py-2.5 text-center">Sl. No.</th>
+              <th className="px-4 py-2.5">Subject</th>
+              <th className="px-4 py-2.5">Status</th>
+              <th className="px-4 py-2.5">Uploaded by</th>
+              <th className="px-4 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-[#eee8d2]">
 
-            {rows.map((row) => {
+            {rows.map((row, index) => {
               const { subject, material } = row;
 
               // The file the "uploaded by" column describes
@@ -467,10 +468,31 @@ export default function StudyMaterialTable({
                 (row.canManage ||
                   material.pending.uploadedByMe);
 
-              return (
-                <tr key={subject._id}>
+              // Stripe on the left, in the order of the
+              // status badge: waiting / approved / missing
+              const stripe = material?.pending
+                ? "border-l-amber-400"
+                : material?.approved
+                ? "border-l-emerald-500"
+                : "border-l-red-400";
 
-                  <td className="px-5 py-3 align-top">
+              return (
+                <tr
+                  key={subject._id}
+                  className={`transition hover:bg-[#f6f1dc] ${
+                    index % 2 === 0
+                      ? "bg-white"
+                      : "bg-[#fbf9f0]"
+                  }`}
+                >
+
+                  <td
+                    className={`border-l-4 px-3 py-3 text-center align-top text-xs font-semibold text-[#9a9474] ${stripe}`}
+                  >
+                    {index + 1}
+                  </td>
+
+                  <td className="px-4 py-3 align-top">
                     <p className="font-mono text-xs font-bold text-slate-700">
                       {subject.code}
                       {subject.subjectCategory !==
