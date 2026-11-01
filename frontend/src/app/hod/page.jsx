@@ -41,6 +41,21 @@ const departmentNames = {
   sc: "Science & English",
 };
 
+// Greeting by the time on the user's device
+const getGreeting = () => {
+  const hour = new Date().getHours();
+
+  if (hour >= 4 && hour < 12) {
+    return "Good morning";
+  }
+
+  if (hour >= 12 && hour < 17) {
+    return "Good afternoon";
+  }
+
+  return "Good evening";
+};
+
 export default function HODDashboardPage() {
   const { getToken } = useAuth();
 
@@ -137,8 +152,10 @@ export default function HODDashboardPage() {
     // =================================================
 
     try {
+      // The backend returns only the HOD's own
+      // department.
       const studentResponse = await axios.get(
-        `${API_URL}/api/students/getstudents`,
+        `${API_URL}/api/students`,
         config
       );
 
@@ -491,8 +508,11 @@ export default function HODDashboardPage() {
                 HOD Portal
               </p>
 
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-2xl">
-                Good morning,{" "}
+              <h1
+                suppressHydrationWarning
+                className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-2xl"
+              >
+                {getGreeting()},{" "}
                 {name.split(" ")[0]}
               </h1>
 
