@@ -150,7 +150,7 @@ export default function FacultyDashboard() {
             Faculty Portal
           </p>
 
-          <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
+          <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-2xl">
             Welcome
             {user?.name
               ? `, ${user.name}`

@@ -267,9 +267,19 @@
    PAGE
    ===================================================== */
 
+/* Compact scale: every Tailwind size (text, padding,
+   gaps) is in rem, so a smaller root makes every page
+   show more at once. Phones stay a touch larger. */
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+  font-size: 15px;
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 14px;
+  }
 }
 
 body {

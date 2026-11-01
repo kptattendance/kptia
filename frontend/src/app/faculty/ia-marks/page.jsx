@@ -2352,7 +2352,7 @@ for (const batch of batchesToSave) {
     ).toUpperCase() === "BRIDGE";
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 <div className="mx-auto w-full max-w-[1600px] min-w-0">
 
         {/* ================================================= */}

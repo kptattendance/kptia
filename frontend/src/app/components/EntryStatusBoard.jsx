@@ -276,10 +276,10 @@ export default function EntryStatusBoard({
   // =====================================================
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-2xl">
           {title}
         </h1>
 

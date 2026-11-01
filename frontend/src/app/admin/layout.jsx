@@ -61,7 +61,7 @@ export default function AdminLayout({ children }) {
       <AdminSidebar />
 
       {/* Page Content */}
-      <main className="min-h-screen pt-16 lg:pl-72 lg:pt-0">
+      <main className="min-h-screen pt-14 lg:pl-60 lg:pt-0">
         {children}
       </main>
 

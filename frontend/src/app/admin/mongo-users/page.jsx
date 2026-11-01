@@ -697,7 +697,7 @@ export default function UsersPage() {
   // ==========================================================
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 
       {/* ======================================================
           HEADER
@@ -710,7 +710,7 @@ export default function UsersPage() {
             User Management
           </p>
 
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-800">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-800">
             Users
           </h1>
 

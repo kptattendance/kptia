@@ -180,7 +180,7 @@ export default function HODProgramOutcomesPage() {
     "mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm";
 
   return (
-    <div className="min-h-screen p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 
       {/* HEADER */}
 
@@ -191,7 +191,7 @@ export default function HODProgramOutcomesPage() {
             : "HOD Portal"}
         </p>
 
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
           Program Outcomes
         </h1>
 

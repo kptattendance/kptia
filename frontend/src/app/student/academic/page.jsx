@@ -341,7 +341,7 @@ export default function StudentAcademicPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+      <div className="min-h-screen p-3 sm:p-4 lg:p-5">
         <div className="mx-auto max-w-7xl">
           <div className="animate-pulse space-y-6">
             <div className="h-32 rounded-3xl bg-white" />
@@ -365,7 +365,7 @@ export default function StudentAcademicPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+      <div className="min-h-screen p-3 sm:p-4 lg:p-5">
         <div className="mx-auto max-w-3xl">
           <div className="rounded-3xl border border-red-100 bg-white p-8 text-center shadow-sm">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-2xl">
@@ -440,7 +440,7 @@ export default function StudentAcademicPage() {
                   Student Academic Portal
                 </p>
 
-                <h1 className="mt-1 truncate text-2xl font-bold sm:text-3xl">
+                <h1 className="mt-1 truncate text-2xl font-bold sm:text-2xl">
                   {student?.name || "Student"}
                 </h1>
 

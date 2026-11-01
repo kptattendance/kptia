@@ -97,7 +97,7 @@ export default function PrincipalDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen p-6 md:p-8">
+      <div className="min-h-screen p-3 sm:p-4 lg:p-5">
         <div className="mx-auto max-w-7xl">
           <div className="animate-pulse">
             <div className="h-8 w-56 rounded bg-slate-200" />

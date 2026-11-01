@@ -197,7 +197,7 @@ export default function StudentAttendancePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen p-6 md:p-8">
+      <div className="min-h-screen p-3 sm:p-4 lg:p-5">
         <div className="mx-auto max-w-7xl animate-pulse">
           <div className="h-8 w-64 rounded bg-slate-200" />
 

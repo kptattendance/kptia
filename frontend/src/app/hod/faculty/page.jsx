@@ -363,7 +363,7 @@ export default function HODFacultyPage() {
   // ---------------------------------------
 
   return (
-    <div className="min-h-screen p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 
       {/* HEADER */}
       <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
@@ -373,7 +373,7 @@ export default function HODFacultyPage() {
             Department Management
           </p>
 
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950">
             Faculty
           </h1>
 

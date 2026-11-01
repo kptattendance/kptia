@@ -602,7 +602,7 @@ export default function HODSubjectsPage() {
     "mb-1.5 block text-xs font-semibold text-slate-600";
 
   return (
-    <div className="min-h-screen p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 
       {/* HEADER */}
 
@@ -614,7 +614,7 @@ export default function HODSubjectsPage() {
             Academic Management
           </p>
 
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
             Subjects
           </h1>
 

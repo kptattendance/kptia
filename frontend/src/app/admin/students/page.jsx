@@ -10,7 +10,7 @@ export default function StudentsPage() {
 
   if (view === "add") {
     return (
-      <main className="min-h-screen p-6 lg:p-8">
+      <main className="min-h-screen p-3 sm:p-4 lg:p-5">
         <div className="mx-auto max-w-5xl">
           <button
             onClick={() => setView("table")}
@@ -69,7 +69,7 @@ export default function StudentsPage() {
   }
 
   return (
-    <main className="min-h-screen p-6 lg:p-8">
+    <main className="min-h-screen p-3 sm:p-4 lg:p-5">
       <div className="mx-auto max-w-7xl">
 
         <div className="mb-7">
@@ -77,7 +77,7 @@ export default function StudentsPage() {
             Academic Management
           </p>
 
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
             Students
           </h1>
 

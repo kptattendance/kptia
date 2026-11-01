@@ -1910,7 +1910,7 @@ const students = useMemo(() => {
                 HOD Portal
               </p>
 
-              <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+              <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-950 sm:text-2xl">
                 Semester Attendance
               </h1>
 

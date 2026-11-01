@@ -12,12 +12,12 @@ import { Menu, X } from "lucide-react";
 // The same navigation for every portal (Admin,
 // Principal, HOD, Faculty, Student).
 //
-// Computers: a fixed panel on the left (w-72).
+// Computers: a fixed panel on the left (w-60).
 // Phones:    a top bar with a menu button; the panel
 //            slides in over the page.
 //
 // The layout around it must leave room:
-//   <main className="min-h-screen pt-16 lg:pl-72 lg:pt-0">
+//   <main className="min-h-screen pt-14 lg:pl-60 lg:pt-0">
 //
 // items: [{ name, href, icon: LucideIcon }]
 // =====================================================
@@ -63,13 +63,13 @@ export default function PortalSidebar({
     "";
 
   const brand = (
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#dda15e] to-[#bc6c25] text-base font-extrabold text-white shadow-lg shadow-[#bc6c25]/30 ring-1 ring-white/20">
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#dda15e] to-[#bc6c25] text-sm font-extrabold text-white shadow-md shadow-[#bc6c25]/30 ring-1 ring-white/20">
         K
       </div>
 
       <div className="leading-tight">
-        <p className="text-base font-extrabold tracking-tight">
+        <p className="text-sm font-extrabold tracking-tight">
           KPT IA
         </p>
 
@@ -85,7 +85,7 @@ export default function PortalSidebar({
 
       {/* PHONE TOP BAR */}
 
-      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center justify-between border-b border-white/60 bg-white/80 px-4 text-slate-900 shadow-sm backdrop-blur-xl lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-white/60 bg-white/80 px-4 text-slate-900 shadow-sm backdrop-blur-xl lg:hidden">
         {brand}
 
         <div className="flex items-center gap-2">
@@ -96,9 +96,9 @@ export default function PortalSidebar({
             onClick={() => setOpen(true)}
             aria-label="Open menu"
             aria-expanded={open}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-md transition active:scale-95"
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white shadow-md transition active:scale-95"
           >
-            <Menu size={20} />
+            <Menu size={18} />
           </button>
         </div>
       </header>
@@ -117,7 +117,7 @@ export default function PortalSidebar({
       {/* PANEL */}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-hidden bg-gradient-to-b from-[#1a240e] via-[#283618] to-[#3d4a22] text-white shadow-2xl transition-transform duration-300 ease-out lg:translate-x-0 lg:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-60 max-w-[85vw] flex-col overflow-hidden bg-gradient-to-b from-[#1a240e] via-[#283618] to-[#3d4a22] text-white shadow-2xl transition-transform duration-300 ease-out lg:translate-x-0 lg:shadow-none ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -128,7 +128,7 @@ export default function PortalSidebar({
 
         {/* BRAND */}
 
-        <div className="relative flex h-20 shrink-0 items-center justify-between px-6">
+        <div className="relative flex h-14 shrink-0 items-center justify-between px-4">
           {brand}
 
           <button
@@ -141,11 +141,11 @@ export default function PortalSidebar({
           </button>
         </div>
 
-        <div className="relative mx-6 h-px bg-white/10" />
+        <div className="relative mx-4 h-px bg-white/10" />
 
         {/* NAVIGATION */}
 
-        <nav className="relative flex-1 space-y-1 overflow-y-auto px-4 py-5 scrollbar-hide">
+        <nav className="relative flex-1 space-y-0.5 overflow-y-auto px-2.5 py-3 scrollbar-hide">
           {items.map((item) => {
             const active = isActive(item.href);
             const Icon = item.icon;
@@ -156,20 +156,20 @@ export default function PortalSidebar({
                 href={item.href}
                 onClick={() => setOpen(false)}
                 aria-current={active ? "page" : undefined}
-                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                className={`group flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold transition ${
                   active
-                    ? "bg-[#fefae0] text-[#283618] shadow-lg shadow-black/20"
+                    ? "bg-[#fefae0] text-[#283618] shadow-md shadow-black/20"
                     : "text-white/75 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition ${
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition ${
                     active
                       ? "bg-gradient-to-br from-[#dda15e] to-[#bc6c25] text-white"
                       : "bg-white/10 text-white/80 group-hover:bg-white/15"
                   }`}
                 >
-                  <Icon size={17} strokeWidth={2} />
+                  <Icon size={15} strokeWidth={2} />
                 </span>
 
                 <span className="truncate">
@@ -182,16 +182,16 @@ export default function PortalSidebar({
 
         {/* USER */}
 
-        <div className="relative shrink-0 p-4">
-          <div className="flex items-center gap-3 rounded-2xl bg-white/10 p-3 ring-1 ring-white/10 backdrop-blur">
+        <div className="relative shrink-0 p-2.5">
+          <div className="flex items-center gap-2.5 rounded-xl bg-white/10 px-2.5 py-2 ring-1 ring-white/10 backdrop-blur">
             <UserButton />
 
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">
+              <p className="truncate text-xs font-semibold">
                 {userName || portal}
               </p>
 
-              <p className="text-xs text-white/60">
+              <p className="text-[11px] text-white/60">
                 {portal}
               </p>
             </div>

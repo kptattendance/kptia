@@ -113,7 +113,7 @@ const dashboardItems = [
 
 export default function AdminDashboard() {
   return (
-    <div className="min-h-screen p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 
       {/* Header */}
       <div className="mb-8">
@@ -125,7 +125,7 @@ export default function AdminDashboard() {
               Administration
             </p>
 
-            <h1 className="text-3xl font-bold tracking-tight text-slate-950">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950">
               Dashboard
             </h1>
 

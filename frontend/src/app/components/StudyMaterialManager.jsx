@@ -170,14 +170,14 @@ export default function StudyMaterialManager({
     "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
   return (
-    <div className="min-h-screen p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 
       {/* HEADER */}
 
       <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             Study Material
           </h1>
 

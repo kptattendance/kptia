@@ -435,7 +435,7 @@ export default function HODCourseAllocationPage() {
     "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none focus:border-slate-500";
 
   return (
-    <div className="min-h-screen p-6 lg:p-8">
+    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
 
       {/* HEADER */}
 
@@ -448,7 +448,7 @@ export default function HODCourseAllocationPage() {
               : "HOD Portal"}
           </p>
 
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
             Course Allocation
           </h1>
 

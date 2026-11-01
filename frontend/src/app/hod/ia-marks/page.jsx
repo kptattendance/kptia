@@ -685,236 +685,141 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
 
 
   return (
-  <div className="min-h-screen px-3 pb-6 pt-20 sm:px-5 sm:py-6 md:px-6 lg:px-8">
-    <div className="mx-auto w-full max-w-[1500px]">
+  <div className="min-h-screen px-3 pb-6 pt-3 sm:px-5 sm:pt-4 lg:px-6">
+    <div className="mx-auto w-full max-w-[1600px]">
 
       {/* =====================================================
-          HEADER
+          HEADER + SELECTION (one compact card)
       ====================================================== */}
-      <div className="mb-5 flex flex-col gap-4 sm:mb-6 lg:flex-row lg:items-center lg:justify-between">
+      <section className="mb-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-        {/* TITLE */}
-        <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
+        {/* TITLE + ACTIONS */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
 
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 sm:h-12 sm:w-12 sm:rounded-2xl">
-            <BarChart3 size={21} className="sm:h-6 sm:w-6" />
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
+              <BarChart3 size={17} />
+            </div>
+
+            <div className="min-w-0">
+              <h1 className="truncate text-lg font-bold leading-tight text-slate-950">
+                Internal Assessment Marks
+              </h1>
+              <p className="text-xs text-slate-500">
+                Semester-wise IA marks of every subject
+              </p>
+            </div>
           </div>
 
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:text-xs">
-              HOD Portal
-            </p>
-
-            <h1 className="mt-0.5 text-xl font-bold leading-tight text-slate-950 sm:text-2xl md:text-3xl">
-              Internal Assessment Marks
-            </h1>
-
-            <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
-              View semester-wise IA marks for all subjects.
-            </p>
-          </div>
-
-        </div>
-
-        {/* ACTION BUTTONS */}
-        <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
-
-          <button
-            type="button"
-            onClick={loadData}
-            disabled={loading || !semester}
-            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-amber-50 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            <RefreshCw
-              size={16}
-              className={loading ? "animate-spin" : ""}
-            />
-            Refresh
-          </button>
-
-          {selectedIA && tableData.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={downloadExcel}
-              className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 sm:w-auto"
+              onClick={loadData}
+              disabled={loading || !semester}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-amber-50 hover:text-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <FileSpreadsheet size={16} />
-              Download Excel
+              <RefreshCw
+                size={14}
+                className={loading ? "animate-spin" : ""}
+              />
+              Refresh
             </button>
-          )}
 
-        </div>
-      </div>
-
-      {semester && (
-        <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <AttainmentDownloads
-            scope="semester"
-            academicYear={academicYear}
-            semester={semester}
-            department={department}
-          />
-        </div>
-      )}
-
-
-      {/* =====================================================
-          REPORT SELECTION
-      ====================================================== */}
-      <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:mb-6">
-
-        <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:text-xs">
-            Report Selection
-          </p>
-
-          <h2 className="mt-1 text-base font-bold text-slate-950 sm:text-lg">
-            Select Assessment
-          </h2>
-
-        </div>
-
-
-        <div className="bg-slate-50/60 p-4 sm:p-5">
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-
-            {/* =================================================
-                ACADEMIC YEAR
-            ================================================== */}
-            <div className="min-w-0">
-
-              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
-                Academic Year
-              </label>
-
-              <div className="relative">
-
-                <select
-                  value={academicYear}
-                  onChange={(e) =>
-                    setAcademicYear(e.target.value)
-                  }
-                  className="min-h-[44px] w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-50"
-                >
-
-                  <option value="2026-27">
-                    2026-27
-                  </option>
-
-                  <option value="2025-26">
-                    2025-26
-                  </option>
-
-                  <option value="2024-25">
-                    2024-25
-                  </option>
-
-                </select>
-
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-
-              </div>
-            </div>
-
-
-            {/* =================================================
-                SEMESTER
-            ================================================== */}
-            <div className="min-w-0">
-
-              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
-                Semester
-              </label>
-
-              <div className="relative">
-
-                <select
-                  value={semester}
-                  onChange={(e) =>
-                    setSemester(e.target.value)
-                  }
-                  className="min-h-[44px] w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-50"
-                >
-
-                  <option value="">
-                    Select Semester
-                  </option>
-
-                  {semesters.map((sem) => (
-                    <option
-                      key={sem}
-                      value={sem}
-                    >
-                      Semester {sem}
-                    </option>
-                  ))}
-
-                </select>
-
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-
-              </div>
-            </div>
-
-
-            {/* =================================================
-                IA
-            ================================================== */}
-            <div className="min-w-0">
-
-              <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500 sm:text-xs">
-                Internal Assessment
-              </label>
-
-              <div className="relative">
-
-                <select
-                  value={selectedIA}
-                  onChange={(e) =>
-                    setSelectedIA(e.target.value)
-                  }
-                  disabled={
-                    !semester ||
-                    availableIANumbers.length === 0
-                  }
-                  className="min-h-[44px] w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 pr-10 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500 focus:ring-4 focus:ring-amber-50 disabled:bg-slate-50 disabled:text-slate-400"
-                >
-
-                  <option value="">
-                    Select IA
-                  </option>
-
-                  {availableIANumbers.map((ia) => (
-                    <option
-                      key={ia}
-                      value={ia}
-                    >
-                      IA {ia}
-                    </option>
-                  ))}
-
-                </select>
-
-                <ChevronDown
-                  size={16}
-                  className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-
-              </div>
-            </div>
-
+            {selectedIA && tableData.length > 0 && (
+              <button
+                type="button"
+                onClick={downloadExcel}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+              >
+                <FileSpreadsheet size={14} />
+                Excel
+              </button>
+            )}
           </div>
         </div>
-      </section>
 
+        {/* FILTERS + CO ATTAINMENT */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-2.5">
+
+          <div className="relative">
+            <select
+              value={academicYear}
+              onChange={(e) =>
+                setAcademicYear(e.target.value)
+              }
+              aria-label="Academic year"
+              className="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500"
+            >
+              <option value="2026-27">2026-27</option>
+              <option value="2025-26">2025-26</option>
+              <option value="2024-25">2024-25</option>
+            </select>
+            <ChevronDown
+              size={14}
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+          </div>
+
+          <div className="relative">
+            <select
+              value={semester}
+              onChange={(e) =>
+                setSemester(e.target.value)
+              }
+              aria-label="Semester"
+              className="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500"
+            >
+              <option value="">Select Semester</option>
+              {semesters.map((sem) => (
+                <option key={sem} value={sem}>
+                  Semester {sem}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+          </div>
+
+          <div className="relative">
+            <select
+              value={selectedIA}
+              onChange={(e) =>
+                setSelectedIA(e.target.value)
+              }
+              disabled={
+                !semester ||
+                availableIANumbers.length === 0
+              }
+              aria-label="Internal assessment"
+              className="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-400"
+            >
+              <option value="">Select IA</option>
+              {availableIANumbers.map((ia) => (
+                <option key={ia} value={ia}>
+                  IA {ia}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={14}
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+          </div>
+
+          {semester && (
+            <div className="ml-auto">
+              <AttainmentDownloads
+                scope="semester"
+                academicYear={academicYear}
+                semester={semester}
+                department={department}
+              />
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* =====================================================
           ERROR
@@ -943,31 +848,18 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
       {/* =====================================================
           ASSESSMENT HEADER
       ====================================================== */}
-      <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2">
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-
-          <div className="min-w-0">
-
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:text-xs">
-              Assessment Overview
-            </p>
-
-            <h2 className="mt-1 text-base font-bold text-slate-950 sm:text-lg">
-              Semester {semester} — IA {selectedIA}
-            </h2>
-
-            <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">
-              All subjects are displayed. A dash means marks have not been entered.
-            </p>
-
-          </div>
-
-          <span className="inline-flex w-fit shrink-0 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
-            {tableData.length} Students
+        <h2 className="text-sm font-bold text-slate-950">
+          Semester {semester} — IA {selectedIA}
+          <span className="ml-2 text-xs font-normal text-slate-500">
+            A dash means marks have not been entered.
           </span>
+        </h2>
 
-        </div>
+        <span className="inline-flex shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+          {tableData.length} Students
+        </span>
 
       </div>
 
