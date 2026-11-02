@@ -995,7 +995,7 @@ export default function HODDashboardPage() {
             {/* IA MARKS */}
 
             <Link
-              href="/hod/ia"
+              href="/hod/ia-marks"
               className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-violet-200 hover:shadow-lg"
             >
 
