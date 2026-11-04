@@ -67,20 +67,6 @@ const departments = [
 ];
 
 const CO_NAMES = ["CO1", "CO2", "CO3", "CO4", "CO5", "CO6"];
-const TEST_NAME_OPTIONS = [
-  "CIE1",
-  "CIE2",
-  "CIE3",
-  "ST1",
-  "ST2",
-  "ST3",
-  "Drawing1",
-  "Drawing2",
-  "Quiz1",
-  "Quiz2",
-  "Assignment1",
-  "Assignment2",
-];
 const emptyCO = () => ({
   CO1: 0,
   CO2: 0,
@@ -908,9 +894,23 @@ const loadBatch = async () => {
 
         const hasDraft =
           Array.isArray(draft?.tests) &&
-          draft.tests.length > 0;
+          draft.tests.some(
+            (test) => getCOTotal(test.coMarks) > 0
+          );
 
-        setTests(hasDraft ? draft.tests : []);
+        // The IA is set up at once: the faculty only
+        // enters the CO maximum marks.
+        setTests(
+          hasDraft
+            ? draft.tests
+            : [
+                {
+                  testName: iaLabel(selectedIaNumber),
+                  maxMarks: 0,
+                  coMarks: emptyCO(),
+                },
+              ]
+        );
 
         const initialMarks = {};
 
@@ -999,110 +999,6 @@ const loadBatch = async () => {
     batchNumber,
   ]);
 
-const addTest = () => {
-  if (existingIA) return;
-
-  // Find the first test name that has not already been used
-  const usedNames = tests.map((test) =>
-    String(test.testName || "").trim()
-  );
-
-  const availableName = TEST_NAME_OPTIONS.find(
-    (name) => !usedNames.includes(name)
-  );
-
-  // All available test names are already used
-  if (!availableName) {
-    showAlert(
-      "warning",
-      "No Test Names Available",
-      "All available test names have already been used."
-    );
-    return;
-  }
-
-  setTests((prev) => [
-    ...prev,
-    {
-      testName: availableName,
-      maxMarks: 25,
-      coMarks: emptyCO(),
-    },
-  ]);
-};
-  // ==================================================
-  // REMOVE TEST
-  // ==================================================
-
-  const removeTest = (testIndex) => {
-    if (existingIA) return;
-
-    setTests((prev) =>
-      prev.filter(
-        (_, index) => index !== testIndex
-      )
-    );
-
-    setStudentMarks((prev) => {
-      const updated = {};
-
-      Object.entries(prev).forEach(
-        ([studentId, studentTests]) => {
-          const newTests = {};
-
-          Object.entries(
-            studentTests
-          ).forEach(
-            ([index, value]) => {
-              const oldIndex = Number(index);
-
-              if (oldIndex < testIndex) {
-                newTests[oldIndex] = value;
-              }
-
-              if (oldIndex > testIndex) {
-                newTests[oldIndex - 1] =
-                  value;
-              }
-            }
-          );
-
-          updated[studentId] = newTests;
-        }
-      );
-
-      return updated;
-    });
-  };
-
-  // ==================================================
-  // UPDATE TEST
-  // ==================================================
-
-  const updateTest = (
-    index,
-    field,
-    value
-  ) => {
-    if (existingIA) return;
-
-    setTests((prev) =>
-      prev.map((test, testIndex) =>
-        testIndex === index
-          ? {
-            ...test,
-            [field]:
-              field === "maxMarks"
-                ? value === ""
-                  ? ""
-                  : Number(value)
-                : value,
-          }
-          : test
-      )
-    );
-  };
-
   // ==================================================
   // UPDATE TEST CO MAXIMUM
   // ==================================================
@@ -1114,21 +1010,24 @@ const addTest = () => {
   ) => {
     if (existingIA) return;
 
+    // The maximum of the IA is the total of its COs.
     setTests((prev) =>
-      prev.map((test, index) =>
-        index === testIndex
-          ? {
-            ...test,
-            coMarks: {
-              ...test.coMarks,
-              [co]:
-                value === ""
-                  ? ""
-                  : value,
-            },
-          }
-          : test
-      )
+      prev.map((test, index) => {
+        if (index !== testIndex) {
+          return test;
+        }
+
+        const coMarks = {
+          ...test.coMarks,
+          [co]: value === "" ? "" : value,
+        };
+
+        return {
+          ...test,
+          coMarks,
+          maxMarks: getCOTotal(coMarks),
+        };
+      })
     );
   };
 
@@ -1185,20 +1084,6 @@ const addTest = () => {
     const errors = [];
     const notes = [];
 
-    const maxMarks = Number(test.maxMarks);
-
-    if (
-      test.maxMarks === "" ||
-      !Number.isFinite(maxMarks) ||
-      maxMarks <= 0
-    ) {
-      errors.push(
-        "Enter the Max Marks of this test first."
-      );
-
-      return { errors, notes };
-    }
-
     const values = CO_NAMES.map((co) =>
       Number(test.coMarks?.[co] || 0)
     );
@@ -1228,19 +1113,9 @@ const addTest = () => {
       );
     }
 
-    const coTotal = getCOTotal(test.coMarks);
-
-    if (coTotal === 0) {
+    if (getCOTotal(test.coMarks) === 0) {
       errors.push(
-        `Now split the ${maxMarks} marks between the COs below.`
-      );
-    } else if (coTotal > maxMarks) {
-      errors.push(
-        `The CO marks add up to ${coTotal}, which is ${Math.round((coTotal - maxMarks) * 100) / 100} more than the Max Marks (${maxMarks}).`
-      );
-    } else if (coTotal < maxMarks) {
-      errors.push(
-        `The CO marks add up to ${coTotal} of ${maxMarks}. ${Math.round((maxMarks - coTotal) * 100) / 100} more to split between the COs.`
+        "Enter the maximum marks of each CO this IA covers. Leave the other COs at 0."
       );
     }
 
@@ -1258,7 +1133,7 @@ const addTest = () => {
     const problems = [];
 
     if (tests.length === 0) {
-      problems.push("Add at least one IA test.");
+      problems.push("Load the students first.");
       return problems;
     }
 
@@ -2720,24 +2595,14 @@ for (const batch of batchesToSave) {
 
               <div>
                 <h2 className="text-lg font-bold text-slate-900">
-                  IA Tests
+                  CO Maximum Marks
                 </h2>
 
                 <p className="text-xs text-slate-500">
-                  Define the maximum CO distribution for each test.
+                  Enter the maximum marks of each CO in this IA. The total is worked out from them.
                 </p>
               </div>
 
-              {!existingIA && tests.length === 0 && (
-                <button
-                  type="button"
-                  onClick={addTest}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-700"
-                >
-                  <span className="text-base leading-none">+</span>
-                  Add IA Test
-                </button>
-              )}
             </div>
 
             {tests.length === 0 ? (
@@ -2747,11 +2612,7 @@ for (const batch of batchesToSave) {
                   No IA tests added
                 </p>
 
-                {!existingIA && (
-                  <p className="mt-1 text-xs text-slate-400">
-                    Click "Add Test" to create the first test.
-                  </p>
-                )}
+
               </div>
             ) : (
               <div className="space-y-3">
@@ -2778,107 +2639,14 @@ for (const batch of batchesToSave) {
 
                     {/* TEST HEADER */}
 
-<div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-end">
+<div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+  <span className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-bold text-white">
+    {test.testName || iaLabel(iaNumber)}
+  </span>
 
-  {/* TEST NUMBER */}   
-
-  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">
-    {index + 1}
-  </div>
-
-
-  {/* TEST NAME */}
-
-  <div className="w-full sm:w-[25%]">
-    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
-      Test Name
-    </label>
-
-    <select
-      value={test.testName || ""}
-      disabled={!!existingIA}
-      onChange={(e) => {
-        const newName = e.target.value;
-
-        const duplicate = tests.some(
-          (item, itemIndex) =>
-            itemIndex !== index &&
-            item.testName === newName
-        );
-
-        if (duplicate) {
-          showAlert(
-            "warning",
-            "Duplicate Test Name",
-            `${newName} is already used by another test.`
-          );
-          return;
-        }
-
-        updateTest(
-          index,
-          "testName",
-          newName
-        );
-      }}
-      className="block w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
-    >
-      <option value="" disabled>
-        Select Test
-      </option>
-
-      {TEST_NAME_OPTIONS.map((name) => (
-        <option
-          key={name}
-          value={name}
-        >
-          {name}
-        </option>
-      ))}
-    </select>
-  </div>
-
-
-  {/* MAX MARKS */}
-
-  <div className="w-full sm:w-32">
-    <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
-      Max Marks
-    </label>
-
-    <input
-      type="text"
-      inputMode="numeric"
-      value={test.maxMarks}
-      disabled={!!existingIA}
-      onChange={(e) =>
-        updateTest(
-          index,
-          "maxMarks",
-          cleanNumberInput(e.target.value)
-        )
-      }
-      onFocus={selectOnFocus}
-      placeholder="e.g. 25"
-      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold outline-none focus:border-slate-400 disabled:bg-slate-50"
-    />
-  </div>
-
-
-  {/* REMOVE */}
-
-  {!existingIA && (
-    <button
-      type="button"
-      onClick={() =>
-        removeTest(index)
-      }
-      className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-    >
-      Remove
-    </button>
-  )}
-
+  <span className="text-sm text-slate-500">
+    Total <b className="text-slate-900">{coTotal}</b>
+  </span>
 </div>
 
                         {/* CO MAXIMUM */}
@@ -2897,12 +2665,8 @@ for (const batch of batchesToSave) {
                                   : "text-red-600"
                                 }`}
                             >
-                              {coTotal} /{" "}
-                              {test.maxMarks ||
-                                0}
-
-                              {valid &&
-                                " ✓"}
+                              Total {coTotal}
+                              {valid && " ✓"}
                             </span>
                           </div>
 
@@ -2926,11 +2690,7 @@ for (const batch of batchesToSave) {
                                       co
                                       ] ?? 0
                                     }
-                                    // Max Marks first, then the CO split
-                                    disabled={
-                                      !!existingIA ||
-                                      !(Number(test.maxMarks) > 0)
-                                    }
+                                    disabled={!!existingIA}
                                     onChange={(e) =>
                                       updateTestCO(
                                         index,
@@ -2983,7 +2743,7 @@ for (const batch of batchesToSave) {
 
                                   {valid && (
                                     <p className="mt-2 text-xs font-medium text-emerald-600">
-                                      CO split matches the Max Marks. Marks can now be entered for this test.
+                                      Out of {coTotal}. Marks can now be entered for the students below.
                                     </p>
                                   )}
                                 </>
@@ -2994,19 +2754,6 @@ for (const batch of batchesToSave) {
                     );
                   }
                 )}
-              </div>
-            )}
-
-            {!existingIA && tests.length > 0 && (
-              <div className="mt-3 flex justify-center">
-                <button
-                  type="button"
-                  onClick={addTest}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50"
-                >
-                  <span className="text-base leading-none">+</span>
-                  Add IA Test
-                </button>
               </div>
             )}
 
