@@ -8,9 +8,11 @@ import {
 } from "./letterheadPdf.js";
 import {
   batchLabel,
+  formatCIE,
   formatMarks,
   getIACells,
 } from "./iaSheet.js";
+import { iaLabel } from "./iaLabels.js";
 
 // =====================================================
 // CONSOLIDATED IA SHEET (PDF)
@@ -53,7 +55,7 @@ export const iaSheetFileName = (data) =>
 export function buildIASheetPdf(data, letterhead = {}) {
   const markColumns = data.ias.reduce(
     (count, ia) => count + ia.cos.length + 1,
-    0
+    1 // Final CIE
   );
 
   const landscape = markColumns > 12;
@@ -149,6 +151,13 @@ export function buildIASheetPdf(data, letterhead = {}) {
     column += 1;
   });
 
+  // Final CIE
+  columnStyles[column] = {
+    cellWidth: Math.max(markWidth, 12),
+    fillColor: TOTAL_FILL,
+    fontStyle: "bold",
+  };
+
   autoTable(doc, {
     theme: "grid",
 
@@ -187,9 +196,14 @@ export function buildIASheetPdf(data, letterhead = {}) {
         { content: "Register No.", rowSpan: 2 },
         { content: "Student", rowSpan: 2 },
         ...data.ias.map((ia) => ({
-          content: `IA ${ia.iaNumber}`,
+          content: iaLabel(ia.iaNumber),
           colSpan: ia.cos.length + 1,
         })),
+        {
+          content: `Final CIE
+(${formatMarks(data.cieMax)})`,
+          rowSpan: 2,
+        },
       ],
       data.ias.flatMap((ia) => [
         ...ia.cos.map(
@@ -216,6 +230,14 @@ export function buildIASheetPdf(data, letterhead = {}) {
             : value
         )
       ),
+      student.cie?.final !== null &&
+      student.cie?.final !== undefined &&
+      student.cie.final < data.cieMin
+        ? {
+            content: formatCIE(student.cie.final),
+            styles: { textColor: ABSENT_TEXT },
+          }
+        : formatCIE(student.cie?.final),
     ]),
   });
 
@@ -224,11 +246,14 @@ export function buildIASheetPdf(data, letterhead = {}) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...GREY);
-  doc.text(
-    "Only the COs that carry marks in an IA are shown. Maximum marks in brackets. AB = absent for the IA.  - = no marks entered.",
-    MARGIN,
-    y
+  const note = doc.splitTextToSize(
+    `Only the COs that carry marks are shown. Maximum marks in brackets. AB = absent.  - = no marks entered. Final CIE = average of the IAs and Activity, each scaled to ${formatMarks(data.cieMax)}; an improvement test counts only when higher. Red = below the minimum of ${formatMarks(data.cieMin)}.`,
+    pageWidth - MARGIN * 2
   );
+
+  doc.text(note, MARGIN, y);
+
+  y += (note.length - 1) * 3;
 
   // ---------------------------------------------------
   // SIGNATURES

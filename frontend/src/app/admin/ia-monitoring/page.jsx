@@ -9,6 +9,7 @@ import {
   buildEntryCells,
   sumEntryCells,
 } from "../../utils/entryCounts";
+import { iaLabel } from "../../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -1580,7 +1581,7 @@ subjectList =
                   ? "All Semesters"
                   : getSemesterLabel(semester)}
                 {" • "}
-                IA {iaNumber}
+                {iaLabel(iaNumber)}
               </div>
             )}
           </div>

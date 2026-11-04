@@ -4,6 +4,7 @@ import Subject from "../models/Subject.js";
 import CourseOutcome from "../models/CourseOutcome.js";
 // Registers the Student model, used when filling in student details
 import "../models/Student.js";
+import { ENTRY_IA_NUMBERS } from "../utils/ciTotal.js";
 
 // ==========================================================
 // CO ATTAINMENT FROM IA MARKS
@@ -390,9 +391,12 @@ export const getSubjectAttainment = async (
       });
     }
 
+    // IA1 to IA4 and Activity. An improvement test is a
+    // second attempt by a few students; it is left out.
     const filter = {
       subjectId,
       academicYear,
+      iaNumber: { $in: ENTRY_IA_NUMBERS },
     };
 
     if (iaNumber) {
@@ -528,6 +532,7 @@ export const getSemesterAttainment = async (
         IAMarks.find({
           academicYear,
           subjectId: { $in: subjectIds },
+          iaNumber: { $in: ENTRY_IA_NUMBERS },
         })
           .select(
             "subjectId iaNumber batchNumber tests students"

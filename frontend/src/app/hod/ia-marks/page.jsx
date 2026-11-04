@@ -11,6 +11,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { useAuth, useUser } from "@clerk/nextjs";
+import { iaLabel } from "../../utils/iaLabels";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -517,7 +518,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
         ["Academic Year", academicYear],
         ["Department", departmentName],
         ["Semester", `Semester ${semester}`],
-        ["Internal Assessment", `IA ${selectedIA}`],
+        ["Internal Assessment", iaLabel(selectedIA)],
         ["Subjects", subjectNames],
         ["Subject Codes", subjectCodes],
         ["Generated On", generatedOn],
@@ -635,7 +636,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
       XLSX.utils.sheet_add_aoa(
         worksheet,
         [[
-          `Report: Semester ${semester} | IA ${selectedIA} | ${academicYear}`,
+          `Report: Semester ${semester} | ${iaLabel(selectedIA)} | ${academicYear}`,
         ]],
         {
           origin: `A${
@@ -798,7 +799,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
               <option value="">Select IA</option>
               {availableIANumbers.map((ia) => (
                 <option key={ia} value={ia}>
-                  IA {ia}
+                  {iaLabel(ia)}
                 </option>
               ))}
             </select>
@@ -851,7 +852,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2">
 
         <h2 className="text-sm font-bold text-slate-950">
-          Semester {semester} — IA {selectedIA}
+          Semester {semester} — {iaLabel(selectedIA)}
           <span className="ml-2 text-xs font-normal text-slate-500">
             A dash means marks have not been entered.
           </span>

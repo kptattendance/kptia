@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
+import { iaLabel } from "../../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -808,7 +809,7 @@ export default function StudentAcademicPage() {
                                   className="rounded-lg bg-slate-50 px-2 py-1.5 text-center"
                                 >
                                   <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                                    IA {iaNumber}
+                                    {iaLabel(iaNumber)}
                                   </p>
 
                                   <IAScore {...subject.ias[iaNumber]} />
@@ -835,7 +836,7 @@ export default function StudentAcademicPage() {
                                   key={iaNumber}
                                   className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-400"
                                 >
-                                  IA {iaNumber}
+                                  {iaLabel(iaNumber)}
                                 </th>
                               ))}
 

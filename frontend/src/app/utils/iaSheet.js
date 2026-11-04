@@ -38,3 +38,9 @@ export const getIACells = (student, ia) => {
     formatMarks(Number(entry.total || 0)),
   ];
 };
+
+// Final CIE: 23.4 -> "23.4", null -> "-"
+export const formatCIE = (value) =>
+  value === null || value === undefined
+    ? "-"
+    : formatMarks(Math.round(Number(value) * 10) / 10);

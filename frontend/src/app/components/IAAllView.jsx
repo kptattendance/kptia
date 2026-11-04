@@ -6,7 +6,8 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import { Download } from "lucide-react";
 import { departments } from "../admin/components/EntryStatusGrid";
-import { getIACells } from "../utils/iaSheet";
+import { formatCIE, getIACells } from "../utils/iaSheet";
+import { iaLabel } from "../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -341,7 +342,7 @@ export default function IAAllView() {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
               <p className="text-sm font-semibold text-slate-700">
                 {sheet.subject.code} · {sheet.students.length} students ·{" "}
-                {sheet.ias.length} IA{sheet.ias.length === 1 ? "" : "s"}
+                {sheet.ias.length} assessment{sheet.ias.length === 1 ? "" : "s"}
               </p>
 
               <button
@@ -374,9 +375,19 @@ export default function IAAllView() {
                         colSpan={ia.cos.length + 1}
                         className={`border-b border-r border-white px-3 py-2 text-center text-xs font-bold ${getColour(index).head}`}
                       >
-                        IA {ia.iaNumber}
+                        {iaLabel(ia.iaNumber)}
                       </th>
                     ))}
+
+                    <th
+                      rowSpan={2}
+                      className="border-b border-slate-200 bg-slate-800 px-3 py-2 text-center text-xs font-bold text-white"
+                    >
+                      Final CIE
+                      <span className="block font-normal text-slate-300">
+                        /{sheet.cieMax} · min {sheet.cieMin}
+                      </span>
+                    </th>
                   </tr>
 
                   {/* CO1 | CO2 | Total ... */}
@@ -438,6 +449,23 @@ export default function IAAllView() {
                           );
                         })
                       )}
+
+                      <td
+                        className={`px-3 py-2 text-center font-bold ${
+                          student.cie?.final !== null &&
+                          student.cie?.final !== undefined &&
+                          student.cie.final < sheet.cieMin
+                            ? "bg-red-50 text-red-700"
+                            : "bg-slate-100 text-slate-900"
+                        }`}
+                      >
+                        {formatCIE(student.cie?.final)}
+                        {student.cie?.improvementUsed && (
+                          <span className="block text-[10px] font-semibold text-emerald-700">
+                            Improved IA {student.cie.replacesIA}
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -446,7 +474,7 @@ export default function IAAllView() {
             </div>
 
             <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">
-              Each IA shows only the COs it uses, then its total. AB = absent, - = no marks entered. Scroll sideways on a phone; the student column stays in place.
+              Each IA shows only the COs it uses, then its total. Final CIE = average of the IAs and Activity entered, each scaled to {sheet.cieMax}; an improvement test counts only when higher. Red = below the minimum. AB = absent, - = no marks entered. Scroll sideways on a phone; the student column stays in place.
             </p>
 
           </div>

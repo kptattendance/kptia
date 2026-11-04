@@ -14,6 +14,7 @@ import {
   getMonthLabel,
   monthPercentage,
 } from "./progressReportPdf";
+import { iaLabel } from "../../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -350,6 +351,14 @@ export default function StudentProgressReportPage() {
                         </td>
                       );
                     })}
+
+                    <td className={`${cellClass} font-bold`}>
+                      {row.iaTotal?.maxMarks
+                        ? `${formatMarks(
+                            Math.round(row.iaTotal.marks * 10) / 10
+                          )} / ${formatMarks(row.iaTotal.maxMarks)}`
+                        : "-"}
+                    </td>
                   </tr>
                 ))}
 
@@ -396,9 +405,13 @@ export default function StudentProgressReportPage() {
                       key={iaNumber}
                       className={headClass}
                     >
-                      IA {iaNumber}
+                      {iaLabel(iaNumber)}
                     </th>
                   ))}
+
+                  <th className={headClass}>
+                    Final CIE
+                  </th>
                 </tr>
               </thead>
 

@@ -25,6 +25,7 @@ import {
   getElectivesNotTaken,
   sumEntryCells,
 } from "../../utils/entryCounts";
+import { ENTRY_IA_NUMBERS, iaLabel } from "../../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -37,10 +38,8 @@ const CO_NAMES = [
   "CO6",
 ];
 
-const iaNumbers = Array.from(
-  { length: 10 },
-  (_, index) => index + 1
-);
+// IA1 to IA4 and Activity
+const iaNumbers = ENTRY_IA_NUMBERS;
 
 const terms = {
   odd: [1, 3, 5],
@@ -264,7 +263,7 @@ export default function AdminIAMarksPage() {
 
     showSubjectStatusAlert({
       title: `${getDepartmentLabel(department)} · Semester ${semester}`,
-      subtitle: `IA ${iaNumber}, ${academicYear}`,
+      subtitle: `${iaLabel(iaNumber)}, ${academicYear}`,
       detailsText: "Show details",
       rows: cellSubjects.map((subject) => ({
         code: subject.code,
@@ -505,7 +504,7 @@ export default function AdminIAMarksPage() {
         <div style="font-size:14px;line-height:1.8;color:#6f6c52">
           <strong style="color:#283618">${escapeHtml(detailTitle)}</strong>
           <br>
-          IA ${escapeHtml(detail.iaNumber)} · ${escapeHtml(detail.academicYear)}
+          ${escapeHtml(iaLabel(detail.iaNumber))} · ${escapeHtml(detail.academicYear)}
           · ${escapeHtml(detail.students.length)} students
           <br><br>
           The whole record will be removed and the faculty can enter it again.
@@ -709,7 +708,7 @@ export default function AdminIAMarksPage() {
             >
               {iaNumbers.map((item) => (
                 <option key={item} value={item}>
-                  IA {item}
+                  {iaLabel(item)}
                 </option>
               ))}
             </select>
@@ -751,11 +750,11 @@ export default function AdminIAMarksPage() {
           <p className="text-sm font-semibold text-slate-700">
             {loading
               ? "Loading IA status..."
-              : `IA ${iaNumber}, ${academicYear}: ${summary.entered} of ${summary.total} subject-batches entered`}
+              : `${iaLabel(iaNumber)}, ${academicYear}: ${summary.entered} of ${summary.total} subject-batches entered`}
           </p>
 
           <EntryStatusDownload
-            title={`IA ${iaNumber} ENTRY STATUS`}
+            title={`${iaLabel(iaNumber).toUpperCase()} ENTRY STATUS`}
             subtitle={`Academic Year ${academicYear}  |  ${
               term === "odd" ? "Odd" : "Even"
             } semesters`}
@@ -796,7 +795,7 @@ export default function AdminIAMarksPage() {
             </h2>
 
             <p className="mt-0.5 text-xs text-slate-500">
-              IA {iaNumber}, {academicYear}. Bridge courses are taught only to Batch 2 and count as one subject-batch. Electives of one group count as one subject, the one that has marks entered.
+              {iaLabel(iaNumber)}, {academicYear}. Bridge courses are taught only to Batch 2 and count as one subject-batch. Electives of one group count as one subject, the one that has marks entered.
             </p>
           </div>
 
@@ -874,7 +873,7 @@ export default function AdminIAMarksPage() {
               </h2>
 
               <p className="mt-0.5 text-xs text-slate-500">
-                IA {iaNumber}, {academicYear}
+                {iaLabel(iaNumber)}, {academicYear}
                 {detail
                   ? ` · Maximum ${detail.totalMaxMarks} marks`
                   : ""}

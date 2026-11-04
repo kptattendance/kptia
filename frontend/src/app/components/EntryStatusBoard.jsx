@@ -7,6 +7,7 @@ import Swal from "sweetalert2";
 import { Download } from "lucide-react";
 import EntryStatusSection from "./EntryStatusSection";
 import { isBridge } from "../utils/entryCounts";
+import { ENTRY_IA_NUMBERS, iaLabel } from "../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -149,12 +150,15 @@ export default function EntryStatusBoard({
           Object.keys(byIA).map(Number)
         )
       ),
-    ].sort((a, b) => a - b);
+    ]
+      // The improvement test is only for some students
+      .filter((number) => ENTRY_IA_NUMBERS.includes(number))
+      .sort((a, b) => a - b);
 
     const result = (iaNumbers.length > 0 ? iaNumbers : [1]).map(
       (iaNumber) => ({
         key: `ia-${iaNumber}`,
-        title: `IA ${iaNumber}`,
+        title: iaLabel(iaNumber),
         subjects: withEntries(
           data.subjects,
           (subjectId) => data.ia[subjectId]?.[iaNumber]

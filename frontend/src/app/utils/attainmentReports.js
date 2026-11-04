@@ -6,6 +6,7 @@ import {
   LETTERHEAD_FOOTER_HEIGHT,
   LETTERHEAD_MARGIN,
 } from "./letterheadPdf.js";
+import { iaLabel as labelOfIA } from "./iaLabels.js";
 
 // =====================================================
 // CO ATTAINMENT REPORTS (PDF + Excel)
@@ -82,9 +83,9 @@ const formatPercent = (value) =>
 
 const iaLabel = (data) =>
   data.iaNumber
-    ? `IA ${data.iaNumber}`
+    ? labelOfIA(data.iaNumber)
     : `All IAs (${
-        data.iaNumbers.map((n) => `IA ${n}`).join(", ") ||
+        data.iaNumbers.map(labelOfIA).join(", ") ||
         "none"
       })`;
 
@@ -101,7 +102,7 @@ const columnGroups = (columns) => {
   const groups = [];
 
   columns.forEach((column) => {
-    const label = `${column.testName} (IA ${column.iaNumber})`;
+    const label = `${column.testName} (${labelOfIA(column.iaNumber)})`;
     const last = groups[groups.length - 1];
 
     if (last && last.label === label) {
@@ -545,7 +546,7 @@ export function buildSemesterAttainmentPdf(
       }`,
       row.subject.name,
       row.iaNumbers.length > 0
-        ? row.iaNumbers.map((n) => `IA ${n}`).join(", ")
+        ? row.iaNumbers.map(labelOfIA).join(", ")
         : "None",
       row.students || "-",
       ...CO_NAMES.map((co) =>
@@ -918,7 +919,7 @@ export const exportSemesterAttainmentExcel = (
       {
         v:
           row.iaNumbers.length > 0
-            ? row.iaNumbers.map((n) => `IA ${n}`).join(", ")
+            ? row.iaNumbers.map(labelOfIA).join(", ")
             : "None",
         s: plain,
       },

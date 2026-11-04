@@ -5,6 +5,7 @@ import IAMarks from "../models/IAMarks.js";
 import StudyMaterial from "../models/StudyMaterial.js";
 import Subject from "../models/Subject.js";
 import { getAllocationError } from "./courseAllocationController.js";
+import { CIE_MAX, computeCIE } from "../utils/ciTotal.js";
 
 // ==========================================================
 // MY ENTRIES (faculty and HOD)
@@ -287,7 +288,7 @@ export const getMyIASheet = async (req, res) => {
     }
 
     const subject = await Subject.findById(subjectId)
-      .select("code name semester department subjectCategory")
+      .select("code name semester department subjectCategory iaMax iaMin")
       .lean();
 
     if (!subject) {
@@ -467,6 +468,29 @@ export const getMyIASheet = async (req, res) => {
       });
     });
 
+    // ------------------------------------------------------
+    // FINAL CIE: average of IA1 to IA4 and Activity, each
+    // scaled to the subject maximum, with the improvement
+    // test when it is higher (utils/ciTotal.js).
+    // ------------------------------------------------------
+
+    const cieMax = Number(subject.iaMax) || CIE_MAX;
+    const cieMin = Number(subject.iaMin) || cieMax * 0.4;
+    const cieByStudent = computeCIE(records, cieMax);
+
+    studentMap.forEach((student, key) => {
+      const cie = cieByStudent.get(key);
+
+      student.cie = cie
+        ? {
+            final: cie.final,
+            finalBeforeImprovement: cie.finalBeforeImprovement,
+            replacesIA: cie.improvement?.replacesIA || null,
+            improvementUsed: Boolean(cie.improvement?.used),
+          }
+        : null;
+    });
+
     const students = [...studentMap.values()].sort(
       (a, b) => {
         const rollA = Number(a.rollNumber);
@@ -502,6 +526,8 @@ export const getMyIASheet = async (req, res) => {
         },
         academicYear,
         batchNumbers,
+        cieMax,
+        cieMin,
         ias,
         students,
       },

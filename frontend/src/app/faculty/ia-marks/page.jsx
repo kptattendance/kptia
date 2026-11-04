@@ -6,6 +6,8 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import AttainmentDownloads from "../../components/AttainmentDownloads";
 import IAAllView from "../../components/IAAllView";
+import ImprovementTest from "../../components/ImprovementTest";
+import { ENTRY_IA_NUMBERS, iaLabel } from "../../utils/iaLabels";
 import {
   cleanNumberInput,
   handleGridKeyDown,
@@ -2276,12 +2278,11 @@ for (const batch of batchesToSave) {
   // IA NUMBERS
   // ==================================================
 
-  // IA number is independent of the Subject.
-  // Faculty can conduct as many IAs as required.
-  const iaNumbers = Array.from(
-    { length: 10 },
-    (_, index) => index + 1
-  );
+  // IA1 to IA4 and Activity (CIE-5). The improvement
+  // test has its own panel below the selection.
+  const iaNumbers = ENTRY_IA_NUMBERS;
+
+  const isImprovement = iaNumber === "improvement";
 
     // ==================================================
   // MOUSE DRAG HORIZONTAL SCROLL
@@ -2539,7 +2540,9 @@ for (const batch of batchesToSave) {
                 onChange={(e) => {
                   setIaNumber(e.target.value);
                   setBatchNumber(
-                    isBridgeSubject && e.target.value
+                    isBridgeSubject &&
+                      e.target.value &&
+                      e.target.value !== "improvement"
                       ? "2"
                       : ""
                   );
@@ -2556,14 +2559,19 @@ for (const batch of batchesToSave) {
 
                 {iaNumbers.map((number) => (
                   <option key={number} value={number}>
-                    IA {number}
+                    {iaLabel(number)}
                   </option>
                 ))}
+
+                <option value="improvement">
+                  Improvement Test
+                </option>
               </select>
             </div>
 
             {/* STUDENT BATCH */}
 
+            {!isImprovement && (
             <div>
               <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
                 Student Batch
@@ -2594,8 +2602,11 @@ for (const batch of batchesToSave) {
               </select>
             </div>
 
+            )}
+
             {/* LOAD BATCH */}
 
+            {!isImprovement && (
             <div className="flex items-end">
               <button
                 type="button"
@@ -2616,6 +2627,7 @@ for (const batch of batchesToSave) {
                     : "Load Students"}
               </button>
             </div>
+            )}
 
           </div>
 
@@ -2636,6 +2648,17 @@ for (const batch of batchesToSave) {
           )}
         </div>
 
+
+        {isImprovement && (
+          <ImprovementTest
+            academicYear={academicYear}
+            subject={subjects.find(
+              (subject) =>
+                String(subject._id) === String(subjectId)
+            )}
+            isBridge={isBridgeSubject}
+          />
+        )}
 
         {/* ================================================= */}
         {/* EXISTING IA NOTICE */}
@@ -2659,7 +2682,7 @@ for (const batch of batchesToSave) {
           <div className="mt-4 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-bold text-amber-800">
-                IA {existingIA.iaNumber} is already frozen
+                {iaLabel(existingIA.iaNumber)} is already frozen
               </p>
 
               <p className="text-xs text-amber-700">

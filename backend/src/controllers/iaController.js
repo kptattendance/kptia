@@ -4,6 +4,10 @@ import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
 import DeletedRecord from "../models/DeletedRecord.js";
 import { getAllocationError } from "./courseAllocationController.js";
+import {
+  ENTRY_IA_NUMBERS,
+  iaLabel,
+} from "../utils/ciTotal.js";
 
 // --------------------------------------------------
 // CONSTANTS
@@ -65,7 +69,7 @@ const getCOTotal = (coMarks = {}) => {
 // VALIDATE IA TEST CONFIGURATION
 // --------------------------------------------------
 
-const validateTests = (tests) => {
+export const validateTests = (tests) => {
   if (!Array.isArray(tests) || tests.length === 0) {
     return {
       valid: false,
@@ -144,7 +148,7 @@ const validateTests = (tests) => {
 // VALIDATE STUDENT IA MARKS
 // ==================================================
 
-const validateStudents = async (
+export const validateStudents = async (
   students,
   tests,
   department,
@@ -672,16 +676,17 @@ export const saveIAMarks = async (
     const iaNumberValue =
       Number(iaNumber);
 
+    // IA1 to IA4 and Activity (5). Improvement tests
+    // are saved from their own page.
     if (
-      !Number.isInteger(
+      !ENTRY_IA_NUMBERS.includes(
         iaNumberValue
-      ) ||
-      iaNumberValue < 1
+      )
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Invalid IA number.",
+          "Only IA 1 to IA 4 and Activity can be entered.",
       });
     }
 
@@ -817,7 +822,7 @@ export const saveIAMarks = async (
       return res.status(409).json({
         success: false,
         message:
-          `IA ${iaNumberValue} for Batch ${batchNumberValue} has already been saved and frozen.`,
+          `${iaLabel(iaNumberValue)} for Batch ${batchNumberValue} has already been saved and frozen.`,
         data: existing,
       });
     }
@@ -905,14 +910,14 @@ const studentValidation =
         return res.status(409).json({
           success: false,
           message:
-            `IA ${iaNumberValue} for Batch ${batchNumberValue} has already been saved and frozen.`,
+            `${iaLabel(iaNumberValue)} for Batch ${batchNumberValue} has already been saved and frozen.`,
         });
       }
 
       return res.status(200).json({
         success: true,
         message:
-          `IA ${iaNumberValue} Batch ${batchNumberValue} corrected and frozen successfully.`,
+          `${iaLabel(iaNumberValue)} Batch ${batchNumberValue} corrected and frozen successfully.`,
         data: corrected,
       });
     }
@@ -961,7 +966,7 @@ const studentValidation =
       success: true,
 
       message:
-        `IA ${iaNumberValue} Batch ${batchNumberValue} saved and frozen successfully.`,
+        `${iaLabel(iaNumberValue)} Batch ${batchNumberValue} saved and frozen successfully.`,
 
       data:
         iaMarks,
@@ -1079,7 +1084,7 @@ export const unlockIAMarks = async (
     return res.status(200).json({
       success: true,
       message:
-        `IA ${iaMarks.iaNumber} Batch ${iaMarks.batchNumber} unlocked. The faculty can now correct and save it again.`,
+        `${iaLabel(iaMarks.iaNumber)} Batch ${iaMarks.batchNumber} unlocked. The faculty can now correct and save it again.`,
       data: iaMarks,
     });
   } catch (error) {

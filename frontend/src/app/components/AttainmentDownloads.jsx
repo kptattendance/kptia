@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
 import { FileSpreadsheet, FileText } from "lucide-react";
+import { iaLabel } from "../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -161,7 +162,7 @@ export default function AttainmentDownloads({
           aria-label="Which IA"
           className="min-h-[40px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-500"
         >
-          <option value="ia">IA {iaNumber}</option>
+          <option value="ia">{iaLabel(iaNumber)}</option>
           <option value="all">All IAs</option>
         </select>
       )}

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import AttainmentDownloads from "../../../components/AttainmentDownloads";
+import { iaLabel } from "../../../utils/iaLabels";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -180,7 +181,7 @@ const handleIAChange = (value) => {
     const confirmation = await Swal.fire({
       icon: "question",
       title: "Unlock IA Marks?",
-      text: `IA ${record.iaNumber} · Batch ${record.batchNumber}. The faculty will be able to correct these marks and save them again.`,
+      text: `${iaLabel(record.iaNumber)} · Batch ${record.batchNumber}. The faculty will be able to correct these marks and save them again.`,
       showCancelButton: true,
       confirmButtonText: "Unlock",
       cancelButtonText: "Cancel",
@@ -349,7 +350,7 @@ const downloadExcelReport = async () => {
       ["Subject", subjectName],
       ["Subject Code", subjectCode],
       ["Semester", `Semester ${semester}`],
-      ["Internal Assessment", `IA ${selectedIA}`],
+      ["Internal Assessment", iaLabel(selectedIA)],
       ["Generated On", generatedOn],
       [],
     ];
@@ -459,7 +460,7 @@ const downloadExcelReport = async () => {
       worksheet,
       [
         [
-          `Report: ${subjectName} | Semester ${semester} | IA ${selectedIA} | ${academicYear}`,
+          `Report: ${subjectName} | Semester ${semester} | ${iaLabel(selectedIA)} | ${academicYear}`,
         ],
       ],
       {
@@ -477,7 +478,7 @@ const downloadExcelReport = async () => {
     XLSX.utils.book_append_sheet(
       workbook,
       worksheet,
-      `IA ${selectedIA}`
+      iaLabel(selectedIA)
     );
 
     // =====================================================
@@ -736,7 +737,7 @@ const downloadExcelReport = async () => {
                       key={ia}
                       value={ia}
                     >
-                      IA {ia}
+                      {iaLabel(ia)}
                     </option>
                   )
                 )}
@@ -795,7 +796,7 @@ const downloadExcelReport = async () => {
 
                   <div>
                     <h2 className="text-base font-semibold text-slate-900">
-                      IA {selectedIA} — CO Distribution
+                      {iaLabel(selectedIA)} — CO Distribution
                     </h2>
 
                     <p className="text-xs text-slate-500">
@@ -1176,7 +1177,7 @@ const downloadExcelReport = async () => {
 
               <p className="mt-1 text-sm text-slate-400">
                 No marks are available for
-                IA {selectedIA}.
+                {iaLabel(selectedIA)}.
               </p>
 
             </div>

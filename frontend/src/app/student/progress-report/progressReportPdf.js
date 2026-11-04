@@ -6,6 +6,7 @@ import {
   drawLetterheadHeader,
   LETTERHEAD_FOOTER_HEIGHT,
 } from "../../utils/letterheadPdf.js";
+import { iaLabel } from "../../utils/iaLabels.js";
 
 // =====================================================
 // PROGRESS REPORT PDF
@@ -295,9 +296,7 @@ export function buildProgressReportPdf(
     : ["Not entered yet"];
 
   const iaHead = hasIA
-    ? report.iaNumbers.map(
-        (iaNumber) => `IA ${iaNumber}`
-      )
+    ? [...report.iaNumbers.map(iaLabel), "Final CIE"]
     : ["Not entered yet"];
 
   const monthCount = hasAttendance
@@ -322,7 +321,7 @@ export function buildProgressReportPdf(
 
   const iaCells = (row) =>
     hasIA
-      ? report.iaNumbers.map((iaNumber) => {
+      ? [...report.iaNumbers.map((iaNumber) => {
           const value = row.ia[iaNumber];
 
           if (!value) {
@@ -334,7 +333,12 @@ export function buildProgressReportPdf(
             : `${formatMarks(
                 value.marks
               )} / ${formatMarks(value.maxMarks)}`;
-        })
+        }),
+        row.iaTotal?.maxMarks
+          ? `${formatMarks(
+              Math.round(row.iaTotal.marks * 10) / 10
+            )} / ${formatMarks(row.iaTotal.maxMarks)}`
+          : "-"]
       : ["-"];
 
   autoTable(doc, {

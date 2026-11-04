@@ -2,6 +2,7 @@ import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
 import Attendance from "../models/Attendance.js";
 import IAMarks from "../models/IAMarks.js";
+import { CIE_MAX, computeCIE } from "../utils/ciTotal.js";
 import { getAcademicYearForMonth } from "./courseAllocationController.js";
 import { getMentorName } from "./mentorController.js";
 
@@ -138,7 +139,7 @@ export const getMyProgressReport = async (
       await Promise.all([
         Subject.find(subjectFilter)
           .select(
-            "code name subjectCategory sequence"
+            "code name subjectCategory sequence iaMax"
           )
           .sort({ sequence: 1 })
           .lean(),
@@ -184,6 +185,7 @@ export const getMyProgressReport = async (
           {
             subjectId: 1,
             iaNumber: 1,
+            batchNumber: 1,
             totalMaxMarks: 1,
             students: {
               $elemMatch: {
@@ -360,16 +362,26 @@ export const getMyProgressReport = async (
       const iaOfSubject =
         iaBySubject.get(subjectKey) || new Map();
 
-      let iaMarks = 0;
-      let iaMaxMarks = 0;
-
       const ia = {};
 
       for (const [iaNumber, value] of iaOfSubject) {
         ia[iaNumber] = value;
-        iaMarks += value.marks;
-        iaMaxMarks += value.maxMarks;
       }
+
+      // IA total = final CIE: average of IA1 to IA4 and
+      // Activity, each scaled to the subject maximum,
+      // with the improvement test when higher.
+      const cieMax = Number(subject.iaMax) || CIE_MAX;
+
+      const cie = computeCIE(
+        iaRecords.filter(
+          (record) => String(record.subjectId) === subjectKey
+        ),
+        cieMax
+      ).get(String(student._id));
+
+      const iaMarks = cie?.final ?? 0;
+      const iaMaxMarks = cie ? cieMax : 0;
 
       return {
         subject: {

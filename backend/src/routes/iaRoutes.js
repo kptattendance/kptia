@@ -12,6 +12,10 @@ import {
   getStudentIAMarks,
   getAdminIAStatus,
 } from "../controllers/iaController.js";
+import {
+  getImprovement,
+  saveImprovement,
+} from "../controllers/improvementController.js";
 
 import {
   authenticateUser,
@@ -55,6 +59,21 @@ router.post(
 router.get(
   "/",
   getIAMarks
+);
+
+// --------------------------------------------------
+// IMPROVEMENT TEST
+// Staff (allocated) / HOD (own department) / Admin
+// --------------------------------------------------
+
+router.get(
+  "/improvement",
+  getImprovement
+);
+
+router.post(
+  "/improvement",
+  saveImprovement
 );
 
 router.get(
