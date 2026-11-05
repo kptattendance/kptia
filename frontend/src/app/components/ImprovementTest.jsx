@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useImperativeHandle, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
@@ -60,14 +60,22 @@ const newCIE = (batchData, student, entry) => {
       : current;
   });
 
-  return parts.reduce((sum, value) => sum + value, 0) / parts.length;
+  // Rounded up to a whole number, as the final CIE
+  return Math.ceil(
+    Math.round(
+      (parts.reduce((sum, value) => sum + value, 0) / parts.length) * 100
+    ) / 100
+  );
 };
 
 // =====================================================
 // IMPROVEMENT TEST
 //
 // Shown on the faculty IA page when "Improvement Test"
-// is chosen. A table of the students whose final CIE is
+// is chosen. The page's Load Students button calls
+// ref.load() for its batch (batchChoice "1", "2" or
+// "both"); the page gives it a new key when the
+// selection changes, which clears it. A table of the students whose final CIE is
 // below the subject minimum, for one batch or both. Each
 // takes one improvement test that replaces one of IA1
 // to IA4 (their absent IA, else their lowest), with that
@@ -77,13 +85,10 @@ const newCIE = (batchData, student, entry) => {
 export default function ImprovementTest({
   academicYear,
   subject,
-  isBridge,
+  batchChoice,
+  ref,
 }) {
   const { getToken } = useAuth();
-
-  const [batchChoice, setBatchChoice] = useState(
-    isBridge ? "2" : ""
-  );
 
   // { 1: data, 2: data } for the loaded batches
   const [batches, setBatches] = useState(null);
@@ -172,6 +177,9 @@ export default function ImprovementTest({
       setLoading(false);
     }
   };
+
+  // Load Students on the page
+  useImperativeHandle(ref, () => ({ load }));
 
   // Rows: students below the minimum or already saved,
   // with their batch's data
@@ -420,35 +428,8 @@ export default function ImprovementTest({
             Improvement Test
           </h2>
           <p className="mt-0.5 text-xs text-slate-500">
-            Students below the CIE minimum. One test per student; it replaces the chosen IA only if the new mark is higher.
+            Choose the batch above and click Load Students. Students below the CIE minimum are listed; one test per student, and it replaces the chosen IA only if the new mark is higher.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <select
-            value={batchChoice}
-            onChange={(e) => {
-              setBatchChoice(e.target.value);
-              setBatches(null);
-              setEntries({});
-            }}
-            aria-label="Batch"
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-slate-400"
-          >
-            <option value="">Select Batch</option>
-            {!isBridge && <option value="1">Batch 1</option>}
-            <option value="2">Batch 2</option>
-            {!isBridge && <option value="both">Both Batches</option>}
-          </select>
-
-          <button
-            type="button"
-            onClick={load}
-            disabled={!batchChoice || loading}
-            className="h-9 rounded-lg bg-[#283618] px-4 text-sm font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {loading ? "Loading..." : "Load Students"}
-          </button>
         </div>
       </div>
 
@@ -467,6 +448,17 @@ export default function ImprovementTest({
                 Batch {lockedBatches.join(" & ")} saved and frozen. Ask the HOD to unlock for a correction.
               </span>
             )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pt-2 text-xs text-slate-600">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3.5 w-5 rounded-sm bg-amber-300 ring-2 ring-inset ring-amber-500" />
+              IA that the improvement test replaces
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-3.5 w-5 rounded-sm border-2 border-amber-400 bg-amber-50" />
+              Enter the improvement marks here, CO-wise
+            </span>
           </div>
 
           {partNumbers.length === 0 ? (
@@ -493,7 +485,7 @@ export default function ImprovementTest({
                       <th className={`${thClass} text-center`}>CIE</th>
                       <th className={`${thClass} text-center`}>Takes</th>
                       <th className={`${thClass} text-center`}>Replaces</th>
-                      <th className={`${thClass} text-left`}>Improvement Marks</th>
+                      <th className={`${thClass} text-left`}>Enter Improvement Marks</th>
                       <th className={`${thClass} text-center`}>Total</th>
                       <th className={`${thClass} text-center`}>New CIE</th>
                     </tr>
@@ -555,14 +547,23 @@ export default function ImprovementTest({
                               <td
                                 key={number}
                                 className={`px-2 py-2 text-center text-xs ${
-                                  part?.absent ? "font-bold text-red-600" : "text-slate-700"
-                                } ${takes && entry.replacesIA === number ? "bg-amber-50 font-bold" : ""}`}
+                                  takes && entry.replacesIA === number
+                                    ? "bg-amber-300 font-bold text-amber-950 ring-2 ring-inset ring-amber-500"
+                                    : part?.absent
+                                    ? "font-bold text-red-600"
+                                    : "text-slate-700"
+                                }`}
                               >
                                 {!batchData.partNumbers.includes(number)
                                   ? "—"
                                   : part?.absent
                                   ? "AB"
                                   : formatScore(part?.scaled ?? 0)}
+                                {takes && entry.replacesIA === number && (
+                                  <span className="block text-[9px] font-bold uppercase tracking-wide">
+                                    Replace
+                                  </span>
+                                )}
                               </td>
                             );
                           })}
@@ -588,6 +589,7 @@ export default function ImprovementTest({
                             {takes ? (
                               <select
                                 value={entry.replacesIA}
+                                title="IA that this improvement test replaces"
                                 disabled={readOnly}
                                 onChange={(e) =>
                                   setReplacesIA(
@@ -596,7 +598,7 @@ export default function ImprovementTest({
                                     Number(e.target.value)
                                   )
                                 }
-                                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-sm"
+                                className="h-8 rounded-md border-2 border-amber-500 bg-amber-100 px-2 text-sm font-bold text-amber-950"
                               >
                                 {testNumbers.map((number) => (
                                   <option key={number} value={number}>
@@ -629,6 +631,7 @@ export default function ImprovementTest({
                                         step="0.5"
                                         value={entry.tests[testIndex]?.coMarks?.[co] ?? ""}
                                         disabled={readOnly || absent}
+                                        placeholder={`0-${test.coMarks[co]}`}
                                         onChange={(e) =>
                                           setCOMark(
                                             student.studentId,
@@ -637,7 +640,11 @@ export default function ImprovementTest({
                                             e.target.value
                                           )
                                         }
-                                        className="mt-0.5 h-8 w-14 rounded-md border border-slate-200 bg-white px-1 text-center text-sm disabled:bg-slate-100"
+                                        className={`mt-0.5 h-8 w-16 rounded-md px-1 text-center text-sm font-semibold placeholder:font-normal placeholder:text-amber-400 disabled:border-slate-200 disabled:bg-slate-100 ${
+                                          (entry.tests[testIndex]?.coMarks?.[co] ?? "") === ""
+                                            ? "border-2 border-amber-400 bg-amber-50"
+                                            : "border border-emerald-300 bg-white"
+                                        }`}
                                       />
                                     </label>
                                   ))
@@ -688,7 +695,7 @@ export default function ImprovementTest({
 
               <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-slate-500">
-                  Scores are out of {formatScore(firstBatch.cieMax)}. The highlighted cell is the IA being replaced. New CIE is green when the student reaches the minimum. Click a photo to see it large.
+                  Scores are out of {formatScore(firstBatch.cieMax)}. The yellow cell is the IA being replaced; the yellow boxes still need marks. Final CIE is rounded up to a whole number. New CIE is green when the student reaches the minimum. Click a photo to see it large.
                 </p>
 
                 {canSave && (

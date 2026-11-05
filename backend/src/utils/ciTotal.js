@@ -16,6 +16,8 @@
 //   the student's batch, so a subject with 4 parts and
 //   one with 5 are both handled.
 // - Absent (or not on the list of an entered part) = 0.
+// - The final CIE is rounded up to a whole number
+//   (8.1 -> 9).
 // - One improvement test per student. It replaces the
 //   chosen IA only when its mark is higher; the old mark
 //   is kept.
@@ -163,11 +165,15 @@ export const computeCIE = (records, cieMax = CIE_MAX) => {
 
       const scaledOf = (number) => parts[number]?.scaled || 0;
 
+      // Rounded up to a whole number; rounding to 2
+      // decimals first keeps 26.0000001 at 26.
       const average = (values) =>
         values.length > 0
-          ? round2(
-              values.reduce((sum, value) => sum + value, 0) /
-                values.length
+          ? Math.ceil(
+              round2(
+                values.reduce((sum, value) => sum + value, 0) /
+                  values.length
+              )
             )
           : null;
 

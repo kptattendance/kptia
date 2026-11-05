@@ -2195,6 +2195,10 @@ for (const batch of batchesToSave) {
 
   const isImprovement = iaNumber === "improvement";
 
+  // Load Students on the Improvement Test loads the
+  // improvement table.
+  const improvementRef = useRef(null);
+
     // ==================================================
   // MOUSE DRAG HORIZONTAL SCROLL
   // ==================================================
@@ -2451,9 +2455,7 @@ for (const batch of batchesToSave) {
                 onChange={(e) => {
                   setIaNumber(e.target.value);
                   setBatchNumber(
-                    isBridgeSubject &&
-                      e.target.value &&
-                      e.target.value !== "improvement"
+                    isBridgeSubject && e.target.value
                       ? "2"
                       : ""
                   );
@@ -2482,7 +2484,6 @@ for (const batch of batchesToSave) {
 
             {/* STUDENT BATCH */}
 
-            {!isImprovement && (
             <div>
               <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-slate-500">
                 Student Batch
@@ -2513,15 +2514,16 @@ for (const batch of batchesToSave) {
               </select>
             </div>
 
-            )}
-
             {/* LOAD BATCH */}
 
-            {!isImprovement && (
             <div className="flex items-end">
               <button
                 type="button"
-                onClick={loadBatch}
+                onClick={
+                  isImprovement
+                    ? () => improvementRef.current?.load()
+                    : loadBatch
+                }
                 disabled={
                   !subjectId ||
                   !iaNumber ||
@@ -2538,7 +2540,6 @@ for (const batch of batchesToSave) {
                     : "Load Students"}
               </button>
             </div>
-            )}
 
           </div>
 
@@ -2562,12 +2563,14 @@ for (const batch of batchesToSave) {
 
         {isImprovement && (
           <ImprovementTest
+            key={`${academicYear}-${subjectId}-${batchNumber}`}
+            ref={improvementRef}
             academicYear={academicYear}
             subject={subjects.find(
               (subject) =>
                 String(subject._id) === String(subjectId)
             )}
-            isBridge={isBridgeSubject}
+            batchChoice={batchNumber}
           />
         )}
 
