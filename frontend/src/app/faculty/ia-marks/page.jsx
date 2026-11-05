@@ -8,6 +8,7 @@ import AttainmentDownloads from "../../components/AttainmentDownloads";
 import IAAllView from "../../components/IAAllView";
 import ImprovementTest from "../../components/ImprovementTest";
 import { ENTRY_IA_NUMBERS, iaLabel } from "../../utils/iaLabels";
+import { escapeHtml } from "../../utils/escapeHtml";
 import {
   cleanNumberInput,
   handleGridKeyDown,
@@ -1785,6 +1786,41 @@ const handleSave = async () => {
     // ----------------------------------------------
 
     if (!validateStudentMarks()) {
+      return;
+    }
+
+    // ----------------------------------------------
+    // CONFIRM: saving freezes the marks
+    // ----------------------------------------------
+
+    const absentCount = students.filter((student) =>
+      tests.every(
+        (_, testIndex) =>
+          getStudentTest(student._id, testIndex).status ===
+          "ABSENT"
+      )
+    ).length;
+
+    const confirmation = await Swal.fire({
+      icon: "warning",
+      title: "Save and Freeze?",
+      html: `${escapeHtml(iaLabel(iaNumber))} · ${
+        batchNumber === "both"
+          ? "Batch 1 &amp; Batch 2"
+          : `Batch ${escapeHtml(batchNumber)}`
+      }<br/>${students.length} students${
+        absentCount > 0 ? `, ${absentCount} absent` : ""
+      }, out of ${totalIAMarks}.<br/><br/>Once frozen, the marks cannot be changed. Only the HOD can unlock them for a correction.`,
+      showCancelButton: true,
+      confirmButtonText: "Yes, Save & Freeze",
+      cancelButtonText: "Check Again",
+      confirmButtonColor: "#283618",
+      cancelButtonColor: "#9a9474",
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!confirmation.isConfirmed) {
       return;
     }
 
