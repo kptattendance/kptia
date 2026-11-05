@@ -344,7 +344,7 @@ export const getMyIASheet = async (req, res) => {
     })
       .populate(
         "students.studentId",
-        "registerNumber rollNumber name batchNumber"
+        "registerNumber rollNumber name batchNumber imageUrl"
       )
       .sort({ iaNumber: 1, batchNumber: 1 })
       .lean();
@@ -435,6 +435,7 @@ export const getMyIASheet = async (req, res) => {
             registerNumber: student.registerNumber || "",
             rollNumber: student.rollNumber || "",
             name: student.name || "",
+            imageUrl: student.imageUrl || "",
             batchNumber: Number(
               student.batchNumber || record.batchNumber
             ),

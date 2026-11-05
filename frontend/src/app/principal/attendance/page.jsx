@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
+import StudentPhoto from "../../components/StudentPhoto";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -728,7 +729,13 @@ export default function PrincipalAttendancePage() {
                             </td>
 
                             <td className="px-6 py-4">
-                              <p className="text-sm font-semibold text-slate-800">
+                              <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                <StudentPhoto
+                                  size="sm"
+                                  imageUrl={student?.imageUrl}
+                                  name={student?.name}
+                                  registerNumber={student?.registerNumber}
+                                />
                                 {student.name ||
                                   "—"}
                               </p>

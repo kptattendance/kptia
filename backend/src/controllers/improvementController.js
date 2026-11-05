@@ -162,7 +162,7 @@ export const getImprovement = async (req, res) => {
     const studentDocs = await Student.find({
       _id: { $in: [...before.keys()] },
     })
-      .select("_id name registerNumber rollNumber")
+      .select("_id name registerNumber rollNumber imageUrl")
       .lean();
 
     const students = studentDocs
@@ -175,6 +175,8 @@ export const getImprovement = async (req, res) => {
           name: student.name,
           registerNumber: student.registerNumber,
           rollNumber: student.rollNumber,
+          imageUrl: student.imageUrl || "",
+          batchNumber: batch,
           parts: cie.parts,
           finalBeforeImprovement: cie.finalBeforeImprovement,
           final: after.get(id)?.final ?? cie.final,

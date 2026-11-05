@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
 import { RefreshCw, UserCheck, UserX } from "lucide-react";
+import StudentPhoto from "../../components/StudentPhoto";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -673,7 +674,13 @@ export default function HODMentorsPage() {
                       </td>
 
                       <td className="px-3 py-2.5">
-                        <p className="font-medium text-slate-900">
+                        <p className="flex items-center gap-2 font-medium text-slate-900">
+                          <StudentPhoto
+                                  size="sm"
+                                  imageUrl={student?.imageUrl}
+                                  name={student?.name}
+                                  registerNumber={student?.registerNumber}
+                                />
                           {student.name}
                         </p>
 

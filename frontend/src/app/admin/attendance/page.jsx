@@ -25,6 +25,7 @@ import {
   getElectivesNotTaken,
   sumEntryCells,
 } from "../../utils/entryCounts";
+import StudentPhoto from "../../components/StudentPhoto";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -1042,8 +1043,16 @@ export default function AdminAttendancePage() {
                               </td>
 
                               <td className="px-4 py-2.5 font-medium text-slate-900">
+                                <span className="flex items-center gap-2">
+                                <StudentPhoto
+                                  size="sm"
+                                  imageUrl={entry.studentId?.imageUrl}
+                                  name={entry.studentId?.name}
+                                  registerNumber={entry.studentId?.registerNumber}
+                                />
                                 {entry.studentId?.name ||
                                   "Deleted student"}
+                                </span>
                               </td>
 
                               <td className="px-4 py-2.5 text-slate-600">

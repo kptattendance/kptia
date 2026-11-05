@@ -1026,7 +1026,7 @@ export const getAdminAttendanceRecords = async (
     })
       .populate(
         "students.studentId",
-        "registerNumber rollNumber name batchNumber"
+        "registerNumber rollNumber name batchNumber imageUrl"
       )
       .sort({
         batchNumbers: 1,

@@ -8,6 +8,7 @@ import { Download } from "lucide-react";
 import { departments } from "../admin/components/EntryStatusGrid";
 import { formatCIE, getIACells } from "../utils/iaSheet";
 import { iaLabel } from "../utils/iaLabels";
+import StudentPhoto from "./StudentPhoto";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -421,14 +422,24 @@ export default function IAAllView() {
                   {sheet.students.map((student) => (
                     <tr key={student._id} className="border-b border-slate-100">
                       <td className="sticky left-0 z-10 border-r border-slate-200 bg-white px-3 py-2">
-                        <p className="max-w-[160px] truncate font-medium text-slate-900 sm:max-w-none">
-                          {student.name}
-                        </p>
-                        <p className="font-mono text-[11px] text-slate-400">
-                          {student.registerNumber}
-                          {sheet.batchNumbers.length === 2 &&
-                            ` · B${student.batchNumber}`}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <StudentPhoto
+                                  size="sm"
+                                  imageUrl={student?.imageUrl}
+                                  name={student?.name}
+                                  registerNumber={student?.registerNumber}
+                                />
+                          <div className="min-w-0">
+                            <p className="max-w-[140px] truncate font-medium text-slate-900 sm:max-w-none">
+                              {student.name}
+                            </p>
+                            <p className="font-mono text-[11px] text-slate-400">
+                              {student.registerNumber}
+                              {sheet.batchNumbers.length === 2 &&
+                                ` · B${student.batchNumber}`}
+                            </p>
+                          </div>
+                        </div>
                       </td>
 
                       {sheet.ias.map((ia, index) =>
