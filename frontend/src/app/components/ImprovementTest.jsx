@@ -4,6 +4,7 @@ import { useImperativeHandle, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
+import { RefreshCw } from "lucide-react";
 import StudentPhoto from "./StudentPhoto";
 import { iaShortLabel, TEST_IA_NUMBERS } from "../utils/iaLabels";
 
@@ -414,8 +415,13 @@ export default function ImprovementTest({
     );
   }
 
-  const thClass =
-    "border-b border-slate-200 bg-[#283618] px-2 py-2 text-[11px] font-bold uppercase tracking-wide text-[#fefae0]";
+  // The IA being replaced: a clay pill
+  const replacePill =
+    "inline-flex items-center gap-1 rounded-full bg-[#fbeee0] px-2 py-0.5 text-sm font-semibold text-[#9c4f14] ring-1 ring-[#e8c39e]";
+
+  // The improvement test columns sit on a soft band
+  const bandHead = "bg-[#ebe6d2] px-2 py-2 text-center";
+  const bandCell = "bg-[#fdfbf5] px-2 py-2.5 group-hover:bg-[#f7f3e6]";
 
   const canSave = rows.some(({ batchData }) => !batchData.locked);
 
@@ -450,14 +456,22 @@ export default function ImprovementTest({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 pt-2 text-xs text-slate-600">
+          {/* LEGEND */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 px-4 pt-3 text-xs text-slate-500">
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-3.5 w-5 rounded-sm bg-amber-300 ring-2 ring-inset ring-amber-500" />
-              IA that the improvement test replaces
+              <span className={replacePill}>
+                <RefreshCw size={10} strokeWidth={2.5} />
+                4
+              </span>
+              IA being replaced
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-3.5 w-5 rounded-sm border-2 border-amber-400 bg-amber-50" />
-              Enter the improvement marks here, CO-wise
+              <span className="inline-block h-5 w-8 rounded-md border border-dashed border-slate-400 bg-white" />
+              Marks still to enter
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block h-5 w-8 rounded-md border border-[#a3b18a] bg-[#f3f6ea]" />
+              Marks entered
             </span>
           </div>
 
@@ -471,23 +485,43 @@ export default function ImprovementTest({
             </p>
           ) : (
             <>
-              <div className="mt-3 overflow-x-auto">
+              <div className="mx-4 mt-3 overflow-x-auto rounded-xl border border-[#e6e0c8]">
                 <table className="w-full min-w-max border-collapse text-sm">
                   <thead>
-                    <tr>
-                      <th className={`${thClass} w-12 text-center`}>Sl.</th>
-                      <th className={`${thClass} sticky left-0 z-10 text-left`}>Student</th>
+                    {/* GROUPS */}
+                    <tr className="bg-[#283618] text-[11px] font-bold uppercase tracking-wider text-[#fefae0]">
+                      <th colSpan={2} className="sticky left-0 z-10 bg-[#283618] px-3 py-2 text-left">
+                        Student
+                      </th>
+                      <th colSpan={partNumbers.length + 1} className="border-l border-white/15 px-3 py-2 text-center">
+                        Current scores (/{formatScore(firstBatch.cieMax)})
+                      </th>
+                      <th colSpan={4} className="border-l border-white/15 bg-[#3b4a26] px-3 py-2 text-center">
+                        Improvement test
+                      </th>
+                      <th className="border-l border-white/15 px-3 py-2 text-center">
+                        Result
+                      </th>
+                    </tr>
+
+                    {/* COLUMNS */}
+                    <tr className="border-b border-[#e6e0c8] bg-[#f4f1e4] text-[11px] font-bold uppercase tracking-wide text-[#4a5a2a]">
+                      <th className="w-10 px-2 py-2 text-center">#</th>
+                      <th className="sticky left-0 z-10 bg-[#f4f1e4] px-3 py-2 text-left">Name</th>
                       {partNumbers.map((number) => (
-                        <th key={number} className={`${thClass} text-center`}>
+                        <th
+                          key={number}
+                          className={`px-2 py-2 text-center ${number === partNumbers[0] ? "border-l border-[#e6e0c8]" : ""}`}
+                        >
                           {iaShortLabel(number)}
                         </th>
                       ))}
-                      <th className={`${thClass} text-center`}>CIE</th>
-                      <th className={`${thClass} text-center`}>Takes</th>
-                      <th className={`${thClass} text-center`}>Replaces</th>
-                      <th className={`${thClass} text-left`}>Enter Improvement Marks</th>
-                      <th className={`${thClass} text-center`}>Total</th>
-                      <th className={`${thClass} text-center`}>New CIE</th>
+                      <th className="px-2 py-2 text-center">CIE</th>
+                      <th className={`${bandHead} border-l border-[#e6e0c8]`}>Takes</th>
+                      <th className={bandHead}>Replaces</th>
+                      <th className={`${bandHead} text-left`}>Marks (CO-wise)</th>
+                      <th className={bandHead}>Total</th>
+                      <th className="border-l border-[#e6e0c8] px-2 py-2 text-center">New CIE</th>
                     </tr>
                   </thead>
 
@@ -509,27 +543,28 @@ export default function ImprovementTest({
                       const testNumbers = batchData.partNumbers.filter(
                         (number) => TEST_IA_NUMBERS.includes(number)
                       );
-                      const rowClass =
-                        index % 2 === 0 ? "bg-white" : "bg-[#fbf9f0]";
+                      const improved =
+                        after !== null &&
+                        after > (student.finalBeforeImprovement ?? 0);
 
                       return (
                         <tr
                           key={student.studentId}
-                          className={`${rowClass} border-b border-slate-100 align-middle`}
+                          className="group border-b border-[#efeadb] bg-white last:border-0 hover:bg-[#faf8f0]"
                         >
-                          <td className="px-2 py-2 text-center text-xs font-semibold text-slate-400">
+                          <td className="px-2 py-2.5 text-center text-xs text-slate-400">
                             {index + 1}
                           </td>
 
-                          <td className={`${rowClass} sticky left-0 z-10 px-2 py-2`}>
-                            <div className="flex items-center gap-2">
+                          <td className="sticky left-0 z-10 bg-white px-3 py-2.5 group-hover:bg-[#faf8f0]">
+                            <div className="flex items-center gap-2.5">
                               <StudentPhoto
                                 imageUrl={student.imageUrl}
                                 name={student.name}
                                 registerNumber={student.registerNumber}
                               />
                               <div className="min-w-0">
-                                <p className="max-w-[170px] truncate font-semibold text-slate-900">
+                                <p className="max-w-[170px] truncate text-sm font-semibold text-slate-800">
                                   {student.name}
                                 </p>
                                 <p className="font-mono text-[11px] text-slate-400">
@@ -542,37 +577,41 @@ export default function ImprovementTest({
 
                           {partNumbers.map((number) => {
                             const part = student.parts[number];
+                            const replaced = takes && entry.replacesIA === number;
+                            const value = !batchData.partNumbers.includes(number)
+                              ? "—"
+                              : part?.absent
+                              ? "AB"
+                              : formatScore(part?.scaled ?? 0);
 
                             return (
                               <td
                                 key={number}
-                                className={`px-2 py-2 text-center text-xs ${
-                                  takes && entry.replacesIA === number
-                                    ? "bg-amber-300 font-bold text-amber-950 ring-2 ring-inset ring-amber-500"
-                                    : part?.absent
-                                    ? "font-bold text-red-600"
-                                    : "text-slate-700"
-                                }`}
+                                className={`px-2 py-2.5 text-center text-sm ${number === partNumbers[0] ? "border-l border-[#efeadb]" : ""}`}
                               >
-                                {!batchData.partNumbers.includes(number)
-                                  ? "—"
-                                  : part?.absent
-                                  ? "AB"
-                                  : formatScore(part?.scaled ?? 0)}
-                                {takes && entry.replacesIA === number && (
-                                  <span className="block text-[9px] font-bold uppercase tracking-wide">
-                                    Replace
+                                {replaced ? (
+                                  <span className={replacePill} title="Replaced by the improvement test">
+                                    <RefreshCw size={10} strokeWidth={2.5} />
+                                    {value}
+                                  </span>
+                                ) : (
+                                  <span className={part?.absent ? "font-semibold text-red-500" : "text-slate-600"}>
+                                    {value}
                                   </span>
                                 )}
                               </td>
                             );
                           })}
 
-                          <td className="px-2 py-2 text-center font-bold text-red-700">
-                            {formatScore(student.finalBeforeImprovement)}
+                          <td className="px-2 py-2.5 text-center">
+                            <span className="inline-block min-w-9 rounded-full bg-red-50 px-2 py-0.5 text-sm font-bold text-red-600">
+                              {formatScore(student.finalBeforeImprovement)}
+                            </span>
                           </td>
 
-                          <td className="px-2 py-2 text-center">
+                          {/* IMPROVEMENT TEST BAND */}
+
+                          <td className={`${bandCell} border-l border-[#efeadb] text-center`}>
                             <input
                               type="checkbox"
                               checked={takes}
@@ -580,12 +619,12 @@ export default function ImprovementTest({
                               onChange={(e) =>
                                 toggleTakes(student, batchData, e.target.checked)
                               }
-                              className="h-4 w-4"
+                              className="h-4 w-4 cursor-pointer accent-[#283618]"
                               aria-label={`${student.name} takes the improvement test`}
                             />
                           </td>
 
-                          <td className="px-2 py-2 text-center">
+                          <td className={`${bandCell} text-center`}>
                             {takes ? (
                               <select
                                 value={entry.replacesIA}
@@ -598,7 +637,7 @@ export default function ImprovementTest({
                                     Number(e.target.value)
                                   )
                                 }
-                                className="h-8 rounded-md border-2 border-amber-500 bg-amber-100 px-2 text-sm font-bold text-amber-950"
+                                className="h-8 cursor-pointer rounded-full border border-[#e8c39e] bg-[#fbeee0] px-3 text-xs font-semibold text-[#9c4f14] outline-none focus:ring-2 focus:ring-[#e8c39e]/60"
                               >
                                 {testNumbers.map((number) => (
                                   <option key={number} value={number}>
@@ -611,80 +650,102 @@ export default function ImprovementTest({
                             )}
                           </td>
 
-                          <td className="px-2 py-2">
+                          <td className={bandCell}>
                             {pattern ? (
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex flex-wrap items-end gap-2">
                                 {pattern.tests.map((test, testIndex) =>
-                                  testCOs(test).map((co) => (
-                                    <label
-                                      key={`${testIndex}-${co}`}
-                                      className="flex flex-col items-center text-[10px] font-semibold text-slate-500"
-                                    >
-                                      {pattern.tests.length > 1
-                                        ? `${test.testName} ${co}`
-                                        : co}{" "}
-                                      /{test.coMarks[co]}
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max={test.coMarks[co]}
-                                        step="0.5"
-                                        value={entry.tests[testIndex]?.coMarks?.[co] ?? ""}
-                                        disabled={readOnly || absent}
-                                        placeholder={`0-${test.coMarks[co]}`}
-                                        onChange={(e) =>
-                                          setCOMark(
-                                            student.studentId,
-                                            testIndex,
-                                            co,
-                                            e.target.value
-                                          )
-                                        }
-                                        className={`mt-0.5 h-8 w-16 rounded-md px-1 text-center text-sm font-semibold placeholder:font-normal placeholder:text-amber-400 disabled:border-slate-200 disabled:bg-slate-100 ${
-                                          (entry.tests[testIndex]?.coMarks?.[co] ?? "") === ""
-                                            ? "border-2 border-amber-400 bg-amber-50"
-                                            : "border border-emerald-300 bg-white"
-                                        }`}
-                                      />
-                                    </label>
-                                  ))
+                                  testCOs(test).map((co) => {
+                                    const value =
+                                      entry.tests[testIndex]?.coMarks?.[co] ?? "";
+
+                                    return (
+                                      <label
+                                        key={`${testIndex}-${co}`}
+                                        className="flex flex-col items-center gap-0.5"
+                                      >
+                                        <span className="text-[10px] font-medium text-slate-400">
+                                          {pattern.tests.length > 1
+                                            ? `${test.testName} ${co}`
+                                            : co}
+                                          <span className="text-slate-300"> /{test.coMarks[co]}</span>
+                                        </span>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          max={test.coMarks[co]}
+                                          step="0.5"
+                                          value={value}
+                                          disabled={readOnly || absent}
+                                          placeholder={`/${test.coMarks[co]}`}
+                                          onChange={(e) =>
+                                            setCOMark(
+                                              student.studentId,
+                                              testIndex,
+                                              co,
+                                              e.target.value
+                                            )
+                                          }
+                                          className={`h-8 w-14 rounded-md px-1 text-center text-sm font-semibold text-slate-800 outline-none transition placeholder:font-normal placeholder:text-slate-300 focus:border-[#606c38] focus:ring-2 focus:ring-[#606c38]/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300 ${
+                                            value === ""
+                                              ? "border border-dashed border-slate-400 bg-white"
+                                              : "border border-[#a3b18a] bg-[#f3f6ea]"
+                                          }`}
+                                        />
+                                      </label>
+                                    );
+                                  })
                                 )}
 
-                                <label className="ml-1 flex items-center gap-1 text-xs text-slate-500">
-                                  <input
-                                    type="checkbox"
-                                    checked={absent}
-                                    disabled={readOnly}
-                                    onChange={(e) =>
-                                      setAbsent(student.studentId, e.target.checked)
-                                    }
-                                  />
-                                  Absent
-                                </label>
+                                <button
+                                  type="button"
+                                  disabled={readOnly}
+                                  onClick={() => setAbsent(student.studentId, !absent)}
+                                  className={`h-8 rounded-full border px-3 text-xs font-semibold transition disabled:cursor-not-allowed ${
+                                    absent
+                                      ? "border-red-200 bg-red-50 text-red-600"
+                                      : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-600"
+                                  }`}
+                                >
+                                  {absent ? "Absent ✓" : "Absent"}
+                                </button>
                               </div>
                             ) : (
                               <span className="text-xs text-slate-300">Not taking</span>
                             )}
                           </td>
 
-                          <td className="px-2 py-2 text-center text-sm font-bold text-slate-800">
-                            {pattern
-                              ? absent
-                                ? "AB"
-                                : `${formatScore(entryTotal(entry.tests))}/${pattern.totalMaxMarks}`
-                              : "—"}
+                          <td className={`${bandCell} text-center`}>
+                            {pattern ? (
+                              absent ? (
+                                <span className="text-sm font-semibold text-red-500">AB</span>
+                              ) : (
+                                <span className="text-sm font-bold text-slate-800">
+                                  {formatScore(entryTotal(entry.tests))}
+                                  <span className="font-normal text-slate-400"> / {pattern.totalMaxMarks}</span>
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
                           </td>
 
-                          <td
-                            className={`px-2 py-2 text-center font-bold ${
-                              after === null
-                                ? "text-slate-300"
-                                : after >= batchData.cieMin
-                                ? "text-emerald-700"
-                                : "text-red-700"
-                            }`}
-                          >
-                            {after === null ? "—" : formatScore(after)}
+                          {/* RESULT */}
+
+                          <td className="border-l border-[#efeadb] px-3 py-2.5 text-center">
+                            {after === null ? (
+                              <span className="text-slate-300">—</span>
+                            ) : (
+                              <span
+                                className={`inline-flex min-w-11 items-center justify-center gap-0.5 rounded-full px-2.5 py-0.5 text-sm font-bold ring-1 ${
+                                  after >= batchData.cieMin
+                                    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                    : "bg-red-50 text-red-600 ring-red-100"
+                                }`}
+                              >
+                                {improved && <span className="text-[10px]">▲</span>}
+                                {formatScore(after)}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -693,9 +754,9 @@ export default function ImprovementTest({
                 </table>
               </div>
 
-              <div className="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-slate-500">
-                  Scores are out of {formatScore(firstBatch.cieMax)}. The yellow cell is the IA being replaced; the yellow boxes still need marks. Final CIE is rounded up to a whole number. New CIE is green when the student reaches the minimum. Click a photo to see it large.
+                  New CIE turns green once the student reaches the minimum of {formatScore(firstBatch.cieMin)}; it is rounded up to a whole number. Click a photo to see it large.
                 </p>
 
                 {canSave && (
@@ -703,7 +764,7 @@ export default function ImprovementTest({
                     type="button"
                     onClick={save}
                     disabled={saving}
-                    className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                    className="rounded-xl bg-[#283618] px-6 py-2.5 text-sm font-bold text-[#fefae0] shadow-sm transition hover:bg-[#3b4a26] disabled:opacity-50"
                   >
                     {saving ? "Saving..." : "Save & Freeze"}
                   </button>
