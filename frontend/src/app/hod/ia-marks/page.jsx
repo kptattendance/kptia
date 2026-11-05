@@ -11,7 +11,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { iaLabel } from "../../utils/iaLabels";
+import { ENTRY_IA_NUMBERS, iaLabel } from "../../utils/iaLabels";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -316,8 +316,23 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
   // AVAILABLE IA NUMBERS
   // ---------------------------------------------------
 
-  const availableIANumbers = useMemo(() => {
+  // IA numbers with marks in some subject
+  const enteredIANumbers = useMemo(() => {
     const numbers = new Set();
+
+    iaSubjects.forEach((subject) => {
+      (subject.iaNumbers || []).forEach(
+        (ia) => numbers.add(ia)
+      );
+    });
+
+    return numbers;
+  }, [iaSubjects]);
+
+  // IA 1 to 4 and Activity always, then any saved
+  // improvement tests
+  const availableIANumbers = useMemo(() => {
+    const numbers = new Set(ENTRY_IA_NUMBERS);
 
     iaSubjects.forEach((subject) => {
       (subject.iaNumbers || []).forEach(
@@ -789,10 +804,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
               onChange={(e) =>
                 setSelectedIA(e.target.value)
               }
-              disabled={
-                !semester ||
-                availableIANumbers.length === 0
-              }
+              disabled={!semester}
               aria-label="Internal assessment"
               className="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-sm font-medium text-slate-700 outline-none transition focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-400"
             >
@@ -800,6 +812,9 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
               {availableIANumbers.map((ia) => (
                 <option key={ia} value={ia}>
                   {iaLabel(ia)}
+                  {enteredIANumbers.has(ia)
+                    ? ""
+                    : " — not entered yet"}
                 </option>
               ))}
             </select>

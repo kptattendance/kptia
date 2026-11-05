@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import AttainmentDownloads from "../../../components/AttainmentDownloads";
-import { iaLabel } from "../../../utils/iaLabels";
+import { ENTRY_IA_NUMBERS, iaLabel } from "../../../utils/iaLabels";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -731,16 +731,26 @@ const downloadExcelReport = async () => {
                   Select IA
                 </option>
 
-                {data.iaNumbers.map(
-                  (ia) => (
+                {/* IA 1 to 4 and Activity always, then any
+                    saved improvement tests */}
+                {[
+                  ...new Set([
+                    ...ENTRY_IA_NUMBERS,
+                    ...data.iaNumbers,
+                  ]),
+                ]
+                  .sort((a, b) => a - b)
+                  .map((ia) => (
                     <option
                       key={ia}
                       value={ia}
                     >
                       {iaLabel(ia)}
+                      {data.iaNumbers.includes(ia)
+                        ? ""
+                        : " — not entered yet"}
                     </option>
-                  )
-                )}
+                  ))}
               </select>
 
               <ChevronDown
