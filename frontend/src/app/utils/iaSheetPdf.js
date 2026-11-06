@@ -247,7 +247,7 @@ export function buildIASheetPdf(data, letterhead = {}) {
   doc.setFontSize(7);
   doc.setTextColor(...GREY);
   const note = doc.splitTextToSize(
-    `Only the COs that carry marks are shown. Maximum marks in brackets. AB = absent.  - = no marks entered. Final CIE = average of the IAs and Activity, each scaled to ${formatMarks(data.cieMax)}; an improvement test counts only when higher. Red = below the minimum of ${formatMarks(data.cieMin)}.`,
+    `Only the COs that carry marks are shown. Maximum marks in brackets. AB = absent.  - = no marks entered. Final CIE = average of IA 1 to 4 and CIE 5, each scaled to ${formatMarks(data.cieMax)}; an improvement test counts only when higher. Red = below the minimum of ${formatMarks(data.cieMin)}.`,
     pageWidth - MARGIN * 2
   );
 

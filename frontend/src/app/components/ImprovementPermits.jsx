@@ -23,7 +23,7 @@ const formatScore = (value) =>
     ? "—"
     : String(Math.round(Number(value) * 100) / 100);
 
-// IA tests (not Activity) the student was absent for
+// IA tests (not CIE 5) the student was absent for
 const absentIAs = (student, partNumbers) =>
   partNumbers.filter(
     (number) =>

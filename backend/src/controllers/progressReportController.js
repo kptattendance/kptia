@@ -369,7 +369,7 @@ export const getMyProgressReport = async (
       }
 
       // IA total = final CIE: average of IA1 to IA4 and
-      // Activity, each scaled to the subject maximum,
+      // CIE 5, each scaled to the subject maximum,
       // with the improvement test when higher.
       const cieMax = Number(subject.iaMax) || CIE_MAX;
 

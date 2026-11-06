@@ -391,7 +391,7 @@ export const getSubjectAttainment = async (
       });
     }
 
-    // IA1 to IA4 and Activity. An improvement test is a
+    // IA1 to IA4 and CIE 5. An improvement test is a
     // second attempt by a few students; it is left out.
     const filter = {
       subjectId,

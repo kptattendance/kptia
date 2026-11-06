@@ -5,7 +5,7 @@ import IAMarks from "../models/IAMarks.js";
 import StudyMaterial from "../models/StudyMaterial.js";
 import Subject from "../models/Subject.js";
 import { getAllocationError } from "./courseAllocationController.js";
-import { CIE_MAX, computeCIE } from "../utils/ciTotal.js";
+import { CIE5_IA, CIE_MAX, computeCIE } from "../utils/ciTotal.js";
 
 // ==========================================================
 // MY ENTRIES (faculty and HOD)
@@ -359,6 +359,16 @@ export const getMyIASheet = async (req, res) => {
 
     const iaMap = new Map();
 
+    // CIE 5 is the average of its activities, so its CO
+    // columns are averages too (they then add up to its
+    // total).
+    const coDivisor = (record) =>
+      Number(record.iaNumber) === CIE5_IA
+        ? Math.max((record.tests || []).length, 1)
+        : 1;
+
+    const round2 = (value) => Math.round(value * 100) / 100;
+
     records.forEach((record) => {
       const iaNumber = Number(record.iaNumber);
 
@@ -370,6 +380,10 @@ export const getMyIASheet = async (req, res) => {
             (coMax[co] || 0) +
             Number(test.coMarks?.[co] || 0);
         });
+      });
+
+      CO_NAMES.forEach((co) => {
+        coMax[co] = round2((coMax[co] || 0) / coDivisor(record));
       });
 
       const ia = iaMap.get(iaNumber) || {
@@ -457,6 +471,10 @@ export const getMyIASheet = async (req, res) => {
           });
         });
 
+        Object.keys(coMarks).forEach((co) => {
+          coMarks[co] = round2(coMarks[co] / coDivisor(record));
+        });
+
         const tests = entry.tests || [];
 
         studentMap.get(key).ia[record.iaNumber] = {
@@ -470,7 +488,7 @@ export const getMyIASheet = async (req, res) => {
     });
 
     // ------------------------------------------------------
-    // FINAL CIE: average of IA1 to IA4 and Activity, each
+    // FINAL CIE: average of IA1 to IA4 and CIE 5, each
     // scaled to the subject maximum, with the improvement
     // test when it is higher (utils/ciTotal.js).
     // ------------------------------------------------------

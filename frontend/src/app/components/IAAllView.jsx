@@ -485,7 +485,7 @@ export default function IAAllView() {
             </div>
 
             <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">
-              Each IA shows only the COs it uses, then its total. Final CIE = average of the IAs and Activity entered, each scaled to {sheet.cieMax}; an improvement test counts only when higher. Red = below the minimum. AB = absent, - = no marks entered. Scroll sideways on a phone; the student column stays in place.
+              Each IA shows only the COs it uses, then its total. Final CIE = average of IA 1 to 4 and CIE 5 entered, each scaled to {sheet.cieMax}; an improvement test counts only when higher. Red = below the minimum. AB = absent, - = no marks entered. Scroll sideways on a phone; the student column stays in place.
             </p>
 
           </div>

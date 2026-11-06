@@ -329,7 +329,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
     return numbers;
   }, [iaSubjects]);
 
-  // IA 1 to 4 and Activity always, then any saved
+  // IA 1 to 4 and CIE 5 always, then any saved
   // improvement tests
   const availableIANumbers = useMemo(() => {
     const numbers = new Set(ENTRY_IA_NUMBERS);

@@ -5,9 +5,28 @@ import Subject from "../models/Subject.js";
 import DeletedRecord from "../models/DeletedRecord.js";
 import { getAllocationError } from "./courseAllocationController.js";
 import {
+  CIE5_IA,
+  CIE5_MAX_ACTIVITIES,
   ENTRY_IA_NUMBERS,
   iaLabel,
 } from "../utils/ciTotal.js";
+
+const round2 = (value) => Math.round(value * 100) / 100;
+
+// CIE 5: the marks and the maximum are the average of
+// its activities (tests). The ratio, and so the final
+// CIE, is the same as with the sums.
+const averageCIE5 = (testValidation, studentValidation) => {
+  const count = testValidation.tests.length;
+
+  return {
+    totalMaxMarks: round2(testValidation.totalMaxMarks / count),
+    students: studentValidation.students.map((student) => ({
+      ...student,
+      totalMarks: round2(student.totalMarks / count),
+    })),
+  };
+};
 
 // --------------------------------------------------
 // CONSTANTS
@@ -676,7 +695,7 @@ export const saveIAMarks = async (
     const iaNumberValue =
       Number(iaNumber);
 
-    // IA1 to IA4 and Activity (5). Improvement tests
+    // IA1 to IA4 and CIE 5. Improvement tests
     // are saved from their own page.
     if (
       !ENTRY_IA_NUMBERS.includes(
@@ -686,7 +705,7 @@ export const saveIAMarks = async (
       return res.status(400).json({
         success: false,
         message:
-          "Only IA 1 to IA 4 and Activity can be entered.",
+          "Only IA 1 to IA 4 and CIE 5 can be entered.",
       });
     }
 
@@ -844,6 +863,16 @@ export const saveIAMarks = async (
       });
     }
 
+    if (
+      iaNumberValue === CIE5_IA &&
+      testValidation.tests.length > CIE5_MAX_ACTIVITIES
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `CIE 5 can have at most ${CIE5_MAX_ACTIVITIES} activities.`,
+      });
+    }
+
     // --------------------------------------------------
     // VALIDATE STUDENTS
     // --------------------------------------------------
@@ -866,6 +895,17 @@ const studentValidation =
         message:
           studentValidation.message,
       });
+    }
+
+    // CIE 5: average of the activities
+    if (iaNumberValue === CIE5_IA) {
+      const averaged = averageCIE5(
+        testValidation,
+        studentValidation
+      );
+
+      testValidation.totalMaxMarks = averaged.totalMaxMarks;
+      studentValidation.students = averaged.students;
     }
 
     // --------------------------------------------------

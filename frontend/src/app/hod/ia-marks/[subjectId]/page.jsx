@@ -732,7 +732,7 @@ const downloadExcelReport = async () => {
                   Select IA
                 </option>
 
-                {/* IA 1 to 4 and Activity always, then any
+                {/* IA 1 to 4 and CIE 5 always, then any
                     saved improvement tests */}
                 {[
                   ...new Set([

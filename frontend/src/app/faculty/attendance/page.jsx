@@ -1281,6 +1281,38 @@ const handleClassesConductedChange = (value) => {
   // HANDLE SAVE
   // =====================================================
 
+  // =====================================================
+  // KEEP A DRAFT NOW (also kept automatically)
+  // =====================================================
+
+  const saveDraftNow = () => {
+    const draftKey = draftKeyRef.current;
+
+    if (!draftKey || attendanceLocked || students.length === 0) {
+      Swal.fire({
+        icon: "info",
+        title: "Nothing to Keep",
+        text: "Load the students and enter some attendance first.",
+        confirmButtonColor: "#283618",
+      });
+      return;
+    }
+
+    writeDraft(draftKey, {
+      classesConducted,
+      attendance,
+      studentMaxClasses,
+      savedAt: Date.now(),
+    });
+
+    Swal.fire({
+      icon: "success",
+      title: "Draft Saved",
+      text: `Kept on this device at ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Open the same subject, month and batch on this device to continue. Nothing is locked until you save the attendance.`,
+      confirmButtonColor: "#283618",
+    });
+  };
+
   const handleSave = async () => {
     // ---------------------------------------------
     // LOCK CHECK
@@ -2762,12 +2794,24 @@ const handleClassesConductedChange = (value) => {
                         <p className="mt-0.5 max-w-xl text-xs leading-5 text-slate-400">
                           {attendanceLocked
                             ? "This attendance record cannot be edited once saved."
-                            : "After saving, this month's attendance for the selected subject and batch will be locked. Only the HOD can unlock it for correction."}
+                            : "Save Draft keeps the attendance on this device to finish later. After saving, this month's attendance for the selected subject and batch will be locked; only the HOD can unlock it for correction."}
                         </p>
 
                       </div>
 
                     </div>
+
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                    {!attendanceLocked && (
+                      <button
+                        type="button"
+                        onClick={saveDraftNow}
+                        title="Attendance is also kept automatically on this device while you type"
+                        className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 sm:w-auto"
+                      >
+                        Save Draft
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -2809,6 +2853,7 @@ const handleClassesConductedChange = (value) => {
                       )}
 
                     </button>
+                    </div>
 
                   </div>
                 </>

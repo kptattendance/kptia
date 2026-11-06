@@ -39,7 +39,7 @@ const CO_NAMES = [
   "CO6",
 ];
 
-// IA1 to IA4 and Activity
+// IA1 to IA4 and CIE 5
 const iaNumbers = ENTRY_IA_NUMBERS;
 
 const terms = {

@@ -7,7 +7,12 @@ import Swal from "sweetalert2";
 import AttainmentDownloads from "../../components/AttainmentDownloads";
 import IAAllView from "../../components/IAAllView";
 import ImprovementTest from "../../components/ImprovementTest";
-import { ENTRY_IA_NUMBERS, iaLabel } from "../../utils/iaLabels";
+import {
+  CIE5_IA,
+  CIE5_MAX_ACTIVITIES,
+  ENTRY_IA_NUMBERS,
+  iaLabel,
+} from "../../utils/iaLabels";
 import { escapeHtml } from "../../utils/escapeHtml";
 import {
   cleanNumberInput,
@@ -906,7 +911,10 @@ const loadBatch = async () => {
             ? draft.tests
             : [
                 {
-                  testName: iaLabel(selectedIaNumber),
+                  testName:
+                    Number(selectedIaNumber) === CIE5_IA
+                      ? "Activity 1"
+                      : iaLabel(selectedIaNumber),
                   maxMarks: 0,
                   coMarks: emptyCO(),
                 },
@@ -1030,6 +1038,87 @@ const loadBatch = async () => {
         };
       })
     );
+  };
+
+  // ==================================================
+  // CIE 5 ACTIVITIES (up to 8)
+  // ==================================================
+
+  const addActivity = () => {
+    if (existingIA || tests.length >= CIE5_MAX_ACTIVITIES) return;
+
+    setTests((prev) => [
+      ...prev,
+      {
+        testName: `Activity ${prev.length + 1}`,
+        maxMarks: 0,
+        coMarks: emptyCO(),
+      },
+    ]);
+  };
+
+  const removeActivity = (testIndex) => {
+    if (existingIA || tests.length <= 1) return;
+
+    // Renumbered so the names stay Activity 1, 2, 3 ...
+    setTests((prev) =>
+      prev
+        .filter((_, index) => index !== testIndex)
+        .map((test, index) => ({
+          ...test,
+          testName: `Activity ${index + 1}`,
+        }))
+    );
+
+    // Marks of the later activities move up by one
+    setStudentMarks((prev) => {
+      const updated = {};
+
+      Object.entries(prev).forEach(([studentId, studentTests]) => {
+        const moved = {};
+
+        Object.entries(studentTests || {}).forEach(([index, value]) => {
+          const oldIndex = Number(index);
+
+          if (oldIndex < testIndex) moved[oldIndex] = value;
+          if (oldIndex > testIndex) moved[oldIndex - 1] = value;
+        });
+
+        updated[studentId] = moved;
+      });
+
+      return updated;
+    });
+  };
+
+  // ==================================================
+  // KEEP A DRAFT NOW (also kept automatically)
+  // ==================================================
+
+  const saveDraftNow = () => {
+    const draftKey = draftKeyRef.current;
+
+    if (!draftKey || existingIA || tests.length === 0) {
+      showAlert(
+        "info",
+        "Nothing to Keep",
+        "Load the students and enter some marks first."
+      );
+      return;
+    }
+
+    writeDraft(draftKey, {
+      tests,
+      studentMarks,
+      savedAt: Date.now(),
+    });
+
+    Swal.fire({
+      icon: "success",
+      title: "Draft Saved",
+      text: `Kept on this device at ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Open the same IA and batch on this device to continue. Nothing is frozen until you click Save & Freeze.`,
+      confirmButtonColor: "#283618",
+    });
   };
 
   // ==================================================
@@ -1236,14 +1325,27 @@ const loadBatch = async () => {
   // TOTAL IA MARKS
   // ==================================================
 
+  // CIE 5 is the average of its activities; IA 1 to 4
+  // add up their tests.
+  const isCIE5 = Number(iaNumber) === CIE5_IA;
+
+  const averageForCIE5 = (sum) =>
+    isCIE5 && tests.length > 0
+      ? Math.round((sum / tests.length) * 100) / 100
+      : sum;
+
   const totalIAMarks = useMemo(() => {
-    return tests.reduce(
+    const sum = tests.reduce(
       (total, test) =>
         total +
         Number(test.maxMarks || 0),
       0
     );
-  }, [tests]);
+
+    return Number(iaNumber) === CIE5_IA && tests.length > 0
+      ? Math.round((sum / tests.length) * 100) / 100
+      : sum;
+  }, [tests, iaNumber]);
 
   // ==================================================
   // GET STUDENT TEST
@@ -1295,14 +1397,16 @@ const loadBatch = async () => {
   const getStudentTotal = (
     studentId
   ) => {
-    return tests.reduce(
-      (total, _, testIndex) =>
-        total +
-        getStudentTestTotal(
-          studentId,
-          testIndex
-        ),
-      0
+    return averageForCIE5(
+      tests.reduce(
+        (total, _, testIndex) =>
+          total +
+          getStudentTestTotal(
+            studentId,
+            testIndex
+          ),
+        0
+      )
     );
   };
 
@@ -2189,7 +2293,7 @@ for (const batch of batchesToSave) {
   // IA NUMBERS
   // ==================================================
 
-  // IA1 to IA4 and Activity (CIE-5). The improvement
+  // IA1 to IA4 and CIE 5. The improvement
   // test has its own panel below the selection.
   const iaNumbers = ENTRY_IA_NUMBERS;
 
@@ -2634,11 +2738,13 @@ for (const batch of batchesToSave) {
 
               <div>
                 <h2 className="text-lg font-bold text-slate-900">
-                  CO Maximum Marks
+                  {isCIE5 ? "CIE 5 Activities" : "CO Maximum Marks"}
                 </h2>
 
                 <p className="text-xs text-slate-500">
-                  Enter the maximum marks of each CO in this IA. The total is worked out from them.
+                  {isCIE5
+                    ? `Enter the maximum marks of each CO in every activity (up to ${CIE5_MAX_ACTIVITIES}). The CIE 5 mark is the average of the activities.`
+                    : "Enter the maximum marks of each CO in this IA. The total is worked out from them."}
                 </p>
               </div>
 
@@ -2686,6 +2792,16 @@ for (const batch of batchesToSave) {
   <span className="text-sm text-slate-500">
     Total <b className="text-slate-900">{coTotal}</b>
   </span>
+
+  {isCIE5 && !existingIA && tests.length > 1 && (
+    <button
+      type="button"
+      onClick={() => removeActivity(index)}
+      className="ml-auto rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+    >
+      Remove
+    </button>
+  )}
 </div>
 
                         {/* CO MAXIMUM */}
@@ -2796,13 +2912,28 @@ for (const batch of batchesToSave) {
               </div>
             )}
 
+            {isCIE5 && !existingIA && tests.length < CIE5_MAX_ACTIVITIES && (
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={addActivity}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50"
+                >
+                  <span className="text-base leading-none">+</span>
+                  Add Activity {tests.length + 1}
+                </button>
+              </div>
+            )}
+
             {/* TOTAL */}
 
             {tests.length > 0 && (
               <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-white">
 
                 <span className="text-sm text-slate-300">
-                  Total IA Maximum
+                  {isCIE5
+                    ? `CIE 5 Maximum (average of ${tests.length} ${tests.length === 1 ? "activity" : "activities"})`
+                    : "Total IA Maximum"}
                 </span>
 
                 <span className="text-xl font-bold">
@@ -3187,14 +3318,26 @@ for (const batch of batchesToSave) {
                 <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-slate-800">
-                      Final IA: {totalIAMarks} marks
+                      {isCIE5
+                        ? `CIE 5: out of ${totalIAMarks} (average of ${tests.length} ${tests.length === 1 ? "activity" : "activities"})`
+                        : `Final IA: ${totalIAMarks} marks`}
                     </p>
                     <p className="text-xs text-slate-400">
-                      Once saved, the IA record will be frozen. Only the HOD can unlock it for correction.
+                      Save Draft keeps your marks on this device to finish later. Save & Freeze freezes them; only the HOD can unlock them for a correction.
                     </p>
                   </div>
 
                   {!existingIA && (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={saveDraftNow}
+                      title="Marks are also kept automatically on this device while you type"
+                      className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                    >
+                      Save Draft
+                    </button>
+
                     <button
                       type="button"
                       onClick={handleSave}
@@ -3204,8 +3347,9 @@ for (const batch of batchesToSave) {
                       }
                       className="rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {saving ? "Saving..." : "Save & Freeze IA"}
+                      {saving ? "Saving..." : `Save & Freeze ${iaLabel(iaNumber)}`}
                     </button>
+                    </div>
                   )}
 
                   {existingIA && (
