@@ -13,7 +13,9 @@ import {
   getAdminIAStatus,
 } from "../controllers/iaController.js";
 import {
+  addImprovementPermit,
   getImprovement,
+  removeImprovementPermit,
   saveImprovement,
 } from "../controllers/improvementController.js";
 
@@ -74,6 +76,18 @@ router.get(
 router.post(
   "/improvement",
   saveImprovement
+);
+
+// HOD allows a student who is not below the minimum
+// (NCC, NSS ...)
+router.post(
+  "/improvement/permits",
+  addImprovementPermit
+);
+
+router.delete(
+  "/improvement/permits/:id",
+  removeImprovementPermit
 );
 
 router.get(

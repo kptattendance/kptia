@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
 import IAMarks from "../models/IAMarks.js";
+import ImprovementPermit, {
+  PERMIT_REASONS,
+} from "../models/ImprovementPermit.js";
 import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
 import { getAllocationError } from "./courseAllocationController.js";
@@ -25,6 +28,10 @@ import {
 // iaNumber 11 replaces IA1, 12 replaces IA2 and so on,
 // each with only the students taking the test. The marks
 // count only when higher (see utils/ciTotal.js).
+//
+// The HOD can also allow a student who is not below the
+// minimum, for example one who missed a CIE for NCC or
+// NSS (models/ImprovementPermit.js).
 // ==========================================================
 
 const getRole = (req) =>
@@ -87,11 +94,24 @@ const loadContext = async (req, { subjectId, academicYear, batchNumber }) => {
     return { status: 403, message: allocationError };
   }
 
-  const records = await IAMarks.find({
-    academicYear,
-    subjectId,
-    batchNumber: batch,
-  }).lean();
+  const [records, permits] = await Promise.all([
+    IAMarks.find({
+      academicYear,
+      subjectId,
+      batchNumber: batch,
+    }).lean(),
+
+    ImprovementPermit.find({
+      academicYear,
+      subjectId,
+      batchNumber: batch,
+    }).lean(),
+  ]);
+
+  // studentId -> permit
+  const permitByStudent = new Map(
+    permits.map((permit) => [String(permit.studentId), permit])
+  );
 
   const cieMax = Number(subject.iaMax) || CIE_MAX;
 
@@ -103,10 +123,15 @@ const loadContext = async (req, { subjectId, academicYear, batchNumber }) => {
     department,
     batch,
     records,
+    permitByStudent,
     cieMax,
     cieMin,
   };
 };
+
+const isBelowMinimum = (cie, cieMin) =>
+  cie.finalBeforeImprovement !== null &&
+  cie.finalBeforeImprovement < cieMin;
 
 // ==========================================================
 // GET /api/ia/improvement?subjectId&academicYear&batchNumber
@@ -122,7 +147,8 @@ export const getImprovement = async (req, res) => {
         .json({ success: false, message: context.message });
     }
 
-    const { subject, batch, records, cieMax, cieMin } = context;
+    const { subject, batch, records, permitByStudent, cieMax, cieMin } =
+      context;
 
     const partRecords = records.filter(
       (record) => !isImprovementIA(record.iaNumber)
@@ -169,6 +195,8 @@ export const getImprovement = async (req, res) => {
       .map((student) => {
         const id = String(student._id);
         const cie = before.get(id);
+        const permit = permitByStudent.get(id);
+        const belowMinimum = isBelowMinimum(cie, cieMin);
 
         return {
           studentId: id,
@@ -180,9 +208,16 @@ export const getImprovement = async (req, res) => {
           parts: cie.parts,
           finalBeforeImprovement: cie.finalBeforeImprovement,
           final: after.get(id)?.final ?? cie.final,
-          eligible:
-            cie.finalBeforeImprovement !== null &&
-            cie.finalBeforeImprovement < cieMin,
+          belowMinimum,
+          // Allowed by the HOD (NCC, NSS ...)
+          special: permit
+            ? {
+                permitId: permit._id,
+                reason: permit.reason,
+                note: permit.note || "",
+              }
+            : null,
+          eligible: belowMinimum || Boolean(permit),
           defaultReplacesIA: defaultReplacedIA(cie),
           improvement: saved.get(id) || null,
         };
@@ -250,8 +285,15 @@ export const saveImprovement = async (req, res) => {
         .json({ success: false, message: context.message });
     }
 
-    const { subject, department, batch, records, cieMax, cieMin } =
-      context;
+    const {
+      subject,
+      department,
+      batch,
+      records,
+      permitByStudent,
+      cieMax,
+      cieMin,
+    } = context;
 
     const { academicYear, entries } = req.body;
 
@@ -315,13 +357,12 @@ export const saveImprovement = async (req, res) => {
       seen.add(id);
 
       const eligible =
-        cie.finalBeforeImprovement !== null &&
-        cie.finalBeforeImprovement < cieMin;
+        isBelowMinimum(cie, cieMin) || permitByStudent.has(id);
 
       if (!eligible && !alreadyTaking.has(id)) {
         return res.status(400).json({
           success: false,
-          message: `Only students below the CIE minimum of ${cieMin} can take the improvement test.`,
+          message: `Only students below the CIE minimum of ${cieMin}, or allowed by the HOD, can take the improvement test.`,
         });
       }
 
@@ -421,6 +462,172 @@ export const saveImprovement = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to save the improvement test.",
+    });
+  }
+};
+
+// ==========================================================
+// SPECIAL PERMISSION (HOD of the department / Admin)
+//
+// POST /api/ia/improvement/permits
+//   { subjectId, academicYear, batchNumber, studentId,
+//     reason, note }
+// DELETE /api/ia/improvement/permits/:id
+// ==========================================================
+
+const permitRoleError = (req) =>
+  ["hod", "admin"].includes(getRole(req))
+    ? null
+    : "Only the HOD can allow a student the improvement test.";
+
+export const addImprovementPermit = async (req, res) => {
+  try {
+    const roleError = permitRoleError(req);
+
+    if (roleError) {
+      return res.status(403).json({ success: false, message: roleError });
+    }
+
+    const context = await loadContext(req, req.body);
+
+    if (context.status) {
+      return res
+        .status(context.status)
+        .json({ success: false, message: context.message });
+    }
+
+    const { subject, batch, records, permitByStudent, cieMax } = context;
+
+    const { academicYear } = req.body;
+    const studentId = String(req.body.studentId || "");
+    const reason = String(req.body.reason || "");
+    const note = String(req.body.note || "").trim().slice(0, 200);
+
+    if (!PERMIT_REASONS.includes(reason)) {
+      return res.status(400).json({
+        success: false,
+        message: `Choose a reason: ${PERMIT_REASONS.join(", ")}.`,
+      });
+    }
+
+    if (reason === "Other" && !note) {
+      return res.status(400).json({
+        success: false,
+        message: "Write the reason when choosing Other.",
+      });
+    }
+
+    const before = computeCIE(
+      records.filter((record) => !isImprovementIA(record.iaNumber)),
+      cieMax
+    );
+
+    if (!before.has(studentId)) {
+      return res.status(400).json({
+        success: false,
+        message: "The student has no IA marks in this batch.",
+      });
+    }
+
+    if (permitByStudent.has(studentId)) {
+      return res.status(409).json({
+        success: false,
+        message: "The student is already allowed the improvement test.",
+      });
+    }
+
+    await ImprovementPermit.create({
+      academicYear,
+      subjectId: subject._id,
+      batchNumber: batch,
+      studentId,
+      reason,
+      note,
+      addedBy: req.user.id,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Student allowed the improvement test.",
+    });
+  } catch (error) {
+    console.error("Add Improvement Permit Error:", error);
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "The student is already allowed the improvement test.",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to allow the student.",
+    });
+  }
+};
+
+export const removeImprovementPermit = async (req, res) => {
+  try {
+    const roleError = permitRoleError(req);
+
+    if (roleError) {
+      return res.status(403).json({ success: false, message: roleError });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid permission.",
+      });
+    }
+
+    const permit = await ImprovementPermit.findById(req.params.id).lean();
+
+    if (!permit) {
+      return res.status(404).json({
+        success: false,
+        message: "Permission not found.",
+      });
+    }
+
+    // Checks the HOD's department
+    const context = await loadContext(req, permit);
+
+    if (context.status) {
+      return res
+        .status(context.status)
+        .json({ success: false, message: context.message });
+    }
+
+    const taken = context.records.some(
+      (record) =>
+        isImprovementIA(record.iaNumber) &&
+        record.students.some(
+          (student) => String(student.studentId) === String(permit.studentId)
+        )
+    );
+
+    if (taken) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "The student's improvement marks are already saved, so the permission cannot be removed.",
+      });
+    }
+
+    await ImprovementPermit.deleteOne({ _id: permit._id });
+
+    return res.status(200).json({
+      success: true,
+      message: "Permission removed.",
+    });
+  } catch (error) {
+    console.error("Remove Improvement Permit Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to remove the permission.",
     });
   }
 };

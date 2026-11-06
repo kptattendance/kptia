@@ -447,7 +447,7 @@ export default function ImprovementTest({
               Minimum {formatScore(firstBatch.cieMin)} / {formatScore(firstBatch.cieMax)}
             </span>
             <span className="rounded-full bg-red-50 px-3 py-1 font-semibold text-red-700">
-              {rows.length} of {totalStudents} students below the minimum
+              {rows.length} of {totalStudents} students on the improvement test
             </span>
             {lockedBatches.length > 0 && (
               <span className="rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-800">
@@ -571,6 +571,14 @@ export default function ImprovementTest({
                                   {student.registerNumber || student.rollNumber}
                                   {batches[1] && batches[2] && ` · B${batchData.batchNumber}`}
                                 </p>
+                                {student.special && (
+                                  <span
+                                    title={student.special.note || undefined}
+                                    className="mt-0.5 inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200"
+                                  >
+                                    HOD allowed · {student.special.reason}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -604,7 +612,13 @@ export default function ImprovementTest({
                           })}
 
                           <td className="px-2 py-2.5 text-center">
-                            <span className="inline-block min-w-9 rounded-full bg-red-50 px-2 py-0.5 text-sm font-bold text-red-600">
+                            <span
+                              className={`inline-block min-w-9 rounded-full px-2 py-0.5 text-sm font-bold ${
+                                student.belowMinimum === false
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-red-50 text-red-600"
+                              }`}
+                            >
                               {formatScore(student.finalBeforeImprovement)}
                             </span>
                           </td>

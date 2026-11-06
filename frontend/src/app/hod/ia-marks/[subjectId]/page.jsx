@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import AttainmentDownloads from "../../../components/AttainmentDownloads";
+import ImprovementPermits from "../../../components/ImprovementPermits";
 import { ENTRY_IA_NUMBERS, iaLabel } from "../../../utils/iaLabels";
 
 const API_URL =
@@ -1192,6 +1193,13 @@ const downloadExcelReport = async () => {
 
             </div>
           )}
+
+        {/* Students allowed the improvement test though
+            not below the minimum (NCC, NSS ...) */}
+        <ImprovementPermits
+          subjectId={subjectId}
+          academicYear={academicYear}
+        />
 
       </div>
     </div>
