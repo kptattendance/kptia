@@ -6,7 +6,12 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import { Download } from "lucide-react";
 import { departments } from "../admin/components/EntryStatusGrid";
-import { formatCIE, getIACells } from "../utils/iaSheet";
+import {
+  computeCOAttainment,
+  formatCIE,
+  formatMarks,
+  getIACells,
+} from "../utils/iaSheet";
 import { iaLabel } from "../utils/iaLabels";
 import StudentPhoto from "./StudentPhoto";
 
@@ -162,6 +167,15 @@ export default function IAAllView() {
 
     loadSheet();
   }, [subjectId, academicYear, batch, getToken]);
+
+  // CO attainment of the loaded sheet
+  const attainment = useMemo(
+    () =>
+      sheet && sheet.students.length > 0
+        ? computeCOAttainment(sheet)
+        : null,
+    [sheet]
+  );
 
   // =====================================================
   // DOWNLOAD PDF
@@ -481,11 +495,134 @@ export default function IAAllView() {
                   ))}
                 </tbody>
 
+                {attainment && (
+                <tfoot className="text-xs">
+                  <tr className="border-t border-slate-200 border-t-2 border-t-slate-300">
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600">Target mark</p>
+                      <p className="text-[10px] text-slate-400">{`≥ ${attainment.targetPercent}% of the CO`}</p>
+                    </td>
+                    {sheet.ias.map((ia) => [
+                      ...ia.cos.map(({ co }) => {
+                        const cell = attainment.columns[`${ia.iaNumber}|${co}`];
+                        return (
+                          <td
+                            key={`${ia.iaNumber}-${co}`}
+                            className="bg-slate-50 px-3 py-2 text-center font-semibold text-slate-600"
+                          >
+                            {formatMarks(cell.threshold)}
+                          </td>
+                        );
+                      }),
+                      <td
+                        key={`${ia.iaNumber}-total`}
+                        className="border-r border-slate-200 bg-slate-50"
+                      />,
+                    ])}
+                    <td className="bg-slate-50" />
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600">Attained</p>
+                      <p className="text-[10px] text-slate-400">students / wrote</p>
+                    </td>
+                    {sheet.ias.map((ia) => [
+                      ...ia.cos.map(({ co }) => {
+                        const cell = attainment.columns[`${ia.iaNumber}|${co}`];
+                        return (
+                          <td
+                            key={`${ia.iaNumber}-${co}`}
+                            className="bg-slate-50 px-3 py-2 text-center text-slate-700"
+                          >
+                            {cell.attained}/{cell.counted}
+                          </td>
+                        );
+                      }),
+                      <td
+                        key={`${ia.iaNumber}-total`}
+                        className="border-r border-slate-200 bg-slate-50"
+                      />,
+                    ])}
+                    <td className="bg-slate-50" />
+                  </tr>
+                  <tr className="border-t border-slate-200">
+                    <td className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-600">CO attainment</p>
+                      <p className="text-[10px] text-slate-400">% of students</p>
+                    </td>
+                    {sheet.ias.map((ia) => [
+                      ...ia.cos.map(({ co }) => {
+                        const cell = attainment.columns[`${ia.iaNumber}|${co}`];
+                        return (
+                          <td
+                            key={`${ia.iaNumber}-${co}`}
+                            className="bg-slate-50 px-2 py-2 text-center"
+                          >
+                            <span className="inline-block rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-bold text-white">
+                              {cell.percent === null ? "-" : `${formatMarks(cell.percent)}%`}
+                            </span>
+                          </td>
+                        );
+                      }),
+                      <td
+                        key={`${ia.iaNumber}-total`}
+                        className="border-r border-slate-200 bg-slate-50"
+                      />,
+                    ])}
+                    <td className="bg-slate-50" />
+                  </tr>
+                </tfoot>
+                )}
+
               </table>
             </div>
 
+            {attainment && attainment.summary.length > 0 && (
+              <div className="border-t border-slate-200 bg-slate-50/70 px-4 py-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-sm font-bold text-slate-800">
+                    CO Attainment
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Semester {sheet.subject.semester} · a student attains a CO by scoring at least{" "}
+                    <span className="font-bold text-slate-700">
+                      {attainment.targetPercent}%
+                    </span>{" "}
+                    of its marks
+                  </p>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                  {attainment.summary.map((item) => (
+                    <div
+                      key={item.co}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+                    >
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-xs font-bold text-slate-500">
+                          {item.co}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {item.iaCount} IA{item.iaCount === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xl font-bold text-slate-900">
+                        {formatMarks(item.percent)}%
+                      </p>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-emerald-600"
+                          style={{ width: `${Math.min(item.percent, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <p className="border-t border-slate-100 px-4 py-2.5 text-xs text-slate-500">
-              Each IA shows only the COs it uses, then its total. Final CIE = average of IA 1 to 4 and CIE 5 entered, each scaled to {sheet.cieMax}; an improvement test counts only when higher. Red = below the minimum. AB = absent, - = no marks entered. Scroll sideways on a phone; the student column stays in place.
+              Each IA shows only the COs it uses, then its total. Final CIE = average of IA 1 to 4 and CIE 5 entered, each scaled to {sheet.cieMax}; an improvement test counts only when higher. Red = below the minimum. AB = absent, - = no marks entered. CO attainment = students scoring at least the target mark / students who wrote that IA (absent left out); the overall figure of a CO is the average across the IAs that test it. Scroll sideways on a phone; the student column stays in place.
             </p>
 
           </div>

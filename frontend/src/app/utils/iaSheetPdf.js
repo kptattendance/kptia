@@ -8,6 +8,7 @@ import {
 } from "./letterheadPdf.js";
 import {
   batchLabel,
+  computeCOAttainment,
   formatCIE,
   formatMarks,
   getIACells,
@@ -158,8 +159,51 @@ export function buildIASheetPdf(data, letterhead = {}) {
     fontStyle: "bold",
   };
 
+  // CO attainment rows under the marks
+  const attainment =
+    data.students.length > 0 ? computeCOAttainment(data) : null;
+
+  const footRow = (label, cellOf) => [
+    {
+      content: label,
+      colSpan: 3,
+      styles: { halign: "right", fontStyle: "bold" },
+    },
+    ...data.ias.flatMap((ia) => [
+      ...ia.cos.map(({ co }) =>
+        cellOf(attainment.columns[`${ia.iaNumber}|${co}`])
+      ),
+      "",
+    ]),
+    "",
+  ];
+
+  const foot = attainment
+    ? [
+        footRow(
+          `Target mark (>= ${attainment.targetPercent}% of CO)`,
+          (cell) => formatMarks(cell.threshold)
+        ),
+        footRow("Attained / wrote", (cell) =>
+          `${cell.attained}/${cell.counted}`
+        ),
+        footRow("CO attainment %", (cell) =>
+          cell.percent === null ? "-" : formatMarks(cell.percent)
+        ),
+      ]
+    : [];
+
   autoTable(doc, {
     theme: "grid",
+
+    foot,
+    showFoot: "lastPage",
+
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: DARK,
+      fontStyle: "normal",
+    },
 
     startY: y,
 
@@ -254,6 +298,69 @@ export function buildIASheetPdf(data, letterhead = {}) {
   doc.text(note, MARGIN, y);
 
   y += (note.length - 1) * 3;
+
+  if (attainment && attainment.summary.length > 0) {
+    y += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...DARK);
+    doc.text(
+      `CO ATTAINMENT (Semester ${data.subject.semester}, target ${attainment.targetPercent}% of CO marks)`,
+      MARGIN,
+      y
+    );
+
+    y += 2;
+
+    autoTable(doc, {
+      theme: "grid",
+      startY: y,
+      margin: {
+        left: MARGIN,
+        right: MARGIN,
+        bottom: LETTERHEAD_FOOTER_HEIGHT + 2,
+      },
+      tableWidth: Math.min(
+        pageWidth - MARGIN * 2,
+        30 + attainment.summary.length * 20
+      ),
+      styles: {
+        font: "helvetica",
+        fontSize: 7.5,
+        cellPadding: 1.2,
+        textColor: DARK,
+        lineColor: LINE,
+        lineWidth: 0.15,
+        halign: "center",
+      },
+      headStyles: {
+        fillColor: HEAD,
+        textColor: DARK,
+        fontStyle: "bold",
+      },
+      columnStyles: { 0: { halign: "left", fontStyle: "bold" } },
+      head: [["", ...attainment.summary.map((item) => item.co)]],
+      body: [
+        [
+          "Attainment %",
+          ...attainment.summary.map((item) => formatMarks(item.percent)),
+        ],
+      ],
+    });
+
+    y = doc.lastAutoTable.finalY + 3;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...GREY);
+    const attNote = doc.splitTextToSize(
+      "CO attainment = students scoring at least the target mark / students who wrote that IA (absent left out). The overall figure of a CO is the average across the IAs that test it.",
+      pageWidth - MARGIN * 2
+    );
+    doc.text(attNote, MARGIN, y);
+    y += (attNote.length - 1) * 3;
+  }
 
   // ---------------------------------------------------
   // SIGNATURES
