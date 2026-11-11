@@ -17,8 +17,9 @@
 //   the student's batch, so a subject with 4 parts and
 //   one with 5 are both handled.
 // - Absent (or not on the list of an entered part) = 0.
-// - The final CIE is rounded up to a whole number
-//   (8.1 -> 9).
+// - Every total is rounded up to a whole number
+//   (8.1 -> 9): IA totals, CIE 5, the improvement test
+//   and the final CIE. No fractions in any total.
 // - One improvement test per student. It replaces the
 //   chosen IA only when its mark is higher; the old mark
 //   is kept.
@@ -62,6 +63,11 @@ export const iaLabel = (iaNumber) => {
 
 const round2 = (value) => Math.round(value * 100) / 100;
 
+// A total mark, rounded up to a whole number: 9.1 -> 10.
+// Rounding to 2 decimals first keeps 26.0000001 at 26.
+export const roundUpMark = (value) =>
+  Math.ceil(round2(Number(value || 0)));
+
 const studentKey = (studentRecord) =>
   String(
     studentRecord.studentId?._id || studentRecord.studentId || ""
@@ -81,13 +87,13 @@ const scoreIn = (record, cieMax) => {
       tests.length > 0 &&
       tests.every((test) => test.status === "ABSENT");
 
-    const marks = absent ? 0 : Number(studentRecord.totalMarks || 0);
+    const marks = absent ? 0 : roundUpMark(studentRecord.totalMarks);
 
     scores.set(studentKey(studentRecord), {
       marks,
       maxMarks: max,
       absent,
-      scaled: max > 0 ? round2((marks / max) * cieMax) : 0,
+      scaled: max > 0 ? roundUpMark((marks / max) * cieMax) : 0,
     });
   }
 

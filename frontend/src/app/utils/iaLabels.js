@@ -22,6 +22,11 @@ export const ENTRY_IA_NUMBERS = [...TEST_IA_NUMBERS, ACTIVITY_IA];
 
 export const IMPROVEMENT_BASE = 10;
 
+// Every total mark is rounded up to a whole number:
+// 9.1 -> 10 (same as roundUpMark in the backend).
+export const roundUpMark = (value) =>
+  Math.ceil(Math.round(Number(value || 0) * 100) / 100);
+
 export const isImprovementIA = (iaNumber) =>
   TEST_IA_NUMBERS.includes(Number(iaNumber) - IMPROVEMENT_BASE);
 

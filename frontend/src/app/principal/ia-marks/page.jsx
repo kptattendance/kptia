@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import StudentPhoto from "../../components/StudentPhoto";
+import { roundUpMark } from "../../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -295,7 +296,7 @@ export default function PrincipalIAMarksPage() {
 
     const totals = iaMarks.students.map(
       (student) =>
-        Number(student.totalMarks) || 0
+        roundUpMark(student.totalMarks)
     );
 
     const total = totals.reduce(
@@ -805,8 +806,9 @@ export default function PrincipalIAMarksPage() {
 
                             <td className="px-5 py-4 text-right">
                               <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                                {studentIA?.totalMarks ??
-                                  "—"}{" "}
+                                {studentIA
+                                  ? roundUpMark(studentIA.totalMarks)
+                                  : "—"}{" "}
                                 / {totalMaxMarks}
                               </span>
                             </td>

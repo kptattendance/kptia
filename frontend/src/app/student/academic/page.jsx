@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
-import { iaLabel } from "../../utils/iaLabels";
+import { iaLabel, roundUpMark } from "../../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -296,7 +296,7 @@ export default function StudentAcademicPage() {
       const tests = ia.tests || [];
 
       const max = Number(ia.totalMaxMarks || 0);
-      const marks = Number(ia.totalMarks || 0);
+      const marks = roundUpMark(ia.totalMarks);
 
       subject.ias[ia.iaNumber] = {
         marks,

@@ -2,7 +2,7 @@ import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
 import Attendance from "../models/Attendance.js";
 import IAMarks from "../models/IAMarks.js";
-import { CIE_MAX, computeCIE } from "../utils/ciTotal.js";
+import { CIE_MAX, computeCIE, roundUpMark } from "../utils/ciTotal.js";
 import { getAcademicYearForMonth } from "./courseAllocationController.js";
 import { getMentorName } from "./mentorController.js";
 
@@ -290,7 +290,7 @@ export const getMyProgressReport = async (
       iaBySubject.get(subjectKey).set(
         record.iaNumber,
         {
-          marks: Number(entry.totalMarks || 0),
+          marks: roundUpMark(entry.totalMarks),
           maxMarks: Number(
             record.totalMaxMarks || 0
           ),

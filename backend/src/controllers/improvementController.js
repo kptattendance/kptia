@@ -15,6 +15,7 @@ import {
   defaultReplacedIA,
   improvementIANumber,
   isImprovementIA,
+  roundUpMark,
 } from "../utils/ciTotal.js";
 
 // ==========================================================
@@ -180,7 +181,7 @@ export const getImprovement = async (req, res) => {
         saved.set(String(studentRecord.studentId), {
           replacesIA: record.iaNumber - IMPROVEMENT_BASE,
           tests: studentRecord.tests,
-          totalMarks: studentRecord.totalMarks,
+          totalMarks: roundUpMark(studentRecord.totalMarks),
         });
       }
     }

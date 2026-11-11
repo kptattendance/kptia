@@ -25,7 +25,7 @@ import {
   getElectivesNotTaken,
   sumEntryCells,
 } from "../../utils/entryCounts";
-import { ENTRY_IA_NUMBERS, iaLabel } from "../../utils/iaLabels";
+import { ENTRY_IA_NUMBERS, iaLabel, roundUpMark } from "../../utils/iaLabels";
 import StudentPhoto from "../../components/StudentPhoto";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -1161,7 +1161,7 @@ export default function AdminIAMarksPage() {
                                 getEditingTotal(test),
                               0
                             )
-                          : entry.totalMarks}
+                          : roundUpMark(entry.totalMarks)}
                       </td>
                     </tr>
                   ))}

@@ -5,7 +5,7 @@ import IAMarks from "../models/IAMarks.js";
 import StudyMaterial from "../models/StudyMaterial.js";
 import Subject from "../models/Subject.js";
 import { getAllocationError } from "./courseAllocationController.js";
-import { CIE5_IA, CIE_MAX, computeCIE } from "../utils/ciTotal.js";
+import { CIE5_IA, CIE_MAX, computeCIE, roundUpMark } from "../utils/ciTotal.js";
 
 // ==========================================================
 // MY ENTRIES (faculty and HOD)
@@ -472,14 +472,18 @@ export const getMyIASheet = async (req, res) => {
         });
 
         Object.keys(coMarks).forEach((co) => {
-          coMarks[co] = round2(coMarks[co] / coDivisor(record));
+          // CIE 5 averages are rounded up too: no fractions
+          coMarks[co] =
+            coDivisor(record) > 1
+              ? roundUpMark(coMarks[co] / coDivisor(record))
+              : round2(coMarks[co]);
         });
 
         const tests = entry.tests || [];
 
         studentMap.get(key).ia[record.iaNumber] = {
           coMarks,
-          total: Number(entry.totalMarks || 0),
+          total: roundUpMark(entry.totalMarks),
           absent:
             tests.length > 0 &&
             tests.every((test) => test.status === "ABSENT"),

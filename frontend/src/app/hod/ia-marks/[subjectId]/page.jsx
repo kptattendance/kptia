@@ -16,7 +16,7 @@ import {
 import { useAuth } from "@clerk/nextjs";
 import AttainmentDownloads from "../../../components/AttainmentDownloads";
 import ImprovementPermits from "../../../components/ImprovementPermits";
-import { ENTRY_IA_NUMBERS, iaLabel } from "../../../utils/iaLabels";
+import { ENTRY_IA_NUMBERS, iaLabel, roundUpMark } from "../../../utils/iaLabels";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -1149,7 +1149,7 @@ const downloadExcelReport = async () => {
                                     (ia.status ===
                                     "ABSENT"
                                       ? "AB"
-                                      : ia.totalMarks)}
+                                      : roundUpMark(ia.totalMarks))}
                                 </td>
 
                               </tr>

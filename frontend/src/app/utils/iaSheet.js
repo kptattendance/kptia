@@ -1,3 +1,5 @@
+import { roundUpMark } from "./iaLabels.js";
+
 // =====================================================
 // CONSOLIDATED IA SHEET - shared by the page and the PDF
 //
@@ -35,7 +37,7 @@ export const getIACells = (student, ia) => {
     ...ia.cos.map(({ co }) =>
       formatMarks(Number(entry.coMarks?.[co] || 0))
     ),
-    formatMarks(Number(entry.total || 0)),
+    String(roundUpMark(entry.total)),
   ];
 };
 
@@ -43,7 +45,7 @@ export const getIACells = (student, ia) => {
 export const formatCIE = (value) =>
   value === null || value === undefined
     ? "-"
-    : formatMarks(Math.round(Number(value) * 10) / 10);
+    : String(roundUpMark(value));
 
 // =====================================================
 // CO ATTAINMENT

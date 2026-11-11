@@ -9,6 +9,7 @@ import {
   CIE5_MAX_ACTIVITIES,
   ENTRY_IA_NUMBERS,
   iaLabel,
+  roundUpMark,
 } from "../utils/ciTotal.js";
 
 const round2 = (value) => Math.round(value * 100) / 100;
@@ -23,7 +24,7 @@ const averageCIE5 = (testValidation, studentValidation) => {
     totalMaxMarks: round2(testValidation.totalMaxMarks / count),
     students: studentValidation.students.map((student) => ({
       ...student,
-      totalMarks: round2(student.totalMarks / count),
+      totalMarks: roundUpMark(student.totalMarks / count),
     })),
   };
 };
@@ -532,8 +533,9 @@ export const validateStudents = async (
       tests:
         cleanedStudentTests,
 
+      // Rounded up: 9.1 -> 10
       totalMarks:
-        studentTotal,
+        roundUpMark(studentTotal),
     });
   }
 
@@ -2083,7 +2085,7 @@ export const getStudentIAMarks = async (
                 studentRecord.tests,
 
               totalMarks:
-                studentRecord.totalMarks,
+                roundUpMark(studentRecord.totalMarks),
 
               totalMaxMarks:
                 record.totalMaxMarks,

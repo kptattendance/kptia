@@ -6,7 +6,7 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import { RefreshCw } from "lucide-react";
 import StudentPhoto from "./StudentPhoto";
-import { iaShortLabel, TEST_IA_NUMBERS } from "../utils/iaLabels";
+import { iaShortLabel, roundUpMark, TEST_IA_NUMBERS } from "../utils/iaLabels";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -50,8 +50,11 @@ const newCIE = (batchData, student, entry) => {
     return student.finalBeforeImprovement;
   }
 
-  const scaled =
-    (entryTotal(entry.tests) / pattern.totalMaxMarks) * batchData.cieMax;
+  // Marks and scaled score rounded up, as the backend
+  const scaled = roundUpMark(
+    (roundUpMark(entryTotal(entry.tests)) / pattern.totalMaxMarks) *
+      batchData.cieMax
+  );
 
   const parts = batchData.partNumbers.map((number) => {
     const current = student.parts[number]?.scaled || 0;
@@ -734,7 +737,7 @@ export default function ImprovementTest({
                                 <span className="text-sm font-semibold text-red-500">AB</span>
                               ) : (
                                 <span className="text-sm font-bold text-slate-800">
-                                  {formatScore(entryTotal(entry.tests))}
+                                  {roundUpMark(entryTotal(entry.tests))}
                                   <span className="font-normal text-slate-400"> / {pattern.totalMaxMarks}</span>
                                 </span>
                               )

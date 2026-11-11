@@ -12,6 +12,7 @@ import {
   CIE5_MAX_ACTIVITIES,
   ENTRY_IA_NUMBERS,
   iaLabel,
+  roundUpMark,
 } from "../../utils/iaLabels";
 import { escapeHtml } from "../../utils/escapeHtml";
 import {
@@ -1437,10 +1438,11 @@ const loadBatch = async () => {
   // GET STUDENT TOTAL
   // ==================================================
 
+  // Rounded up to a whole number, as saved
   const getStudentTotal = (
     studentId
   ) => {
-    return averageForCIE5(
+    return roundUpMark(averageForCIE5(roundUpMark(
       tests.reduce(
         (total, _, testIndex) =>
           total +
@@ -1450,7 +1452,7 @@ const loadBatch = async () => {
           ),
         0
       )
-    );
+    )));
   };
 
   // ==================================================
@@ -1725,10 +1727,10 @@ const exportIAMarksToExcel = async () => {
             `${test.testName} - Total`
           ] = absent
             ? "AB"
-            : getStudentTestTotal(
+            : roundUpMark(getStudentTestTotal(
                 student._id,
                 testIndex
-              );
+              ));
 
           row[
             `${test.testName} - Status`
@@ -3185,7 +3187,7 @@ for (const batch of batchesToSave) {
 
                           {tests.map((test, testIndex) => {
                             const record = getStudentTest(student._id, testIndex);
-                            const total = getStudentTestTotal(student._id, testIndex);
+                            const total = roundUpMark(getStudentTestTotal(student._id, testIndex));
                             const absent = record.status === "ABSENT";
                             const cos = usedCOs(test);
 
