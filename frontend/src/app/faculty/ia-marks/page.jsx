@@ -1348,6 +1348,23 @@ const loadBatch = async () => {
   }, [tests, iaNumber]);
 
   // ==================================================
+  // COs OF A TEST THAT CARRY MARKS
+  //
+  // Only these get a column in the marks table.
+  // ==================================================
+
+  const usedCOs = (test) =>
+    CO_NAMES.filter(
+      (co) => Number(test.coMarks?.[co] || 0) > 0
+    );
+
+  // Width of a test's column group: one box per CO and
+  // the total
+  const testGridStyle = (test) => ({
+    gridTemplateColumns: `repeat(${usedCOs(test).length + 1}, 3.75rem)`,
+  });
+
+  // ==================================================
   // GET STUDENT TEST
   // ==================================================
 
@@ -2990,7 +3007,7 @@ for (const batch of batchesToSave) {
 {!existingIA &&
   tests.some((test) => !isTestValid(test)) && (
     <div className="border-b border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-800">
-      Marks can be entered for a test once its CO split above adds up to its Max Marks. Waiting for:{" "}
+      Marks can be entered once the CO maximums are entered above. Waiting for:{" "}
       {tests
         .filter((test) => !isTestValid(test))
         .map((test) => test.testName || "a test")
@@ -3025,7 +3042,7 @@ for (const batch of batchesToSave) {
       className="border-collapse"
       style={{
         width: "max-content",
-        minWidth: "1250px",
+        minWidth: "100%",
       }}
     >
                     <thead>
@@ -3043,40 +3060,43 @@ for (const batch of batchesToSave) {
                         {tests.map((test, testIndex) => (
                           <th
                             key={testIndex}
-                            className="min-w-[430px] border-r border-slate-200 px-3 py-3 text-center align-top"
+                            className="border-r border-slate-200 px-3 py-2.5 text-center align-top"
                           >
                             <div className="text-xs font-bold text-slate-800">
                               {test.testName}
+                              <span className="ml-1 font-medium text-slate-400">
+                                ({test.maxMarks || 0})
+                              </span>
                             </div>
-                            <div className="mt-0.5 text-[9px] font-semibold text-slate-400">
-                              Maximum: {test.maxMarks}
-                            </div>
-                            <div className="mt-2 grid grid-cols-7 gap-1">
-                              {CO_NAMES.map((co) => (
-                                <div
-                                  key={co}
-                                  className="text-[9px] font-bold text-slate-400"
-                                >
-                                  {co}
-                                </div>
-                              ))}
-                              <div className="text-[9px] font-bold text-slate-500">
-                                Total
+
+                            {usedCOs(test).length === 0 ? (
+                              <div className="mt-1.5 text-[10px] font-medium text-amber-600">
+                                Set the CO maximums above
                               </div>
-                            </div>
-                            <div className="mt-0.5 grid grid-cols-7 gap-1">
-                              {CO_NAMES.map((co) => (
-                                <div
-                                  key={co}
-                                  className="text-[8px] font-medium text-slate-300"
-                                >
-                                  /{Number(test.coMarks?.[co] || 0)}
+                            ) : (
+                              <div
+                                className="mt-1.5 grid justify-center gap-1"
+                                style={testGridStyle(test)}
+                              >
+                                {usedCOs(test).map((co) => (
+                                  <div
+                                    key={co}
+                                    className="text-[10px] font-bold text-slate-500"
+                                  >
+                                    {co}
+                                    <span className="block font-medium text-slate-400">
+                                      /{Number(test.coMarks[co])}
+                                    </span>
+                                  </div>
+                                ))}
+                                <div className="text-[10px] font-bold text-slate-700">
+                                  Total
+                                  <span className="block font-medium text-slate-400">
+                                    /{test.maxMarks}
+                                  </span>
                                 </div>
-                              ))}
-                              <div className="text-[8px] font-medium text-slate-400">
-                                /{test.maxMarks}
                               </div>
-                            </div>
+                            )}
                           </th>
                         ))}
 
@@ -3141,16 +3161,19 @@ for (const batch of batchesToSave) {
                             const record = getStudentTest(student._id, testIndex);
                             const total = getStudentTestTotal(student._id, testIndex);
                             const absent = record.status === "ABSENT";
+                            const cos = usedCOs(test);
 
                             return (
                               <td
                                 key={testIndex}
-                                className="border-r border-slate-100 px-3 py-3 align-middle"
+                                className="border-r border-slate-100 px-3 py-2 align-middle"
                               >
-                                {absent ? (
-                                  <div className="flex min-h-[76px] items-center justify-center gap-2">
-                                    <span className="rounded-lg bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">
-                                      AB
+                                {cos.length === 0 ? (
+                                  <div className="text-center text-xs text-slate-300">—</div>
+                                ) : absent ? (
+                                  <div className="flex items-center justify-center gap-2">
+                                    <span className="rounded-md bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">
+                                      Absent
                                     </span>
                                     {!existingIA && (
                                       <button
@@ -3159,22 +3182,22 @@ for (const batch of batchesToSave) {
                                         onClick={() =>
                                           setStudentPresent(student._id, testIndex)
                                         }
-                                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50"
+                                        className="text-[11px] font-semibold text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
                                       >
-                                        PRESENT
+                                        Undo
                                       </button>
                                     )}
                                   </div>
                                 ) : (
-                                  <div className="min-w-[400px]">
-                                    <div className="grid grid-cols-7 items-center gap-1">
-                                      {CO_NAMES.map((co, coIndex) => {
+                                  <div>
+                                    <div
+                                      className="grid items-center justify-center gap-1"
+                                      style={testGridStyle(test)}
+                                    >
+                                      {cos.map((co) => {
+                                        const coIndex = CO_NAMES.indexOf(co);
                                         const value = record.coMarks?.[co] ?? "";
-                                        const maxCO = Number(test.coMarks?.[co] || 0);
-
-                                        // A CO that carries no marks in this test
-                                        // cannot be entered, and is skipped by the keyboard.
-                                        const notUsed = maxCO === 0;
+                                        const maxCO = Number(test.coMarks[co]);
 
                                         const tooHigh =
                                           value !== "" &&
@@ -3188,10 +3211,9 @@ for (const batch of batchesToSave) {
                                             data-grid="ia"
                                             data-row={studentIndex}
                                             data-col={testIndex * CO_NAMES.length + coIndex}
-                                            value={notUsed ? "" : value}
+                                            value={value}
                                             disabled={
                                               !!existingIA ||
-                                              notUsed ||
                                               !isTestValid(test)
                                             }
                                             onChange={(e) =>
@@ -3210,42 +3232,35 @@ for (const batch of batchesToSave) {
                                             title={
                                               tooHigh
                                                 ? `More than the ${co} maximum of ${maxCO}`
-                                                : undefined
+                                                : `${co}: 0 to ${maxCO}`
                                             }
-                                            className={`h-9 w-full rounded-md border px-1 text-center text-xs font-semibold outline-none transition focus:ring-2 disabled:cursor-not-allowed ${
+                                            className={`h-9 w-full rounded-md border px-1 text-center text-sm font-semibold outline-none transition focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 ${
                                               tooHigh
                                                 ? "border-red-400 bg-red-50 text-red-700 focus:ring-red-200"
-                                                : "border-slate-200 bg-white text-slate-700 focus:border-slate-500 focus:ring-slate-200"
-                                            } ${
-                                              notUsed
-                                                ? "disabled:bg-slate-100"
-                                                : "disabled:bg-slate-50 disabled:text-slate-500"
+                                                : "border-slate-200 bg-white text-slate-800 focus:border-slate-500 focus:ring-slate-200"
                                             }`}
-                                            placeholder={notUsed ? "–" : "0"}
+                                            placeholder="0"
                                             aria-label={`${student.name} ${test.testName} ${co}`}
                                           />
                                         );
                                       })}
 
-                                      <div className="flex h-9 items-center justify-center rounded-md bg-slate-900 px-1 text-xs font-bold text-white">
+                                      <div className="flex h-9 items-center justify-center rounded-md bg-slate-100 text-sm font-bold text-slate-900">
                                         {total}
                                       </div>
                                     </div>
 
                                     {!existingIA && (
-                                      <div className="mt-2 flex items-center justify-between gap-2">
-                                        <span className="text-[9px] text-slate-400">
-                                          Enter marks up to the CO maximum.
-                                        </span>
+                                      <div className="mt-1 text-right">
                                         <button
                                           type="button"
                                           tabIndex={-1}
                                           onClick={() =>
                                             setStudentAbsent(student._id, testIndex)
                                           }
-                                          className="shrink-0 rounded-md border border-amber-200 px-2 py-1 text-[9px] font-bold text-amber-700 hover:bg-amber-50"
+                                          className="text-[10px] font-semibold text-slate-400 hover:text-amber-700"
                                         >
-                                          Mark AB
+                                          Mark absent
                                         </button>
                                       </div>
                                     )}
