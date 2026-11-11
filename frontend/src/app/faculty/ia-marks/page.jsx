@@ -1038,6 +1038,32 @@ const loadBatch = async () => {
         };
       })
     );
+
+    // Marks entered against the old maximum no longer
+    // apply: clear this CO of this test for every
+    // student. Other COs and absences are kept.
+    setStudentMarks((prev) => {
+      const updated = {};
+
+      Object.entries(prev).forEach(([studentId, studentTests]) => {
+        const record = studentTests?.[testIndex];
+
+        if (!record?.coMarks || record.coMarks[co] === undefined) {
+          updated[studentId] = studentTests;
+          return;
+        }
+
+        const coMarks = { ...record.coMarks };
+        delete coMarks[co];
+
+        updated[studentId] = {
+          ...studentTests,
+          [testIndex]: { ...record, coMarks },
+        };
+      });
+
+      return updated;
+    });
   };
 
   // ==================================================
