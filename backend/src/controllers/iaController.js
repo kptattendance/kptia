@@ -9,23 +9,54 @@ import {
   CIE5_MAX_ACTIVITIES,
   ENTRY_IA_NUMBERS,
   iaLabel,
+  isNotEntered,
   roundUpMark,
 } from "../utils/ciTotal.js";
 
 const round2 = (value) => Math.round(value * 100) / 100;
 
-// CIE 5: the marks and the maximum are the average of
-// its activities (tests). The ratio, and so the final
-// CIE, is the same as with the sums.
+// CIE 5: the maximum is the average of its activities
+// (tests). Each student's mark is the average of only
+// the activities that have marks for that student: an
+// activity left blank (not given to that student) is
+// not counted. Absent counts as 0.
+//
+// mark = (marks of the entered activities, rounded up)
+//        / (their maximum) x CIE 5 maximum, rounded up
+// With every activity entered this is the plain average.
 const averageCIE5 = (testValidation, studentValidation) => {
-  const count = testValidation.tests.length;
+  const tests = testValidation.tests;
+  const count = tests.length;
+  const maximum = round2(testValidation.totalMaxMarks / count);
 
   return {
-    totalMaxMarks: round2(testValidation.totalMaxMarks / count),
-    students: studentValidation.students.map((student) => ({
-      ...student,
-      totalMarks: roundUpMark(student.totalMarks / count),
-    })),
+    totalMaxMarks: maximum,
+    students: studentValidation.students.map((student) => {
+      let marks = 0;
+      let maxOfEntered = 0;
+
+      (student.tests || []).forEach((test, index) => {
+        if (isNotEntered(test)) {
+          return;
+        }
+
+        maxOfEntered += Number(tests[index]?.maxMarks || 0);
+
+        if (test.status !== "ABSENT") {
+          marks += Number(test.marks || 0);
+        }
+      });
+
+      return {
+        ...student,
+        totalMarks:
+          maxOfEntered > 0
+            ? roundUpMark(
+                (roundUpMark(marks) * maximum) / maxOfEntered
+              )
+            : 0,
+      };
+    }),
   };
 };
 
@@ -417,6 +448,34 @@ export const validateStudents = async (
           studentTest.status ||
             "PRESENT"
         ).toUpperCase();
+
+      // ----------------------------------------------
+      // CIE 5 ACTIVITY NOT GIVEN TO THIS STUDENT
+      // (left blank): kept as not entered, left out
+      // of the student's CIE 5 average
+      // ----------------------------------------------
+
+      if (
+        studentTest.notEntered === true &&
+        status !== "ABSENT"
+      ) {
+        cleanedStudentTests.push({
+          marks: null,
+
+          status: "PRESENT",
+
+          coMarks: {
+            CO1: 0,
+            CO2: 0,
+            CO3: 0,
+            CO4: 0,
+            CO5: 0,
+            CO6: 0,
+          },
+        });
+
+        continue;
+      }
 
       // ----------------------------------------------
       // ABSENT
@@ -1766,6 +1825,17 @@ export const updateIAMarks = async (
 
     existing.batchNumber =
       batchNumberValue;
+
+    // CIE 5: average of the activities entered
+    if (iaNumberValue === CIE5_IA) {
+      const averaged = averageCIE5(
+        testValidation,
+        studentValidation
+      );
+
+      testValidation.totalMaxMarks = averaged.totalMaxMarks;
+      studentValidation.students = averaged.students;
+    }
 
     existing.tests =
       testValidation.tests;

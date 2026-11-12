@@ -5,7 +5,7 @@ import IAMarks from "../models/IAMarks.js";
 import StudyMaterial from "../models/StudyMaterial.js";
 import Subject from "../models/Subject.js";
 import { getAllocationError } from "./courseAllocationController.js";
-import { CIE5_IA, CIE_MAX, computeCIE, roundUpMark } from "../utils/ciTotal.js";
+import { CIE5_IA, CIE_MAX, computeCIE, isNotEntered, roundUpMark } from "../utils/ciTotal.js";
 
 // ==========================================================
 // MY ENTRIES (faculty and HOD)
@@ -459,6 +459,18 @@ export const getMyIASheet = async (req, res) => {
 
         const coMarks = {};
 
+        // CIE 5: the CO averages are over the activities
+        // entered for this student (absent counts as 0)
+        const isCIE5 = Number(record.iaNumber) === CIE5_IA;
+
+        const enteredCount = isCIE5
+          ? Math.max(
+              (entry.tests || []).filter((test) => !isNotEntered(test))
+                .length,
+              1
+            )
+          : 1;
+
         (entry.tests || []).forEach((test) => {
           if (test.status === "ABSENT") {
             return;
@@ -473,10 +485,9 @@ export const getMyIASheet = async (req, res) => {
 
         Object.keys(coMarks).forEach((co) => {
           // CIE 5 averages are rounded up too: no fractions
-          coMarks[co] =
-            coDivisor(record) > 1
-              ? roundUpMark(coMarks[co] / coDivisor(record))
-              : round2(coMarks[co]);
+          coMarks[co] = isCIE5
+            ? roundUpMark(coMarks[co] / enteredCount)
+            : round2(coMarks[co]);
         });
 
         const tests = entry.tests || [];

@@ -857,6 +857,19 @@ const loadBatch = async () => {
 
             (studentRecord.tests || []).forEach(
               (test, index) => {
+                // CIE 5 activity not given to this student
+                if (
+                  Number(primaryRecord.iaNumber) === CIE5_IA &&
+                  test.status !== "ABSENT" &&
+                  (test.marks === null || test.marks === undefined)
+                ) {
+                  loadedMarks[studentId][index] = {
+                    status: "PRESENT",
+                    coMarks: emptyStudentCO(),
+                  };
+                  return;
+                }
+
                 loadedMarks[studentId][index] = {
                   status:
                     test.status || "PRESENT",
@@ -1343,7 +1356,9 @@ const loadBatch = async () => {
 
     return emptyEntries > 0
       ? [
-          `${emptyEntries} ${emptyEntries === 1 ? "student-test has" : "student-tests have"} no marks typed and will be saved as 0. Use "Mark AB" for students who were absent.`,
+          Number(iaNumber) === CIE5_IA
+            ? `${emptyEntries} ${emptyEntries === 1 ? "activity is" : "activities are"} left blank. A blank activity is treated as not given to that student and is left out of the student's CIE 5 average. Type 0 if the student scored 0, or use "Mark absent".`
+            : `${emptyEntries} ${emptyEntries === 1 ? "student-test has" : "student-tests have"} no marks typed and will be saved as 0. Use "Mark AB" for students who were absent.`,
         ]
       : [];
   };
@@ -1438,10 +1453,52 @@ const loadBatch = async () => {
   // GET STUDENT TOTAL
   // ==================================================
 
-  // Rounded up to a whole number, as saved
+  // A CIE 5 activity with no mark typed for the
+  // student (not absent): not given to that student
+  const isBlankActivity = (studentId, testIndex) => {
+    const test = tests[testIndex];
+    const record = getStudentTest(studentId, testIndex);
+    const cos = usedCOs(test);
+
+    return (
+      isCIE5 &&
+      record.status !== "ABSENT" &&
+      cos.length > 0 &&
+      cos.every(
+        (co) =>
+          record.coMarks?.[co] === "" ||
+          record.coMarks?.[co] === undefined ||
+          record.coMarks?.[co] === null
+      )
+    );
+  };
+
+  // Rounded up to a whole number, as saved.
+  // CIE 5: the average of only the activities entered
+  // for the student (same rule as the backend).
   const getStudentTotal = (
     studentId
   ) => {
+    if (isCIE5) {
+      let marks = 0;
+      let maxOfEntered = 0;
+
+      tests.forEach((test, testIndex) => {
+        if (isBlankActivity(studentId, testIndex)) {
+          return;
+        }
+
+        maxOfEntered += Number(test.maxMarks || 0);
+        marks += getStudentTestTotal(studentId, testIndex);
+      });
+
+      return maxOfEntered > 0
+        ? roundUpMark(
+            (roundUpMark(marks) * totalIAMarks) / maxOfEntered
+          )
+        : 0;
+    }
+
     return roundUpMark(averageForCIE5(roundUpMark(
       tests.reduce(
         (total, _, testIndex) =>
@@ -2081,6 +2138,15 @@ const handleSave = async () => {
                   };
                 }
 
+                if (isBlankActivity(student._id, testIndex)) {
+                  return {
+                    marks: null,
+                    status: "PRESENT",
+                    notEntered: true,
+                    coMarks: { CO1: 0, CO2: 0, CO3: 0, CO4: 0, CO5: 0, CO6: 0 },
+                  };
+                }
+
                 const coMarks =
                   record.coMarks ||
                   {};
@@ -2193,6 +2259,15 @@ for (const batch of batchesToSave) {
                 CO5: 0,
                 CO6: 0,
               },
+            };
+          }
+
+          if (isBlankActivity(student._id, testIndex)) {
+            return {
+              marks: null,
+              status: "PRESENT",
+              notEntered: true,
+              coMarks: { CO1: 0, CO2: 0, CO3: 0, CO4: 0, CO5: 0, CO6: 0 },
             };
           }
 
@@ -3274,7 +3349,7 @@ for (const batch of batchesToSave) {
                                       })}
 
                                       <div className="flex h-9 items-center justify-center rounded-md bg-slate-100 text-sm font-bold text-slate-900">
-                                        {total}
+                                        {isBlankActivity(student._id, testIndex) ? "–" : total}
                                       </div>
                                     </div>
 

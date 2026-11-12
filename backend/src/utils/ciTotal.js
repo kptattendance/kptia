@@ -68,6 +68,14 @@ const round2 = (value) => Math.round(value * 100) / 100;
 export const roundUpMark = (value) =>
   Math.ceil(round2(Number(value || 0)));
 
+// A CIE 5 activity left blank for a student (not given
+// to them): saved as PRESENT with marks null. Absent is
+// a separate status and counts as 0.
+export const isNotEntered = (studentTest) =>
+  !!studentTest &&
+  studentTest.status !== "ABSENT" &&
+  (studentTest.marks === null || studentTest.marks === undefined);
+
 const studentKey = (studentRecord) =>
   String(
     studentRecord.studentId?._id || studentRecord.studentId || ""

@@ -4,7 +4,7 @@ import Subject from "../models/Subject.js";
 import CourseOutcome from "../models/CourseOutcome.js";
 // Registers the Student model, used when filling in student details
 import "../models/Student.js";
-import { ENTRY_IA_NUMBERS } from "../utils/ciTotal.js";
+import { CIE5_IA, ENTRY_IA_NUMBERS, isNotEntered } from "../utils/ciTotal.js";
 
 // ==========================================================
 // CO ATTAINMENT FROM IA MARKS
@@ -213,6 +213,15 @@ export const computeSubjectAttainment = (
         (test, testIndex) => {
           const studentTest =
             entry.tests?.[testIndex] || {};
+
+          // A CIE 5 activity not given to this student
+          // is left out, like a student not on the IA
+          if (
+            Number(record.iaNumber) === CIE5_IA &&
+            isNotEntered(studentTest)
+          ) {
+            return;
+          }
 
           CO_NAMES.forEach((co) => {
             const index = columnIndex.get(
