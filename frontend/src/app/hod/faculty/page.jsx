@@ -5,6 +5,7 @@ import axios from "axios";
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { fetchCurrentUser } from "../../utils/currentUser";
+import { photoUrl } from "../../utils/photoUrl";
 
 const departments = [
   { value: "", label: "Select department" },
@@ -622,10 +623,7 @@ export default function HODFacultyPage() {
                         <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-slate-100">
 
                           <img
-                            src={
-                              user.imageUrl ||
-                              "/default-avatar.png"
-                            }
+                            src={photoUrl(user.imageUrl) || "/default-avatar.png"} loading="lazy" decoding="async"
                             alt={user.name || "Faculty"}
                             className="h-full w-full object-cover"
                             onError={(e) => {

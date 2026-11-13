@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { photoUrl } from "../../utils/photoUrl";
 
 const departments = [
   { value: "", label: "Select department" },
@@ -1172,10 +1173,7 @@ export default function FacultyPage() {
                             <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">
 
                               <img
-                                src={
-                                  user.imageUrl ||
-                                  "/default-avatar.png"
-                                }
+                                src={photoUrl(user.imageUrl) || "/default-avatar.png"} loading="lazy" decoding="async"
                                 alt={
                                   user.name ||
                                   "Faculty"

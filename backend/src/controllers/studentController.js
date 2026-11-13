@@ -92,6 +92,11 @@ const uploadGoogleDrivePhoto = async (driveUrl) => {
       {
         folder: "kpt-examination/students",
         resource_type: "image",
+        // Stored at most 800 px, compressed: phone photos
+      // are several MB otherwise
+      transformation: [
+        { width: 800, height: 800, crop: "limit", quality: "auto:good" },
+      ],
       }
     );
 

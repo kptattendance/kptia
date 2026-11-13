@@ -14,6 +14,7 @@ import {
   FileText,
 } from "lucide-react";
 import { fetchCurrentUser } from "../utils/currentUser";
+import { photoUrl } from "../utils/photoUrl";
 
 export default function FacultyDashboard() {
   const { getToken } = useAuth();
@@ -180,7 +181,7 @@ export default function FacultyDashboard() {
                   <div className="h-24 w-24 animate-pulse rounded-2xl bg-slate-200" />
                 ) : facultyPhoto ? (
                   <img
-                    src={facultyPhoto}
+                    src={photoUrl(facultyPhoto, 240)}
                     alt={facultyName}
                     className="h-24 w-24 rounded-2xl object-cover ring-4 ring-white shadow-md"
                   />

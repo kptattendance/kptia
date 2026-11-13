@@ -17,6 +17,7 @@ import { useAuth } from "@clerk/nextjs";
 import AttainmentDownloads from "../../../components/AttainmentDownloads";
 import ImprovementPermits from "../../../components/ImprovementPermits";
 import { ENTRY_IA_NUMBERS, iaLabel, roundUpMark } from "../../../utils/iaLabels";
+import { photoUrl } from "../../../utils/photoUrl";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -922,7 +923,7 @@ const downloadExcelReport = async () => {
                                 <div className="flex items-center gap-3">
                                  {student.imageUrl ? (
   <img
-    src={student.imageUrl}
+    src={photoUrl(student.imageUrl)} decoding="async"
     alt={student.name || "Student"}
     className="
       h-10
@@ -1033,7 +1034,7 @@ const downloadExcelReport = async () => {
                                     <div className="flex items-center gap-3">
                                       {student.imageUrl ? (
                                         <img
-                                          src={student.imageUrl}
+                                          src={photoUrl(student.imageUrl)} loading="lazy" decoding="async"
                                           alt={student.name || "Student"}
                                           className="h-10 w-10 shrink-0 rounded-full border border-slate-200 object-cover"
                                           onError={(e) => {

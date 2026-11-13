@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import * as XLSX from "xlsx";
 import { fetchCurrentUser } from "../../utils/currentUser";
+import { photoUrl } from "../../utils/photoUrl";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -1167,7 +1168,7 @@ setStudents(departmentStudents);
                               title="View photo"
                             >
                               <img
-                                src={student.imageUrl}
+                                src={photoUrl(student.imageUrl)} loading="lazy" decoding="async"
                                 alt={student.name}
                                 className="h-11 w-11 rounded-lg object-cover transition hover:scale-105"
                               />
@@ -1791,7 +1792,7 @@ setStudents(departmentStudents);
 
       {/* PHOTO */}
       <img
-        src={previewPhoto.imageUrl}
+        src={photoUrl(previewPhoto.imageUrl, "large")}
         alt={previewPhoto.name || "Student photo"}
         className="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain shadow-2xl"
       />

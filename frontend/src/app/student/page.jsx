@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Link from "next/link";
 import { fetchCurrentUser } from "../utils/currentUser";
+import { photoUrl } from "../utils/photoUrl";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -169,7 +170,7 @@ export default function StudentDashboard() {
               {/* Photo */}
               {imageUrl ? (
                 <img
-                  src={imageUrl}
+                  src={photoUrl(imageUrl, 240)}
                   alt={name}
                   className="h-24 w-24 rounded-2xl border-4 border-white/20 object-cover"
                 />

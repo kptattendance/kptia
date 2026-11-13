@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { ENTRY_IA_NUMBERS, iaLabel } from "../../utils/iaLabels";
+import { photoUrl } from "../../utils/photoUrl";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -995,7 +996,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
                   <div className="flex justify-center">
 {student.imageUrl ? (
   <img
-    src={student.imageUrl}
+    src={photoUrl(student.imageUrl)}
     alt={student.name || "Student"}
     className="h-9 w-9 cursor-pointer rounded-full bg-slate-100 object-cover ring-2 ring-slate-100 transition hover:scale-110 hover:ring-2 hover:ring-amber-400 sm:h-10 sm:w-10"
     loading="lazy"
@@ -1156,7 +1157,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
       {/* LARGE PHOTO */}
       <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
         <img
-          src={selectedStudentPhoto.imageUrl}
+          src={photoUrl(selectedStudentPhoto.imageUrl, "large")}
           alt={selectedStudentPhoto.name}
           className="max-h-[75vh] max-w-[90vw] rounded-xl object-contain"
         />

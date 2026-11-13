@@ -23,7 +23,14 @@ const uploadToCloudinary = (req, res, next) => {
   if (!req.file) return next();
 
   const stream = cloudinary.uploader.upload_stream(
-    { folder: "users" }, // all profile pics go into "users" folder
+    {
+      folder: "users", // all profile pics go into "users" folder
+      // Stored at most 800 px, compressed: phone photos
+      // are several MB otherwise
+      transformation: [
+        { width: 800, height: 800, crop: "limit", quality: "auto:good" },
+      ],
+    },
     (err, result) => {
       if (err) return next(err);
 

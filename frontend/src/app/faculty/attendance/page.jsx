@@ -25,6 +25,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { escapeHtml } from "../../utils/escapeHtml";
+import { photoUrl } from "../../utils/photoUrl";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -2583,7 +2584,7 @@ const handleClassesConductedChange = (value) => {
         <div className="flex items-center gap-3">
   {student.imageUrl ? (
     <img
-      src={student.imageUrl}
+      src={photoUrl(student.imageUrl)} loading="lazy" decoding="async"
       alt={student.name || "Student"}
       className="h-9 w-9 shrink-0 cursor-pointer rounded-full border border-slate-200 object-cover transition hover:scale-110 hover:ring-2 hover:ring-blue-400"
       onClick={() => {
@@ -2939,7 +2940,7 @@ const handleClassesConductedChange = (value) => {
       {/* Student Photo */}
       <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
         <img
-          src={selectedStudentPhoto.imageUrl}
+          src={photoUrl(selectedStudentPhoto.imageUrl, "large")}
           alt={selectedStudentPhoto.name}
           className="max-h-[75vh] max-w-[90vw] rounded-xl object-contain"
         />

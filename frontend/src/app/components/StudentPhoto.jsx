@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { photoUrl } from "../utils/photoUrl";
 
 const SIZES = {
   sm: "h-8 w-8 text-[11px]",
@@ -58,7 +59,7 @@ export default function StudentPhoto({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={imageUrl}
+            src={photoUrl(imageUrl)} decoding="async"
             alt={name || "Student"}
             onError={() => setBroken(true)}
             className="h-full w-full object-cover"
@@ -94,7 +95,7 @@ export default function StudentPhoto({
               <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={imageUrl}
+                  src={photoUrl(imageUrl, "large")}
                   alt={name || "Student"}
                   className="max-h-[75vh] max-w-[90vw] rounded-xl object-contain"
                 />

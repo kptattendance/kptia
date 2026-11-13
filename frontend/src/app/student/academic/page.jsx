@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
 import { iaLabel, roundUpMark } from "../../utils/iaLabels";
+import { photoUrl } from "../../utils/photoUrl";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -421,7 +422,7 @@ export default function StudentAcademicPage() {
 
                 {student?.imageUrl ? (
                   <img
-                    src={student.imageUrl}
+                    src={photoUrl(student.imageUrl, 240)}
                     alt={student?.name || "Student"}
                     className="h-full w-full object-cover"
                   />

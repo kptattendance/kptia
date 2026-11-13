@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { photoUrl } from "../../utils/photoUrl";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -1170,9 +1171,7 @@ export default function UsersPage() {
 
                             {user.imageUrl ? (
                               <img
-                                src={
-                                  user.imageUrl
-                                }
+                                src={photoUrl(user.imageUrl)} loading="lazy" decoding="async"
                                 alt={
                                   user.name ||
                                   "User"

@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 
 import * as XLSX from "xlsx";
+import { photoUrl } from "../../../utils/photoUrl";
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const departments = [
@@ -1606,9 +1607,7 @@ const handleDownloadExcel = () => {
                                 title="View photo"
                               >
                                 <img
-                                  src={
-                                    student.imageUrl
-                                  }
+                                  src={photoUrl(student.imageUrl)} loading="lazy" decoding="async"
                                   alt={
                                     student.name
                                   }
@@ -1980,7 +1979,7 @@ const handleDownloadExcel = () => {
       {/* PHOTO */}
       <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl">
         <img
-          src={previewPhoto.imageUrl}
+          src={photoUrl(previewPhoto.imageUrl, "large")}
           alt={previewPhoto.name || "Student photo"}
           className="max-h-[80vh] max-w-[90vw] rounded-xl object-contain"
         />

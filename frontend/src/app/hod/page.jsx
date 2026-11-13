@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   UserRound,
 } from "lucide-react";
+import { photoUrl } from "../utils/photoUrl";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL;
@@ -610,7 +611,7 @@ export default function HODDashboardPage() {
 
                     {imageUrl ? (
                       <img
-                        src={imageUrl}
+                        src={photoUrl(imageUrl, 240)}
                         alt={name}
                         className="h-24 w-24 rounded-3xl border-4 border-white/10 object-cover shadow-lg sm:h-28 sm:w-28"
                       />
