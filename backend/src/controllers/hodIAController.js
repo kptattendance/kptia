@@ -1,6 +1,7 @@
 import IAMarks from "../models/IAMarks.js";
 import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
+import { CIE_MAX, computeCIE } from "../utils/ciTotal.js";
 
 export const getHODSemesterIAMarks = async (req, res) => {
   try {
@@ -546,6 +547,163 @@ if (
     res.status(500).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+// ==========================================================
+// FINAL CIE OF EVERY SUBJECT OF A SEMESTER
+//
+// GET /api/hod/ia/semester-final
+//   ?academicYear&semester (&department for admin /
+//   principal; a HOD always gets their own department)
+//
+// For the HOD's single Excel: one row per student, the
+// final CIE of every subject (the same rule as
+// everywhere: average of the CIEs entered, improvement
+// test when higher, rounded up).
+//
+// Returns {
+//   subjects: [{ _id, code, name, subjectCategory,
+//                cieMax, cieMin, parts }],
+//   students: [{ studentId, registerNumber, name,
+//                batchNumber, finals: { [subjectId]:
+//                { final, improved } } }]
+// }
+// ==========================================================
+
+export const getHODSemesterFinalCIE = async (req, res) => {
+  try {
+    const role = String(req.user?.role || "").toLowerCase();
+
+    if (!["hod", "principal", "admin"].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied.",
+      });
+    }
+
+    const { academicYear, semester } = req.query;
+
+    const department =
+      role === "hod"
+        ? String(req.user?.department || "").trim().toLowerCase()
+        : String(req.query.department || "").trim().toLowerCase();
+
+    if (!academicYear || !semester || !department) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Academic year, semester and department are required.",
+      });
+    }
+
+    const subjectDocs = await Subject.find({
+      department,
+      semester: Number(semester),
+    })
+      .select("code name sequence subjectCategory iaMax iaMin")
+      .lean();
+
+    subjectDocs.sort((a, b) =>
+      String(a.sequence || a.code || "").localeCompare(
+        String(b.sequence || b.code || ""),
+        undefined,
+        { numeric: true }
+      )
+    );
+
+    const records = await IAMarks.find({
+      academicYear,
+      subjectId: { $in: subjectDocs.map((subject) => subject._id) },
+    })
+      .select(
+        "subjectId iaNumber batchNumber totalMaxMarks students.studentId students.totalMarks students.tests.status"
+      )
+      .populate(
+        "students.studentId",
+        "registerNumber name batchNumber"
+      )
+      .lean();
+
+    const students = new Map();
+    const subjects = [];
+
+    for (const subject of subjectDocs) {
+      const subjectId = String(subject._id);
+
+      const subjectRecords = records.filter(
+        (record) => String(record.subjectId) === subjectId
+      );
+
+      if (subjectRecords.length === 0) {
+        continue;
+      }
+
+      const cieMax = Number(subject.iaMax) || CIE_MAX;
+
+      const cie = computeCIE(subjectRecords, cieMax);
+
+      let parts = 0;
+
+      for (const [studentId, result] of cie) {
+        parts = Math.max(parts, result.partNumbers.length);
+
+        if (!students.has(studentId)) {
+          const doc = subjectRecords
+            .flatMap((record) => record.students || [])
+            .find(
+              (entry) =>
+                String(entry.studentId?._id || "") === studentId
+            )?.studentId;
+
+          if (!doc) {
+            continue;
+          }
+
+          students.set(studentId, {
+            studentId,
+            registerNumber: doc.registerNumber || "",
+            name: doc.name || "",
+            batchNumber: doc.batchNumber || null,
+            finals: {},
+          });
+        }
+
+        students.get(studentId).finals[subjectId] = {
+          final: result.final,
+          improved: Boolean(result.improvement?.used),
+        };
+      }
+
+      subjects.push({
+        _id: subjectId,
+        code: subject.code,
+        name: subject.name,
+        subjectCategory: subject.subjectCategory || "",
+        cieMax,
+        cieMin: Number(subject.iaMin) || cieMax * 0.4,
+        parts,
+      });
+    }
+
+    const list = [...students.values()].sort((a, b) =>
+      String(a.registerNumber).localeCompare(
+        String(b.registerNumber),
+        undefined,
+        { numeric: true }
+      )
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: { subjects, students: list },
+    });
+  } catch (error) {
+    console.error("HOD semester final CIE error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to calculate the final IA marks.",
     });
   }
 };

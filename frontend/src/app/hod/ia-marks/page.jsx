@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import Swal from "sweetalert2";
 import AttainmentDownloads from "../../components/AttainmentDownloads";
 import {
   BarChart3,
@@ -76,6 +77,77 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
       );
     }
   }, [user, userLoaded]);
+
+  // ---------------------------------------------------
+  // FINAL IA OF ALL SUBJECTS (one Excel)
+  //
+  // One row per student, the final CIE of every subject
+  // of the semester and the total.
+  // ---------------------------------------------------
+
+  const [downloadingFinal, setDownloadingFinal] =
+    useState(false);
+
+  const handleDownloadFinal = async () => {
+    if (downloadingFinal || !semester || !department) {
+      return;
+    }
+
+    try {
+      setDownloadingFinal(true);
+
+      const token = await getToken();
+
+      const [response, XLSXModule, reports] = await Promise.all([
+        axios.get(`${API_URL}/api/hod/ia/semester-final`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { academicYear, semester, department },
+        }),
+        import("xlsx-js-style"),
+        import("../../utils/semesterFinalCIEExcel"),
+      ]);
+
+      const data = response.data?.data;
+
+      if (!data || data.subjects.length === 0) {
+        await Swal.fire({
+          icon: "info",
+          title: "No IA Marks",
+          text: `No IA marks are entered for Semester ${semester} in ${academicYear}.`,
+          confirmButtonColor: "#283618",
+        });
+
+        return;
+      }
+
+      const XLSX = XLSXModule.utils ? XLSXModule : XLSXModule.default;
+
+      reports.exportSemesterFinalCIEExcel(XLSX, {
+        departmentLabel: String(department).toUpperCase(),
+        semester,
+        academicYear,
+        data,
+        fileName: reports.semesterFinalCIEFileName({
+          department,
+          semester,
+          academicYear,
+        }),
+      });
+    } catch (err) {
+      console.error("Final IA Excel error:", err);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Download",
+        text:
+          err.response?.data?.message ||
+          "The final IA sheet could not be prepared. Please try again.",
+        confirmButtonColor: "#283618",
+      });
+    } finally {
+      setDownloadingFinal(false);
+    }
+  };
 
   // ---------------------------------------------------
   // LOAD ALL SUBJECTS + IA DATA + STUDENTS
@@ -826,7 +898,18 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
           </div>
 
           {semester && (
-            <div className="ml-auto">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadFinal}
+                disabled={downloadingFinal}
+                title="One Excel with the final IA of every subject of the semester, and each student's total"
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FileSpreadsheet size={16} />
+                {downloadingFinal ? "Preparing..." : "Final IA (all subjects)"}
+              </button>
+
               <AttainmentDownloads
                 scope="semester"
                 academicYear={academicYear}
