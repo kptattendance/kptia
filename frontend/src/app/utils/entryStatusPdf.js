@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { autoTable, startCapture, stopCapture } from "./pdfCapture.js";
 import {
   drawLetterheadFooter,
   drawLetterheadHeader,
@@ -230,6 +230,9 @@ const buildStatusPdf = (
 
   drawLetterheadHeader(doc, letterhead);
 
+  // Recorded for the Excel download
+  startCapture(doc);
+
   // ---------------------------------------------------
   // TITLE
   // ---------------------------------------------------
@@ -380,6 +383,8 @@ const buildStatusPdf = (
       body: pending.body,
     });
   }
+
+  stopCapture(doc);
 
   drawLetterheadFooter(doc, letterhead, footerNote);
 

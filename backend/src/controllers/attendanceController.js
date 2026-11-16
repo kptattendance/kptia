@@ -678,6 +678,187 @@ export const getSemesterAttendance = async (req, res) => {
 };
 
 // =====================================================
+// SEMESTER ATTENDANCE PERCENTAGE OF EVERY SUBJECT
+// =====================================================
+//
+// GET /api/attendance/semester-percentage
+//   ?department&semester&month&year&batchNumbers
+//
+// For the HOD's "percentage at the end of the semester"
+// download. Attendance is entered as running totals
+// (each month holds the total from the start of the
+// semester), so a student's semester attendance in a
+// subject is the latest month entered for them, up to
+// the selected month. Months more than 6 months before
+// the selected one belong to an earlier semester and
+// are not looked at.
+//
+// Returns { [subjectId]: { latest: {month, year},
+//   students: [{ studentId, registerNumber, name,
+//   batchNumber, attended, eligible, month, year }] } }
+// HOD: own department only.
+//
+// =====================================================
+
+const SEMESTER_SPAN_MONTHS = 6;
+
+const monthIndex = (year, month) =>
+  Number(year) * 12 + (Number(month) - 1);
+
+export const getSemesterPercentage = async (req, res) => {
+  try {
+    const role = String(req.user?.role || "").toLowerCase();
+
+    if (!ATTENDANCE_VIEW_ROLES.includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "You are not authorized to view attendance.",
+      });
+    }
+
+    const { semester, month, year, batchNumbers } =
+      req.query;
+
+    const department =
+      role === "hod"
+        ? String(req.user?.department || "")
+            .trim()
+            .toLowerCase()
+        : String(req.query.department || "")
+            .trim()
+            .toLowerCase();
+
+    if (!department || !semester || !month || !year) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Attendance selection data is missing.",
+      });
+    }
+
+    const last = monthIndex(year, month);
+    const first = last - (SEMESTER_SPAN_MONTHS - 1);
+
+    // Year/month pairs from first to last
+    const window = [];
+
+    for (let index = first; index <= last; index++) {
+      window.push({
+        year: Math.floor(index / 12),
+        month: (index % 12) + 1,
+      });
+    }
+
+    const records = await Attendance.find({
+      department,
+      semester: Number(semester),
+      $or: window,
+    })
+      .populate(
+        "students.studentId",
+        "registerNumber name batchNumber"
+      )
+      .lean();
+
+    const requestedBatches =
+      parseBatchNumbers(batchNumbers);
+
+    // subject -> month index -> records
+    const bySubject = new Map();
+
+    records.forEach((record) => {
+      const subjectKey = String(record.subjectId);
+      const key = monthIndex(record.year, record.month);
+
+      if (!bySubject.has(subjectKey)) {
+        bySubject.set(subjectKey, new Map());
+      }
+
+      const months = bySubject.get(subjectKey);
+
+      if (!months.has(key)) {
+        months.set(key, []);
+      }
+
+      months.get(key).push(record);
+    });
+
+    const data = {};
+
+    for (const [subjectId, months] of bySubject) {
+      const students = new Map();
+      let latest = null;
+
+      // Latest month first; a student keeps the first
+      // (latest) month that has them.
+      const ordered = [...months.keys()].sort((a, b) => b - a);
+
+      for (const key of ordered) {
+        const view = buildAttendanceView(
+          months.get(key),
+          requestedBatches,
+          {}
+        );
+
+        if (!view) {
+          continue;
+        }
+
+        const monthOf = {
+          year: Math.floor(key / 12),
+          month: (key % 12) + 1,
+        };
+
+        if (!latest) {
+          latest = monthOf;
+        }
+
+        view.students.forEach((entry) => {
+          const id = String(entry.studentId._id);
+
+          if (students.has(id)) {
+            return;
+          }
+
+          students.set(id, {
+            studentId: id,
+            registerNumber: entry.studentId.registerNumber || "",
+            name: entry.studentId.name || "",
+            batchNumber: entry.studentId.batchNumber || null,
+            attended: entry.classesAttended,
+            eligible: entry.classesEligible,
+            ...monthOf,
+          });
+        });
+      }
+
+      if (latest) {
+        data[subjectId] = {
+          latest,
+          students: [...students.values()],
+        };
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    console.error(
+      "Semester Percentage Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch the semester attendance.",
+    });
+  }
+};
+
+// =====================================================
 // GET MONTHLY ATTENDANCE
 // =====================================================
 

@@ -4,6 +4,7 @@ import {
   saveAttendance,
   getAttendance,
   getSemesterAttendance,
+  getSemesterPercentage,
   unlockAttendance,
   getAdminAttendanceStatistics,
   getAdminAttendanceMonths,
@@ -28,6 +29,13 @@ router.get(
   authenticateUser,
   getSemesterAttendance
 );
+// HOD: semester attendance percentage of every subject
+router.get(
+  "/semester-percentage",
+  authenticateUser,
+  getSemesterPercentage
+);
+
 router.get(
   "/admin-statistics",
   authenticateUser,

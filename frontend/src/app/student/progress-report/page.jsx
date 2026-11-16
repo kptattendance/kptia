@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
-import { Download } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 import { loadLetterhead } from "../../utils/letterheadAssets";
 import {
   formatDate,
@@ -90,6 +90,7 @@ export default function StudentProgressReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
+  const [downloadingExcel, setDownloadingExcel] = useState(false);
 
   // =====================================================
   // LOAD
@@ -128,6 +129,41 @@ export default function StudentProgressReportPage() {
   // =====================================================
   // DOWNLOAD PDF
   // =====================================================
+
+  // The same report as an Excel sheet (no photo or
+  // signatures)
+  const handleDownloadExcel = async () => {
+    if (downloadingExcel || !report) {
+      return;
+    }
+
+    try {
+      setDownloadingExcel(true);
+
+      const [{ buildProgressReportPdf }, { downloadPdfAsExcel }] =
+        await Promise.all([
+          import("./progressReportPdf"),
+          import("../../utils/pdfToExcel"),
+        ]);
+
+      await downloadPdfAsExcel(
+        buildProgressReportPdf(report, null, {}),
+        `Progress_Report_${report.student.registerNumber}.xlsx`,
+        "Progress Report"
+      );
+    } catch (err) {
+      console.error("Progress report Excel error:", err);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Download",
+        text: "The report could not be prepared. Please try again.",
+        confirmButtonColor: "#283618",
+      });
+    } finally {
+      setDownloadingExcel(false);
+    }
+  };
 
   const handleDownload = async () => {
     if (downloading || !report) {
@@ -251,6 +287,17 @@ export default function StudentProgressReportPage() {
           </p>
         </div>
 
+        <div className="flex shrink-0 flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={handleDownloadExcel}
+          disabled={downloadingExcel}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <FileSpreadsheet size={17} />
+          {downloadingExcel ? "Preparing..." : "Download Excel"}
+        </button>
+
         <button
           type="button"
           onClick={handleDownload}
@@ -262,6 +309,7 @@ export default function StudentProgressReportPage() {
             ? "Preparing..."
             : "Download PDF"}
         </button>
+        </div>
 
       </div>
 

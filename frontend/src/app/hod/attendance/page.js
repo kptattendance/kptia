@@ -18,6 +18,7 @@ import {
   Building2,
   GraduationCap,
   Download,
+  Percent,
 } from "lucide-react";
 import { photoUrl } from "../../utils/photoUrl";
 
@@ -1863,6 +1864,94 @@ const students = useMemo(() => {
     }
   };
 
+  // =====================================================
+  // SEMESTER PERCENTAGE OF ALL SUBJECTS (Excel)
+  //
+  // Only the attendance percentage of every subject at
+  // the end of the semester, and the overall. Attendance
+  // is entered as running totals, so the latest month
+  // entered for a subject (up to the selected month) is
+  // its semester attendance.
+  // =====================================================
+
+  const [downloadingPercentage, setDownloadingPercentage] =
+    useState(false);
+
+  const handleDownloadPercentage = async () => {
+    if (downloadingPercentage || !department || !semester) {
+      return;
+    }
+
+    try {
+      setDownloadingPercentage(true);
+
+      const token = await getToken();
+
+      const [response, XLSXModule, reports] = await Promise.all([
+        axios.get(`${API_URL}/api/attendance/semester-percentage`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            department,
+            semester: Number(semester),
+            month: Number(month),
+            year: Number(year),
+            batchNumbers:
+              batchSelection === "both" ? "1,2" : batchSelection,
+          },
+        }),
+        import("xlsx-js-style"),
+        import("../../utils/semesterPercentageExcel"),
+      ]);
+
+      const data = response.data?.data || {};
+
+      if (!subjects.some((subject) => data[String(subject._id)])) {
+        await Swal.fire({
+          icon: "info",
+          title: "No Attendance Data",
+          text: `No attendance is entered for Semester ${semester} up to ${monthLabel} ${year}.`,
+          confirmButtonColor: "#283618",
+        });
+
+        return;
+      }
+
+      const XLSX = XLSXModule.utils ? XLSXModule : XLSXModule.default;
+
+      reports.exportSemesterPercentageExcel(XLSX, {
+        departmentLabel,
+        semester,
+        monthLabel,
+        year,
+        batchLabel:
+          batchSelection === "both"
+            ? "Batch 1 & Batch 2"
+            : `Batch ${batchSelection}`,
+        subjects,
+        data,
+        fileName: reports.semesterPercentageFileName({
+          department,
+          semester,
+          monthLabel,
+          year,
+        }),
+      });
+    } catch (err) {
+      console.error("Semester percentage error:", err);
+
+      await Swal.fire({
+        icon: "error",
+        title: "Unable to Download",
+        text:
+          err.response?.data?.message ||
+          "The percentage sheet could not be prepared. Please try again.",
+        confirmButtonColor: "#283618",
+      });
+    } finally {
+      setDownloadingPercentage(false);
+    }
+  };
+
   const moveTableHorizontally = (direction) => {
   const container = tableScrollRef.current;
 
@@ -2280,6 +2369,18 @@ const students = useMemo(() => {
     >
       <Download size={16} />
       Download Excel
+    </button>
+
+    {/* SEMESTER PERCENTAGE OF ALL SUBJECTS */}
+    <button
+      type="button"
+      onClick={handleDownloadPercentage}
+      disabled={loading || downloadingPercentage}
+      title="Excel with only the attendance percentage of every subject at the end of the semester (latest month entered, up to the selected month)"
+      className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-800 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <Percent size={16} />
+      {downloadingPercentage ? "Preparing..." : "Semester % (all subjects)"}
     </button>
 
     {/* PDF DOWNLOAD */}

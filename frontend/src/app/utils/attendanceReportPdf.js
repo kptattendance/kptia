@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { autoTable, startCapture, stopCapture } from "./pdfCapture.js";
 import {
   drawLetterheadFooter,
   drawLetterheadHeader,
@@ -171,6 +171,9 @@ export function buildAttendanceReportPdf(
   const pageWidth = doc.internal.pageSize.getWidth();
 
   drawLetterheadHeader(doc, letterhead);
+
+  // Recorded for the Excel download
+  startCapture(doc);
 
   const overall = students.map((student) =>
     getOverall(student, subjects)
@@ -433,6 +436,8 @@ export function buildAttendanceReportPdf(
 
     y = doc.lastAutoTable.finalY;
   }
+
+  stopCapture(doc);
 
   // ---------------------------------------------------
   // SIGNATURE

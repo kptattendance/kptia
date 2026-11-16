@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { autoTable, startCapture, stopCapture } from "../../utils/pdfCapture.js";
 import {
   drawImageInBox,
   drawLetterheadFooter,
@@ -119,6 +119,9 @@ export function buildProgressReportPdf(
   // ---------------------------------------------------
 
   drawLetterheadHeader(doc, letterhead);
+
+  // Recorded for the Excel download
+  startCapture(doc);
 
   let y = 49;
 
@@ -447,8 +450,10 @@ export function buildProgressReportPdf(
 
   y = doc.lastAutoTable.finalY + 6;
 
+  stopCapture(doc);
+
   // ---------------------------------------------------
-  // DECLARATION + SIGNATURES
+  // DECLARATION + SIGNATURES (not in the Excel)
   //
   // Kept together. Moves to a new page only if the
   // table has left no room for it.

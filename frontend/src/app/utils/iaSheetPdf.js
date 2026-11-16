@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { autoTable, startCapture, stopCapture } from "./pdfCapture.js";
 import {
   drawLetterheadFooter,
   drawLetterheadHeader,
@@ -70,6 +70,9 @@ export function buildIASheetPdf(data, letterhead = {}) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
   drawLetterheadHeader(doc, letterhead);
+
+  // Recorded for the Excel download
+  startCapture(doc);
 
   // ---------------------------------------------------
   // TITLE
@@ -361,6 +364,8 @@ export function buildIASheetPdf(data, letterhead = {}) {
     doc.text(attNote, MARGIN, y);
     y += (attNote.length - 1) * 3;
   }
+
+  stopCapture(doc);
 
   // ---------------------------------------------------
   // SIGNATURES

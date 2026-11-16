@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
-import { Download } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 import { departments } from "../admin/components/EntryStatusGrid";
 import {
   computeCOAttainment,
@@ -79,7 +79,8 @@ export default function IAAllView() {
   const [sheet, setSheet] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [downloading, setDownloading] = useState(false);
+  // "" | "pdf" | "excel"
+  const [downloading, setDownloading] = useState("");
 
   // =====================================================
   // SUBJECTS OF THE SEMESTER
@@ -181,13 +182,29 @@ export default function IAAllView() {
   // DOWNLOAD PDF
   // =====================================================
 
-  const handleDownload = async () => {
+  // format: "pdf" or "excel" (the same sheet as the PDF)
+  const handleDownload = async (format = "pdf") => {
     if (!sheet || downloading) {
       return;
     }
 
     try {
-      setDownloading(true);
+      setDownloading(format);
+
+      if (format === "excel") {
+        const [reports, { downloadPdfAsExcel }] = await Promise.all([
+          import("../utils/iaSheetPdf"),
+          import("../utils/pdfToExcel"),
+        ]);
+
+        await downloadPdfAsExcel(
+          reports.buildIASheetPdf(sheet, {}),
+          reports.iaSheetFileName(sheet),
+          "IA Marks"
+        );
+
+        return;
+      }
 
       const [reports, { loadLetterhead }] =
         await Promise.all([
@@ -206,11 +223,11 @@ export default function IAAllView() {
       await Swal.fire({
         icon: "error",
         title: "Unable to Download",
-        text: "The PDF could not be prepared. Please try again.",
+        text: "The file could not be prepared. Please try again.",
         confirmButtonColor: "#283618",
       });
     } finally {
-      setDownloading(false);
+      setDownloading("");
     }
   };
 
@@ -360,15 +377,27 @@ export default function IAAllView() {
                 {sheet.ias.length} assessment{sheet.ias.length === 1 ? "" : "s"}
               </p>
 
-              <button
-                type="button"
-                onClick={handleDownload}
-                disabled={downloading}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                <Download size={16} />
-                {downloading ? "Preparing PDF..." : "Download PDF"}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDownload("excel")}
+                  disabled={Boolean(downloading)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  <FileSpreadsheet size={16} />
+                  {downloading === "excel" ? "Preparing Excel..." : "Download Excel"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDownload("pdf")}
+                  disabled={Boolean(downloading)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Download size={16} />
+                  {downloading === "pdf" ? "Preparing PDF..." : "Download PDF"}
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto">

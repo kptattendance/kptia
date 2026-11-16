@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
-import { Download } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 import EntryStatusSection from "./EntryStatusSection";
 import { isBridge } from "../utils/entryCounts";
 import { ENTRY_IA_NUMBERS, iaLabel } from "../utils/iaLabels";
@@ -223,13 +223,14 @@ export default function EntryStatusBoard({
   // DOWNLOAD CONSOLIDATED IA SHEET
   // =====================================================
 
-  const handleDownloadSheet = async (subject) => {
+  // format: "pdf" or "excel" (the same sheet as the PDF)
+  const handleDownloadSheet = async (subject, format = "pdf") => {
     if (downloadingId) {
       return;
     }
 
     try {
-      setDownloadingId(String(subject.subjectId));
+      setDownloadingId(`${subject.subjectId}|${format}`);
 
       const token = await getToken();
 
@@ -253,6 +254,18 @@ export default function EntryStatusBoard({
         ]);
 
       const sheet = response.data?.data;
+
+      if (format === "excel") {
+        const { downloadPdfAsExcel } = await import("../utils/pdfToExcel");
+
+        await downloadPdfAsExcel(
+          reports.buildIASheetPdf(sheet, {}),
+          reports.iaSheetFileName(sheet),
+          "IA Marks"
+        );
+
+        return;
+      }
 
       const letterhead = await loadLetterhead();
 
@@ -361,17 +374,31 @@ export default function EntryStatusBoard({
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDownloadSheet(subject)}
-                  disabled={Boolean(downloadingId)}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Download size={16} />
-                  {downloadingId === String(subject.subjectId)
-                    ? "Preparing PDF..."
-                    : "Download IA sheet"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadSheet(subject, "excel")}
+                    disabled={Boolean(downloadingId)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <FileSpreadsheet size={16} />
+                    {downloadingId === `${subject.subjectId}|excel`
+                      ? "Preparing Excel..."
+                      : "Excel"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadSheet(subject, "pdf")}
+                    disabled={Boolean(downloadingId)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Download size={16} />
+                    {downloadingId === `${subject.subjectId}|pdf`
+                      ? "Preparing PDF..."
+                      : "IA sheet PDF"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
