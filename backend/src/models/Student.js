@@ -162,6 +162,13 @@ const studentSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Changed branch: takes the bridge subjects ticked for
+    // "Branch Change" (utils/bridgeEligibility.js)
+    branchChange: {
+      type: Boolean,
+      default: false,
+    },
+
     semester: {
       type: Number,
       required: true,

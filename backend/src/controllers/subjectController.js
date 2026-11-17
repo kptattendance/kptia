@@ -1,5 +1,7 @@
+import mongoose from "mongoose";
 import Subject from "../models/Subject.js";
 import { parse } from "csv-parse/sync";
+import { cleanBridgeGroups } from "../utils/bridgeEligibility.js";
 
 // =====================================================
 // VALID DEPARTMENTS
@@ -1189,6 +1191,82 @@ uniqueSubjectKeys.add(subjectKey);
       message:
         "Failed to upload subjects.",
       error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// BRIDGE COURSES: WHO TAKES EACH ONE
+//
+// GET /api/subjects/bridge-courses
+//   every BRIDGE subject with its groups (bridgeFor)
+//
+// PUT /api/subjects/bridge-courses   (admin)
+//   { updates: [{ id, bridgeFor: ["lateralPUC", ...] }] }
+//   An empty list clears the setting: the subject then
+//   goes to all lateral students again.
+// =====================================================
+
+export const getBridgeCourses = async (req, res) => {
+  try {
+    const subjects = await Subject.find({ subjectCategory: "BRIDGE" })
+      .select("code name department semester sequence bridgeFor")
+      .sort({ semester: 1, department: 1, sequence: 1 })
+      .lean();
+
+    return res.json({ success: true, data: subjects });
+  } catch (error) {
+    console.error("Bridge courses error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load the bridge courses.",
+    });
+  }
+};
+
+export const saveBridgeCourses = async (req, res) => {
+  try {
+    const updates = Array.isArray(req.body?.updates)
+      ? req.body.updates
+      : [];
+
+    const operations = updates
+      .filter((update) => mongoose.Types.ObjectId.isValid(update?.id))
+      .map((update) => {
+        const groups = cleanBridgeGroups(update.bridgeFor);
+
+        return {
+          updateOne: {
+            filter: { _id: update.id, subjectCategory: "BRIDGE" },
+            update:
+              groups.length > 0
+                ? { $set: { bridgeFor: groups } }
+                : { $unset: { bridgeFor: "" } },
+          },
+        };
+      });
+
+    if (operations.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Nothing to save.",
+      });
+    }
+
+    const result = await Subject.bulkWrite(operations);
+
+    return res.json({
+      success: true,
+      message: `${result.matchedCount} bridge course(s) saved.`,
+      saved: result.matchedCount,
+    });
+  } catch (error) {
+    console.error("Save bridge courses error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to save the bridge courses.",
     });
   }
 };

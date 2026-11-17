@@ -68,6 +68,7 @@ export default function AddStudent({
     batch: "",
     batchNumber: "",
     admissionType: "",
+    branchChange: false,
     semester: "",
     status: "active",
   });
@@ -351,6 +352,11 @@ export default function AddStudent({
       formData.append(
         "admissionType",
         form.admissionType
+      );
+
+      formData.append(
+        "branchChange",
+        form.branchChange ? "true" : "false"
       );
 
       formData.append(
@@ -1081,6 +1087,25 @@ export default function AddStudent({
 
               </select>
             </div>
+
+            {/* BRANCH CHANGE: takes the bridge subjects ticked
+                for "Branch Change" (Admin -> Bridge Courses) */}
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+              <input
+                type="checkbox"
+                checked={form.branchChange}
+                onChange={(e) => setForm((prev) => ({ ...prev, branchChange: e.target.checked }))}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block font-semibold text-slate-800">
+                  Branch change
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Changed branch: also takes the bridge subjects ticked for Branch Change.
+                </span>
+              </span>
+            </label>
 
           </div>
 

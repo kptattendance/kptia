@@ -2,6 +2,7 @@
 
 import {
   BookOpen,
+  Route,
   CalendarCheck,
   ClipboardList,
   Database,
@@ -19,6 +20,7 @@ const menuItems = [
   { name: "Faculty", href: "/admin/faculty", icon: Users },
   { name: "HOD", href: "/admin/hod", icon: UserCog },
   { name: "Subjects", href: "/admin/subjects", icon: BookOpen },
+  { name: "Bridge Courses", href: "/admin/bridge-courses", icon: Route },
   { name: "Students", href: "/admin/students", icon: GraduationCap },
   { name: "Attendance", href: "/admin/attendance", icon: CalendarCheck },
   { name: "IA Marks", href: "/admin/ia-marks", icon: ClipboardList },

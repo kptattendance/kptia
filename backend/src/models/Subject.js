@@ -82,6 +82,21 @@ const subjectSchema = new mongoose.Schema(
     },
 
     // =====================================================
+    // BRIDGE COURSE: WHO TAKES IT
+    //
+    // lateralPUC, lateralITI (ITI same trade),
+    // lateralCross (ITI cross trade), branchChange.
+    // Empty / not set = all lateral students.
+    // See utils/bridgeEligibility.js.
+    // =====================================================
+
+    bridgeFor: {
+      type: [String],
+      enum: ["lateralPUC", "lateralITI", "lateralCross", "branchChange"],
+      default: undefined,
+    },
+
+    // =====================================================
     // ELECTIVE GROUP
     //
     // Used only for elective subjects.

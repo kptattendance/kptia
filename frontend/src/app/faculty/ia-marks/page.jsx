@@ -15,6 +15,7 @@ import {
   roundUpMark,
 } from "../../utils/iaLabels";
 import { escapeHtml } from "../../utils/escapeHtml";
+import { takesSubject } from "../../utils/bridgeEligibility";
 import {
   cleanNumberInput,
   handleGridKeyDown,
@@ -590,7 +591,9 @@ const loadBatch = async () => {
   // --------------------------------------------------
   // BRIDGE SUBJECT
   //
-  // ONLY LATERAL STUDENTS
+  // Only the student groups ticked for this subject on
+  // Admin -> Bridge Courses (PUC, ITI same, ITI cross,
+  // branch change). Not set yet = all lateral students.
   // --------------------------------------------------
 
   if (
@@ -599,15 +602,7 @@ const loadBatch = async () => {
     selectedStudents =
       selectedStudents.filter(
         (student) =>
-          [
-            "lateralPUC",
-            "lateralITI",
-            "lateralCross",
-          ].includes(
-            String(
-              student.admissionType || ""
-            ).trim()
-          )
+          takesSubject(student, selectedSubject)
       );
   }
 
@@ -663,8 +658,8 @@ const loadBatch = async () => {
     ) {
       showAlert(
         "warning",
-        "No Lateral Students",
-        "No lateral students are available for this bridge course."
+        "No Eligible Students",
+        "No student of this class takes this bridge course (see Admin → Bridge Courses for who takes it)."
       );
     } else {
       showAlert(
@@ -2216,15 +2211,7 @@ for (const batch of batchesToSave) {
       // ------------------------------------------------
 
       if (subjectCategory === "BRIDGE") {
-        return [
-          "lateralPUC",
-          "lateralITI",
-          "lateralCross",
-        ].includes(
-          String(
-            student.admissionType || ""
-          ).trim()
-        );
+        return takesSubject(student, selectedSubject);
       }
 
       // ------------------------------------------------

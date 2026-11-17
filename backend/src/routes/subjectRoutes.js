@@ -7,6 +7,8 @@ import {
   updateSubject,
   deleteSubject,
   bulkUploadSubjects,
+  getBridgeCourses,
+  saveBridgeCourses,
 } from "../controllers/subjectController.js";
 
 import Subject from "../models/Subject.js";
@@ -26,6 +28,21 @@ router.get(
   "/getsubjects",
   authenticateUser,
   getSubjects
+);
+
+// Bridge courses: which student groups take each one
+router.get(
+  "/bridge-courses",
+  authenticateUser,
+  authorizeRoles("admin", "principal", "hod"),
+  getBridgeCourses
+);
+
+router.put(
+  "/bridge-courses",
+  authenticateUser,
+  authorizeRoles("admin"),
+  saveBridgeCourses
 );
 
 // Get single subject

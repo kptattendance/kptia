@@ -2136,6 +2136,11 @@ export const createStudent = async (
         admissionType:
           normalizedAdmissionType,
 
+        // Changed branch: takes the bridge subjects ticked
+        // for "Branch Change"
+        branchChange:
+          String(req.body.branchChange) === "true",
+
         semester:
           normalizedSemester,
 
@@ -2626,6 +2631,12 @@ export const updateStudent =
         "semester",
         "status",
       ];
+
+      // Changed branch (sent as "true" / "false")
+      if (req.body.branchChange !== undefined) {
+        student.branchChange =
+          String(req.body.branchChange) === "true";
+      }
 
       for (
         const field of allowedFields

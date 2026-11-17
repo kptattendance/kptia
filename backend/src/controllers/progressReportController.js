@@ -1,4 +1,5 @@
 import Student from "../models/Student.js";
+import { takesSubject } from "../utils/bridgeEligibility.js";
 import Subject from "../models/Subject.js";
 import Attendance from "../models/Attendance.js";
 import IAMarks from "../models/IAMarks.js";
@@ -82,7 +83,7 @@ export const getMyProgressReport = async (
       clerkId: req.user.id,
     })
       .select(
-        "name registerNumber rollNumber fatherName motherName phone parentPhone department semester batch batchNumber admissionType imageUrl"
+        "name registerNumber rollNumber fatherName motherName phone parentPhone department semester batch batchNumber admissionType branchChange imageUrl"
       )
       .lean();
 
@@ -119,11 +120,14 @@ export const getMyProgressReport = async (
       semester: student.semester,
     };
 
-    // Bridge courses are for lateral students.
+    // Bridge courses: only for the groups ticked for the
+    // subject (filtered below); a student who can take
+    // none of them skips bridge subjects here.
     if (
       !LATERAL_ADMISSION_TYPES.includes(
         student.admissionType
-      )
+      ) &&
+      !student.branchChange
     ) {
       subjectFilter.subjectCategory = {
         $ne: "BRIDGE",
@@ -131,7 +135,7 @@ export const getMyProgressReport = async (
     }
 
     const [
-      subjects,
+      allSubjects,
       attendanceRecords,
       iaRecords,
       mentorName,
@@ -139,7 +143,7 @@ export const getMyProgressReport = async (
       await Promise.all([
         Subject.find(subjectFilter)
           .select(
-            "code name subjectCategory sequence iaMax iaMin"
+            "code name subjectCategory bridgeFor sequence iaMax iaMin"
           )
           .sort({ sequence: 1 })
           .lean(),
@@ -197,6 +201,11 @@ export const getMyProgressReport = async (
 
         getMentorName(student._id, academicYear),
       ]);
+
+    // Bridge subjects: only those this student takes
+    const subjects = allSubjects.filter((subject) =>
+      takesSubject(student, subject)
+    );
 
     // --------------------------------------------------
     // ATTENDANCE: subject -> month -> classes

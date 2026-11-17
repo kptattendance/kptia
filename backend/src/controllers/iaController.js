@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { takesSubject } from "../utils/bridgeEligibility.js";
 import IAMarks from "../models/IAMarks.js";
 import Student from "../models/Student.js";
 import Subject from "../models/Subject.js";
@@ -208,7 +209,8 @@ export const validateStudents = async (
   department,
   semester,
   batchNumber,
-  subjectCategory
+  subjectCategory,
+  bridgeFor = null
 ) => {
   if (
     !Array.isArray(students) ||
@@ -317,7 +319,7 @@ export const validateStudents = async (
         $in: validObjectIds,
       },
     }).select(
-      "_id department batchNumber admissionType"
+      "_id name registerNumber department batchNumber admissionType branchChange"
     );
 
   if (
@@ -381,21 +383,18 @@ export const validateStudents = async (
     // bridge course IA marks.
     // ------------------------------------------------
 
+    // Only the groups ticked for this bridge subject
+    // (Admin -> Bridge Courses); not set = all laterals.
     if (
-      normalizedSubjectCategory ===
-      "BRIDGE"
+      !takesSubject(dbStudent, {
+        subjectCategory: normalizedSubjectCategory,
+        bridgeFor,
+      })
     ) {
-      if (
-        !isLateralStudent(
-          dbStudent.admissionType
-        )
-      ) {
-        return {
-          valid: false,
-          message:
-            "Bridge course IA marks can only be entered for lateral students.",
-        };
-      }
+      return {
+        valid: false,
+        message: `${dbStudent.registerNumber || dbStudent.name || "A student"} does not take this bridge course.`,
+      };
     }
   }
 
@@ -803,7 +802,7 @@ export const saveIAMarks = async (
       await Subject.findById(
         subjectId
       ).select(
-        "code name semester department subjectCategory"
+        "code name semester department subjectCategory bridgeFor"
       );
 
     if (!subject) {
@@ -961,7 +960,8 @@ const studentValidation =
     department,
     semesterNumber,
     batchNumberValue,
-    subject.subjectCategory
+    subject.subjectCategory,
+    subject.bridgeFor
   );
 
     if (
@@ -1419,7 +1419,7 @@ export const getIAMarks = async (
       })
         .populate(
           "subjectId",
-          "code name semester department subjectCategory"
+          "code name semester department subjectCategory bridgeFor"
         )
         .populate(
           "students.studentId",
@@ -1500,7 +1500,7 @@ export const getIAMarksById = async (
       await IAMarks.findById(id)
         .populate(
           "subjectId",
-          "code name semester department subjectCategory"
+          "code name semester department subjectCategory bridgeFor"
         )
         .populate(
           "students.studentId",
@@ -1717,7 +1717,7 @@ export const updateIAMarks = async (
       await Subject.findById(
         subjectId
       ).select(
-        "code name semester department subjectCategory"
+        "code name semester department subjectCategory bridgeFor"
       );
 
     if (!subject) {
@@ -1817,7 +1817,8 @@ export const updateIAMarks = async (
         requestedDepartment,
         semesterNumber,
         batchNumberValue,
-        subjectCategory
+        subjectCategory,
+        subject.bridgeFor
       );
 
     if (
@@ -2166,7 +2167,7 @@ export const getStudentIAMarks = async (
       )
         .populate(
           "subjectId",
-          "code name semester department subjectCategory"
+          "code name semester department subjectCategory bridgeFor"
         )
         .lean();
 

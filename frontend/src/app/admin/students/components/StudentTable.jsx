@@ -459,6 +459,7 @@ const handleDownloadExcel = () => {
           data.batchNumber || "",
         admissionType:
           data.admissionType || "",
+        branchChange: Boolean(data.branchChange),
         semester: data.semester || "",
         status:
           data.status || "active",
@@ -608,6 +609,11 @@ const handleDownloadExcel = () => {
       formData.append(
         "admissionType",
         editForm.admissionType
+      );
+
+      formData.append(
+        "branchChange",
+        editForm.branchChange ? "true" : "false"
       );
 
       formData.append(
@@ -2553,6 +2559,25 @@ const handleDownloadExcel = () => {
                         </option>
                       </select>
                     </div>
+
+            {/* BRANCH CHANGE: takes the bridge subjects ticked
+                for "Branch Change" (Admin -> Bridge Courses) */}
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(editForm.branchChange)}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, branchChange: e.target.checked }))}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block font-semibold text-slate-800">
+                  Branch change
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Changed branch: also takes the bridge subjects ticked for Branch Change.
+                </span>
+              </span>
+            </label>
 
                     {/* SEMESTER */}
                     <div>

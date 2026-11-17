@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { takesSubject } from "../utils/bridgeEligibility.js";
 import StudyMaterial from "../models/StudyMaterial.js";
 import Subject from "../models/Subject.js";
 import Student from "../models/Student.js";
@@ -1046,12 +1047,12 @@ export const readMaterial = async (req, res) => {
               clerkId: req.user.id,
             })
               .select(
-                "department semester admissionType"
+                "department semester admissionType branchChange"
               )
               .lean(),
 
             Subject.findById(material.subjectId)
-              .select("subjectCategory")
+              .select("subjectCategory bridgeFor")
               .lean(),
           ]);
 
@@ -1062,11 +1063,9 @@ export const readMaterial = async (req, res) => {
           ) === material.department &&
           Number(student.semester) ===
             Number(material.semester) &&
-          // Bridge courses are for lateral students.
-          (subject?.subjectCategory !== "BRIDGE" ||
-            LATERAL_ADMISSION_TYPES.includes(
-              student.admissionType
-            ));
+          // Bridge courses: only the groups ticked for
+          // the subject (utils/bridgeEligibility.js)
+          takesSubject(student, subject);
       }
     } else if (
       role === "admin" ||
@@ -1159,7 +1158,7 @@ export const getStudentMaterials = async (
       clerkId: req.user.id,
     })
       .select(
-        "name registerNumber department semester admissionType"
+        "name registerNumber department semester admissionType branchChange"
       )
       .lean();
 
@@ -1183,19 +1182,20 @@ export const getStudentMaterials = async (
       semester: student.semester,
     };
 
-    // Bridge courses are for lateral students.
-    if (!lateral) {
+    // Bridge courses: only the groups ticked for the
+    // subject (filtered below)
+    if (!lateral && !student.branchChange) {
       subjectFilter.subjectCategory = {
         $ne: "BRIDGE",
       };
     }
 
-    const subjects = await Subject.find(
-      subjectFilter
-    )
-      .select("code name subjectCategory sequence")
-      .sort({ sequence: 1 })
-      .lean();
+    const subjects = (
+      await Subject.find(subjectFilter)
+        .select("code name subjectCategory bridgeFor sequence")
+        .sort({ sequence: 1 })
+        .lean()
+    ).filter((subject) => takesSubject(student, subject));
 
     const materials = await StudyMaterial.find({
       academicYear,
