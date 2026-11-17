@@ -402,15 +402,18 @@ export default function IAAllView() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* The table scrolls inside its own box, so the
+                sideways scrollbar is always on screen and the
+                headings stay at the top. */}
+            <div className="max-h-[75vh] overflow-auto overscroll-contain">
               <table className="w-full min-w-max border-collapse text-sm">
 
-                <thead>
+                <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_#e2e8f0]">
                   {/* IA 1 | IA 2 | ... */}
                   <tr>
                     <th
                       rowSpan={2}
-                      className="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500"
+                      className="sticky left-0 z-30 border-b border-r border-slate-200 bg-slate-50 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500"
                     >
                       Student
                     </th>

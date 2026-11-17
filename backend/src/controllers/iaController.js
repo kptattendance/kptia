@@ -927,6 +927,19 @@ export const saveIAMarks = async (
       });
     }
 
+    // IA 1 to 4 are one question paper. A second paper
+    // would double the maximum (100 instead of 50) and
+    // halve every student's IA in the final CIE.
+    if (
+      iaNumberValue !== CIE5_IA &&
+      testValidation.tests.length > 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `${iaLabel(iaNumberValue)} has one question paper. Remove the extra test and save again.`,
+      });
+    }
+
     if (
       iaNumberValue === CIE5_IA &&
       testValidation.tests.length > CIE5_MAX_ACTIVITIES
@@ -1773,6 +1786,19 @@ export const updateIAMarks = async (
         success: false,
         message:
           testValidation.message,
+      });
+    }
+
+    // IA 1 to 4 are one question paper. A second paper
+    // would double the maximum (100 instead of 50) and
+    // halve every student's IA in the final CIE.
+    if (
+      iaNumberValue !== CIE5_IA &&
+      testValidation.tests.length > 1
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `${iaLabel(iaNumberValue)} has one question paper. Remove the extra test and save again.`,
       });
     }
 
