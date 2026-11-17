@@ -4,6 +4,7 @@ import StudentSemester from "../models/StudentSemester.js";
 import Attendance from "../models/Attendance.js";
 import IAMarks from "../models/IAMarks.js";
 import Subject from "../models/Subject.js";
+import { CIE_MAX, computeCIE, roundUpMark } from "../utils/ciTotal.js";
 
 // ==========================================================
 // STUDENT - GET OWN ACADEMIC DATA
@@ -155,7 +156,7 @@ export const getMyAcademicData = async (req, res) => {
     })
       .populate(
         "subjectId",
-        "name code semester"
+        "name code semester iaMax iaMin"
       )
       .sort({
         academicYear: -1,
@@ -221,6 +222,15 @@ export const getMyAcademicData = async (req, res) => {
           }
         );
 
+        // The saved total: for CIE 5 it is the average of
+        // the activities, not their sum
+        if (
+          studentMarks.totalMarks !== null &&
+          studentMarks.totalMarks !== undefined
+        ) {
+          totalMarks = roundUpMark(studentMarks.totalMarks);
+        }
+
         return {
           _id: record._id,
 
@@ -251,6 +261,100 @@ export const getMyAcademicData = async (req, res) => {
         };
       })
       .filter(Boolean);
+
+    // ======================================================
+    // FINAL CIE OF EACH SUBJECT
+    //
+    // Same rule as everywhere (utils/ciTotal.js): IA 1-4
+    // and CIE 5 of the student's batch, each scaled to the
+    // subject maximum, averaged, improvement test when
+    // higher, rounded up. Every record of that batch is
+    // read (an IA the student is missing from counts 0),
+    // keeping only this student's marks.
+    // ======================================================
+
+    const groups = new Map();
+
+    iaRecords.forEach((record) => {
+      const subject = record.subjectId;
+
+      if (!subject?._id) {
+        return;
+      }
+
+      const key = `${record.academicYear}|${subject._id}|${record.batchNumber}`;
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          academicYear: record.academicYear,
+          semester: record.semester,
+          subject,
+          batchNumber: record.batchNumber,
+        });
+      }
+    });
+
+    const finalCIE = [];
+
+    if (groups.size > 0) {
+      const batchRecords = await IAMarks.find({
+        $or: [...groups.values()].map((group) => ({
+          academicYear: group.academicYear,
+          subjectId: group.subject._id,
+          batchNumber: group.batchNumber,
+        })),
+      })
+        .select({
+          academicYear: 1,
+          subjectId: 1,
+          batchNumber: 1,
+          iaNumber: 1,
+          totalMaxMarks: 1,
+          students: { $elemMatch: { studentId: student._id } },
+        })
+        .lean();
+
+      groups.forEach((group, key) => {
+        const records = batchRecords
+          .filter(
+            (record) =>
+              `${record.academicYear}|${record.subjectId}|${record.batchNumber}` ===
+              key
+          )
+          .map((record) => ({
+            ...record,
+            students: record.students || [],
+          }));
+
+        const cieMax = Number(group.subject.iaMax) || CIE_MAX;
+
+        const cieMin =
+          Number(group.subject.iaMin) || Math.ceil(cieMax * 0.4);
+
+        const cie = computeCIE(records, cieMax).get(
+          String(student._id)
+        );
+
+        if (!cie) {
+          return;
+        }
+
+        finalCIE.push({
+          academicYear: group.academicYear,
+          semester: group.semester,
+          subjectId: group.subject._id,
+          final: cie.final,
+          maxMarks: cieMax,
+          minMarks: cieMin,
+          improvement: cie.improvement?.used
+            ? {
+                replacesIA: cie.improvement.replacesIA,
+                finalBeforeImprovement: cie.finalBeforeImprovement,
+              }
+            : null,
+        });
+      });
+    }
 
     // ======================================================
     // RESPONSE
@@ -298,6 +402,8 @@ export const getMyAcademicData = async (req, res) => {
         attendance,
 
         iaMarks,
+
+        finalCIE,
       },
     });
   } catch (error) {

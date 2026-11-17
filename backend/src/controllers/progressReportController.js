@@ -139,7 +139,7 @@ export const getMyProgressReport = async (
       await Promise.all([
         Subject.find(subjectFilter)
           .select(
-            "code name subjectCategory sequence iaMax"
+            "code name subjectCategory sequence iaMax iaMin"
           )
           .sort({ sequence: 1 })
           .lean(),
@@ -408,6 +408,12 @@ export const getMyProgressReport = async (
         iaTotal: {
           marks: iaMarks,
           maxMarks: iaMaxMarks,
+          minMarks: cie
+            ? Number(subject.iaMin) || Math.ceil(cieMax * 0.4)
+            : 0,
+          improvedIA: cie?.improvement?.used
+            ? cie.improvement.replacesIA
+            : null,
         },
       };
     });

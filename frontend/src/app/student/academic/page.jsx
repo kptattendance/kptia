@@ -3,25 +3,29 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
-import { iaLabel, roundUpMark } from "../../utils/iaLabels";
+import { roundUpMark } from "../../utils/iaLabels";
 import { photoUrl } from "../../utils/photoUrl";
+import {
+  ATTENDANCE_MINIMUM,
+  AttendanceCell,
+  AttendanceLegend,
+  MarkCell,
+  MarksLegend,
+  assessmentHead,
+  assessmentName,
+} from "../components/AcademicBadges";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+const SHORT_MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+
+const monthLabel = (month) =>
+  `${SHORT_MONTHS[month.month - 1] || month.month} ${month.year}`;
+
+const byCode = (a, b) => String(a.code).localeCompare(String(b.code));
 
 export default function StudentAcademicPage() {
   const { getToken } = useAuth();
@@ -34,6 +38,7 @@ export default function StudentAcademicPage() {
 
   const [attendance, setAttendance] = useState([]);
   const [iaMarks, setIaMarks] = useState([]);
+  const [finalCIE, setFinalCIE] = useState([]);
 
   const [activeTab, setActiveTab] = useState("attendance");
 
@@ -43,10 +48,6 @@ export default function StudentAcademicPage() {
   // ==========================================================
   // LOAD DATA
   // ==========================================================
-
-  useEffect(() => {
-    loadAcademicData();
-  }, []);
 
   const loadAcademicData = async () => {
     try {
@@ -74,10 +75,7 @@ export default function StudentAcademicPage() {
       }
 
       setStudent(result.data?.student || null);
-
-      setAcademic(
-        result.data?.academic || null
-      );
+      setAcademic(result.data?.academic || null);
 
       setAttendance(
         Array.isArray(result.data?.attendance)
@@ -88,6 +86,12 @@ export default function StudentAcademicPage() {
       setIaMarks(
         Array.isArray(result.data?.iaMarks)
           ? result.data.iaMarks
+          : []
+      );
+
+      setFinalCIE(
+        Array.isArray(result.data?.finalCIE)
+          ? result.data.finalCIE
           : []
       );
     } catch (err) {
@@ -106,26 +110,14 @@ export default function StudentAcademicPage() {
     }
   };
 
-  // ==========================================================
-  // SUBJECT NAME
-  // ==========================================================
-
-  const getSubjectName = (subject) => {
-    if (!subject) return "Unknown Subject";
-
-    return (
-      subject.name ||
-      subject.code ||
-      "Unknown Subject"
-    );
-  };
-
-  const getSubjectCode = (subject) => {
-    return subject?.code || "";
-  };
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadAcademicData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ==========================================================
-  // ATTENDANCE FILTER
+  // FILTERS
   // ==========================================================
 
   const filteredAttendance = useMemo(() => {
@@ -138,44 +130,25 @@ export default function StudentAcademicPage() {
         Number(item.subjectId?.semester) ===
         Number(selectedSemester)
     );
-  }, [
-    attendance,
-    selectedSemester,
-  ]);
-
-  // ==========================================================
-  // IA FILTER
-  // ==========================================================
+  }, [attendance, selectedSemester]);
 
   const filteredIA = useMemo(() => {
-    let result = iaMarks;
-
-    if (selectedSemester !== "all") {
-      result = result.filter(
-        (item) =>
-          Number(item.semester) ===
-          Number(selectedSemester)
-      );
+    if (selectedSemester === "all") {
+      return iaMarks;
     }
 
-    return result;
-  }, [
-    iaMarks,
-    selectedSemester,
-  ]);
-
-  // ==========================================================
-  // SEMESTERS
-  // ==========================================================
+    return iaMarks.filter(
+      (item) =>
+        Number(item.semester) === Number(selectedSemester)
+    );
+  }, [iaMarks, selectedSemester]);
 
   const semesters = useMemo(() => {
     const values = new Set();
 
     attendance.forEach((item) => {
       if (item.subjectId?.semester) {
-        values.add(
-          Number(item.subjectId.semester)
-        );
+        values.add(Number(item.subjectId.semester));
       }
     });
 
@@ -189,72 +162,116 @@ export default function StudentAcademicPage() {
       values.add(Number(academic.semester));
     }
 
-    return [...values].sort(
-      (a, b) => a - b
-    );
-  }, [
-    attendance,
-    iaMarks,
-    academic,
-  ]);
+    return [...values].sort((a, b) => a - b);
+  }, [attendance, iaMarks, academic]);
 
   // ==========================================================
-  // ATTENDANCE SUMMARY
+  // ATTENDANCE TABLES
+  //
+  // One table per semester: subjects down the side, months
+  // across. Attendance is entered as a running total, so
+  // each month is "from the start of the semester up to the
+  // end of that month" and the latest month of a subject is
+  // its semester figure.
   // ==========================================================
 
-  const attendanceSummary = useMemo(() => {
-    if (filteredAttendance.length === 0) {
-      return {
-        conducted: 0,
-        attended: 0,
-        percentage: 0,
+  const attendanceTables = useMemo(() => {
+    const tables = new Map();
+
+    filteredAttendance.forEach((item) => {
+      const semester = Number(item.subjectId?.semester) || 0;
+
+      if (!tables.has(semester)) {
+        tables.set(semester, {
+          semester,
+          months: new Map(),
+          subjects: new Map(),
+        });
+      }
+
+      const table = tables.get(semester);
+
+      const monthKey = Number(item.year) * 100 + Number(item.month);
+
+      table.months.set(monthKey, {
+        key: monthKey,
+        month: Number(item.month),
+        year: Number(item.year),
+      });
+
+      const subjectKey = String(item.subjectId?._id || item.subjectId);
+
+      if (!table.subjects.has(subjectKey)) {
+        table.subjects.set(subjectKey, {
+          key: subjectKey,
+          name: item.subjectId?.name || item.subjectId?.code || "Subject",
+          code: item.subjectId?.code || "",
+          months: {},
+        });
+      }
+
+      table.subjects.get(subjectKey).months[monthKey] = {
+        attended: Number(item.classesAttended || 0),
+        eligible: Number(item.classesConducted || 0),
       };
-    }
+    });
 
-    const conducted =
-      filteredAttendance.reduce(
-        (sum, item) =>
-          sum +
-          Number(item.classesConducted || 0),
-        0
-      );
+    return [...tables.values()]
+      .sort((a, b) => b.semester - a.semester)
+      .map((table) => {
+        const months = [...table.months.values()].sort(
+          (a, b) => a.key - b.key
+        );
 
-    const attended =
-      filteredAttendance.reduce(
-        (sum, item) =>
-          sum +
-          Number(item.classesAttended || 0),
-        0
-      );
+        let attended = 0;
+        let eligible = 0;
 
-    const percentage =
-      conducted > 0
-        ? Number(
-            ((attended / conducted) * 100).toFixed(
-              2
-            )
-          )
-        : 0;
+        const subjects = [...table.subjects.values()]
+          .map((subject) => {
+            const latestKey = Object.keys(subject.months)
+              .map(Number)
+              .sort((a, b) => a - b)
+              .pop();
 
-    return {
-      conducted,
-      attended,
-      percentage,
-    };
+            const latest = subject.months[latestKey] || {
+              attended: 0,
+              eligible: 0,
+            };
+
+            attended += latest.attended;
+            eligible += latest.eligible;
+
+            return { ...subject, latest };
+          })
+          .sort(byCode);
+
+        return {
+          ...table,
+          months,
+          subjects,
+          overall: { attended, eligible },
+        };
+      });
   }, [filteredAttendance]);
 
   // ==========================================================
   // IA TABLES
   //
   // One table per academic year + semester: subjects down
-  // the side, IAs across the top, then the total.
-  //
-  // [{ key, academicYear, semester, iaNumbers,
-  //    subjects: [{ key, name, code,
-  //                 ias: { [iaNumber]: { marks, max,
-  //                                      absent } },
-  //                 marks, max }] }]
+  // the side, IA 1-4, CIE 5 and the improvement test
+  // across, then the Final CIE (from the backend, same
+  // rule as the progress report).
   // ==========================================================
+
+  const finalOf = useMemo(() => {
+    const map = new Map();
+
+    finalCIE.forEach((item) => {
+      map.set(`${item.academicYear}|${item.subjectId}`, item);
+    });
+
+    return map;
+  }, [finalCIE]);
 
   const iaTables = useMemo(() => {
     const tables = new Map();
@@ -274,9 +291,7 @@ export default function StudentAcademicPage() {
 
       const table = tables.get(tableKey);
 
-      const subjectKey = String(
-        ia.subjectId?._id || ia.subjectId
-      );
+      const subjectKey = String(ia.subjectId?._id || ia.subjectId);
 
       if (!table.subjects.has(subjectKey)) {
         table.subjects.set(subjectKey, {
@@ -287,33 +302,20 @@ export default function StudentAcademicPage() {
             "Unknown Subject",
           code: ia.subjectId?.code || "",
           ias: {},
-          marks: 0,
-          max: 0,
+          final: finalOf.get(`${ia.academicYear}|${subjectKey}`) || null,
         });
       }
 
-      const subject = table.subjects.get(subjectKey);
-
       const tests = ia.tests || [];
 
-      const max = Number(ia.totalMaxMarks || 0);
-      const marks = roundUpMark(ia.totalMarks);
-
-      subject.ias[ia.iaNumber] = {
-        marks,
-        max,
+      table.subjects.get(subjectKey).ias[ia.iaNumber] = {
+        marks: roundUpMark(ia.totalMarks),
+        max: Number(ia.totalMaxMarks || 0),
         // Absent for every test of the IA
         absent:
           tests.length > 0 &&
-          tests.every(
-            (test) =>
-              test.status === "ABSENT" ||
-              test.marks === null
-          ),
+          tests.every((test) => test.status === "ABSENT"),
       };
-
-      subject.marks += marks;
-      subject.max += max;
 
       table.iaNumbers.add(Number(ia.iaNumber));
     });
@@ -327,15 +329,10 @@ export default function StudentAcademicPage() {
       )
       .map((table) => ({
         ...table,
-        iaNumbers: [...table.iaNumbers].sort(
-          (a, b) => a - b
-        ),
-        subjects: [...table.subjects.values()].sort(
-          (a, b) =>
-            String(a.code).localeCompare(String(b.code))
-        ),
+        iaNumbers: [...table.iaNumbers].sort((a, b) => a - b),
+        subjects: [...table.subjects.values()].sort(byCode),
       }));
-  }, [filteredIA]);
+  }, [filteredIA, finalOf]);
 
   // ==========================================================
   // LOADING
@@ -347,13 +344,6 @@ export default function StudentAcademicPage() {
         <div className="mx-auto max-w-7xl">
           <div className="animate-pulse space-y-6">
             <div className="h-32 rounded-3xl bg-white" />
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="h-28 rounded-2xl bg-white" />
-              <div className="h-28 rounded-2xl bg-white" />
-              <div className="h-28 rounded-2xl bg-white" />
-            </div>
-
             <div className="h-96 rounded-3xl bg-white" />
           </div>
         </div>
@@ -378,9 +368,7 @@ export default function StudentAcademicPage() {
               Unable to Load Academic Data
             </h2>
 
-            <p className="mt-2 text-sm text-slate-500">
-              {error}
-            </p>
+            <p className="mt-2 text-sm text-slate-500">{error}</p>
 
             <button
               onClick={loadAcademicData}
@@ -394,32 +382,25 @@ export default function StudentAcademicPage() {
     );
   }
 
+  const headCell =
+    "px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider";
+
   // ==========================================================
   // PAGE
   // ==========================================================
 
   return (
     <div className="min-h-screen px-3 py-4 sm:px-5 sm:py-6 lg:px-8 lg:py-8">
-
       <div className="mx-auto max-w-7xl space-y-6">
 
-        {/* ==================================================
-            HEADER / STUDENT PROFILE
-        ================================================== */}
-
+        {/* ================= PROFILE ================= */}
         <section className="relative overflow-hidden rounded-3xl bg-slate-950 p-5 text-white shadow-xl sm:p-7">
-
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-blue-500/20 blur-3xl" />
           <div className="absolute -bottom-24 left-20 h-56 w-56 rounded-full bg-indigo-500/20 blur-3xl" />
 
           <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-
             <div className="flex items-center gap-4">
-
-              {/* PHOTO */}
-
               <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-2 border-white/20 bg-white/10 sm:h-24 sm:w-24">
-
                 {student?.imageUrl ? (
                   <img
                     src={photoUrl(student.imageUrl, 240)}
@@ -428,21 +409,17 @@ export default function StudentAcademicPage() {
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-3xl font-bold">
-                    {student?.name
-                      ?.charAt(0)
-                      ?.toUpperCase() || "S"}
+                    {student?.name?.charAt(0)?.toUpperCase() || "S"}
                   </div>
                 )}
-
               </div>
 
               <div className="min-w-0">
-
                 <p className="text-sm font-medium text-blue-300">
                   Student Academic Portal
                 </p>
 
-                <h1 className="mt-1 truncate text-2xl font-bold sm:text-2xl">
+                <h1 className="mt-1 truncate text-2xl font-bold">
                   {student?.name || "Student"}
                 </h1>
 
@@ -452,15 +429,12 @@ export default function StudentAcademicPage() {
                     ? ` • ${student.department.toUpperCase()}`
                     : ""}
                 </p>
-
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
-
               <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-medium text-slate-200">
-                Semester{" "}
-                {academic?.semester || "—"}
+                Semester {academic?.semester || "—"}
               </span>
 
               <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-medium text-slate-200">
@@ -472,286 +446,202 @@ export default function StudentAcademicPage() {
                   Batch {student.batchNumber}
                 </span>
               )}
-
             </div>
-
           </div>
         </section>
 
-    
-
-        {/* ==================================================
-            TABS + FILTERS
-        ================================================== */}
-
+        {/* ================= TABS + FILTER ================= */}
         <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-
-          <div className="flex flex-col gap-4 border-b border-slate-100 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
-
-            {/* TABS */}
-
-            <div className="flex rounded-xl bg-slate-100 p-1">
-
-              <button
-                onClick={() =>
-                  setActiveTab("attendance")
-                }
-                className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
-                  activeTab === "attendance"
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                Attendance
-              </button>
-
-              <button
-                onClick={() =>
-                  setActiveTab("ia")
-                }
-                className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
-                  activeTab === "ia"
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                IA Marks
-              </button>
-
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="grid grid-cols-2 rounded-xl bg-slate-100 p-1 sm:flex">
+              {[
+                ["attendance", "Attendance"],
+                ["ia", "IA Marks"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={`rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
+                    activeTab === key
+                      ? "bg-white text-slate-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
 
-            {/* FILTERS */}
-
-            <div className="flex flex-wrap gap-3">
-
-              <select
-                value={selectedSemester}
-                onChange={(e) =>
-                  setSelectedSemester(
-                    e.target.value
-                  )
-                }
-                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-400 focus:bg-white"
-              >
-                <option value="all">
-                  All Semesters
+            <select
+              value={selectedSemester}
+              onChange={(e) => setSelectedSemester(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-400 focus:bg-white"
+            >
+              <option value="all">All Semesters</option>
+              {semesters.map((semester) => (
+                <option key={semester} value={semester}>
+                  Semester {semester}
                 </option>
-
-                {semesters.map((semester) => (
-                  <option
-                    key={semester}
-                    value={semester}
-                  >
-                    Semester {semester}
-                  </option>
-                ))}
-              </select>
-
-            </div>
-
+              ))}
+            </select>
           </div>
 
-          {/* ==================================================
-              ATTENDANCE TAB
-          ================================================== */}
-
+          {/* ================= ATTENDANCE TAB ================= */}
           {activeTab === "attendance" && (
             <div className="p-4 sm:p-5">
-
-              <div className="mb-5">
-                <h2 className="text-lg font-bold text-slate-900">
-                  Monthly Attendance
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Attendance recorded subject-wise for
-                  each month.
-                </p>
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Attendance</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Each month shows the classes attended / held from the start of the semester up to the end of that month. Semester = latest month.
+                  </p>
+                </div>
+                <AttendanceLegend minimum={ATTENDANCE_MINIMUM} />
               </div>
 
-              {filteredAttendance.length === 0 ? (
+              {attendanceTables.length === 0 ? (
                 <EmptyState
                   icon="✓"
                   title="No Attendance Records"
                   text="Attendance has not been entered for the selected semester."
                 />
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                <div className="space-y-6">
+                  {attendanceTables.map((table) => (
+                    <div
+                      key={table.semester}
+                      className="overflow-hidden rounded-2xl border border-slate-200"
+                    >
+                      <TableTitle
+                        semester={table.semester}
+                        right={
+                          <span className="text-xs font-medium text-slate-500">
+                            Overall{" "}
+                            <AttendanceCell
+                              attended={table.overall.attended}
+                              eligible={table.overall.eligible}
+                            />
+                          </span>
+                        }
+                      />
 
-                  <div className="overflow-x-auto">
+                      {/* phone: one card per subject */}
+                      <div className="divide-y divide-slate-100 md:hidden">
+                        {table.subjects.map((subject) => (
+                          <div key={subject.key} className="px-4 py-3.5">
+                            <div className="flex items-start justify-between gap-3">
+                              <SubjectName subject={subject} />
+                              <AttendanceCell
+                                attended={subject.latest.attended}
+                                eligible={subject.latest.eligible}
+                                large
+                              />
+                            </div>
 
-                    <table className="min-w-[850px] w-full text-left">
-
-                      <thead className="bg-slate-50">
-
-                        <tr>
-
-                          <th className="px-4 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Subject
-                          </th>
-
-                          <th className="px-4 py-4 text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Month
-                          </th>
-
-                          <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Conducted
-                          </th>
-
-                          <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Attended
-                          </th>
-
-                          <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Percentage
-                          </th>
-
-                          <th className="px-4 py-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
-                            Status
-                          </th>
-
-                        </tr>
-
-                      </thead>
-
-                      <tbody className="divide-y divide-slate-100">
-
-                        {filteredAttendance.map(
-                          (item) => {
-
-                            const percentage =
-                              Number(
-                                item.percentage || 0
-                              );
-
-                            const good =
-                              percentage >= 75;
-
-                            return (
-                              <tr
-                                key={item._id}
-                                className="transition hover:bg-slate-50"
-                              >
-
-                                <td className="px-4 py-4">
-
-                                  <div className="font-semibold text-slate-900">
-                                    {getSubjectName(
-                                      item.subjectId
-                                    )}
+                            <div className="mt-3 grid grid-cols-3 gap-2">
+                              {table.months.map((month) => {
+                                const value = subject.months[month.key];
+                                return (
+                                  <div key={month.key} className="rounded-lg bg-slate-50 px-1.5 py-2 text-center">
+                                    <p className="mb-1 text-[10px] font-bold uppercase text-slate-400">
+                                      {monthLabel(month)}
+                                    </p>
+                                    <AttendanceCell
+                                      attended={value?.attended}
+                                      eligible={value?.eligible}
+                                    />
                                   </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-                                  {getSubjectCode(
-                                    item.subjectId
-                                  ) && (
-                                    <div className="mt-0.5 text-xs text-slate-400">
-                                      {getSubjectCode(
-                                        item.subjectId
-                                      )}
-                                    </div>
-                                  )}
+                      {/* larger screens: table */}
+                      <div className="hidden overflow-x-auto md:block">
+                        <table className="w-full min-w-[640px]">
+                          <thead>
+                            <tr className="border-b border-slate-200 bg-slate-50">
+                              <th className={`${headCell} sticky left-0 z-10 bg-slate-50 text-left text-slate-500`}>
+                                Subject
+                              </th>
+                              {table.months.map((month) => (
+                                <th key={month.key} className={`${headCell} text-slate-500`}>
+                                  Up to {monthLabel(month)}
+                                </th>
+                              ))}
+                              <th className={`${headCell} bg-slate-800 text-white`}>
+                                Semester
+                              </th>
+                            </tr>
+                          </thead>
 
+                          <tbody className="divide-y divide-slate-100">
+                            {table.subjects.map((subject) => (
+                              <tr key={subject.key} className="hover:bg-slate-50/60">
+                                <td className="sticky left-0 z-10 bg-white px-4 py-3">
+                                  <SubjectName subject={subject} />
                                 </td>
-
-                                <td className="px-4 py-4 text-sm text-slate-600">
-                                  {MONTHS[
-                                    Number(item.month) - 1
-                                  ] || item.month}{" "}
-                                  {item.year}
+                                {table.months.map((month) => {
+                                  const value = subject.months[month.key];
+                                  return (
+                                    <td key={month.key} className="px-3 py-3 text-center">
+                                      <AttendanceCell
+                                        attended={value?.attended}
+                                        eligible={value?.eligible}
+                                      />
+                                    </td>
+                                  );
+                                })}
+                                <td className="bg-slate-50 px-3 py-3 text-center">
+                                  <AttendanceCell
+                                    attended={subject.latest.attended}
+                                    eligible={subject.latest.eligible}
+                                    large
+                                  />
                                 </td>
-
-                                <td className="px-4 py-4 text-center text-sm font-medium text-slate-700">
-                                  {item.classesConducted}
-                                </td>
-
-                                <td className="px-4 py-4 text-center text-sm font-medium text-slate-700">
-                                  {item.classesAttended}
-                                </td>
-
-                                <td className="px-4 py-4 text-center">
-
-                                  <span
-                                    className={`inline-flex min-w-[72px] justify-center rounded-lg px-3 py-1.5 text-sm font-bold ${
-                                      good
-                                        ? "bg-emerald-50 text-emerald-700"
-                                        : "bg-red-50 text-red-700"
-                                    }`}
-                                  >
-                                    {percentage}%
-                                  </span>
-
-                                </td>
-
-                                <td className="px-4 py-4 text-center">
-
-                                  <span
-                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-                                      good
-                                        ? "bg-emerald-100 text-emerald-700"
-                                        : "bg-red-100 text-red-700"
-                                    }`}
-                                  >
-                                    {good
-                                      ? "Good"
-                                      : "Below 75%"}
-                                  </span>
-
-                                </td>
-
                               </tr>
-                            );
-                          }
-                        )}
+                            ))}
+                          </tbody>
 
-                      </tbody>
-
-                    </table>
-
-                  </div>
-
+                          <tfoot>
+                            <tr className="border-t-2 border-slate-200 bg-slate-50">
+                              <td
+                                colSpan={table.months.length + 1}
+                                className="sticky left-0 bg-slate-50 px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600"
+                              >
+                                Overall (all subjects)
+                              </td>
+                              <td className="bg-slate-100 px-3 py-3 text-center">
+                                <AttendanceCell
+                                  attended={table.overall.attended}
+                                  eligible={table.overall.eligible}
+                                  large
+                                />
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
-
-              {/* ATTENDANCE NOTE */}
-
-              {filteredAttendance.length > 0 && (
-                <div className="mt-4 flex items-start gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
-
-                  <span className="mt-0.5">
-                    ℹ
-                  </span>
-
-                  <p>
-                    Attendance below{" "}
-                    <strong>75%</strong> is highlighted
-                    for attention.
-                  </p>
-
-                </div>
-              )}
-
             </div>
           )}
 
-          {/* ==================================================
-              IA TAB
-
-              One table per semester: subjects down the
-              side, every IA across the top, then the
-              total. On a phone each subject is a card.
-          ================================================== */}
-
+          {/* ================= IA TAB ================= */}
           {activeTab === "ia" && (
             <div className="p-4 sm:p-5">
-
-              <div className="mb-5">
-                <h2 className="text-lg font-bold text-slate-900">
-                  Internal Assessment Marks
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-500">
-                  Every IA of every subject side by side. Green is 50% or more, red is below 50%.
-                </p>
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Internal Assessment Marks</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Final CIE = average of the IAs and CIE 5, each scaled to the subject maximum, with the improvement test when higher. Red = below the subject minimum.
+                  </p>
+                </div>
+                <MarksLegend />
               </div>
 
               {iaTables.length === 0 ? (
@@ -767,53 +657,32 @@ export default function StudentAcademicPage() {
                       key={table.key}
                       className="overflow-hidden rounded-2xl border border-slate-200"
                     >
+                      <TableTitle
+                        semester={table.semester}
+                        academicYear={table.academicYear}
+                      />
 
-                      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
-                        <span className="rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-bold text-violet-700">
-                          Semester {table.semester}
-                        </span>
-
-                        <span className="text-xs font-medium text-slate-500">
-                          Academic Year {table.academicYear || "—"}
-                        </span>
-                      </div>
-
-                      {/* PHONE: one card per subject */}
-
-                      <div className="divide-y divide-slate-100 sm:hidden">
+                      {/* phone: one card per subject */}
+                      <div className="divide-y divide-slate-100 md:hidden">
                         {table.subjects.map((subject) => (
-                          <div key={subject.key} className="px-4 py-3">
+                          <div key={subject.key} className="px-4 py-3.5">
                             <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-slate-900">
-                                  {subject.name}
+                              <SubjectName subject={subject} />
+                              <div className="text-center">
+                                <p className="mb-1 text-[10px] font-bold uppercase text-slate-400">
+                                  Final CIE
                                 </p>
-
-                                {subject.code && (
-                                  <p className="font-mono text-xs text-slate-400">
-                                    {subject.code}
-                                  </p>
-                                )}
+                                <FinalCIE final={subject.final} />
                               </div>
-
-                              <IAScore
-                                marks={subject.marks}
-                                max={subject.max}
-                                strong
-                              />
                             </div>
 
-                            <div className="mt-2 grid grid-cols-3 gap-2">
+                            <div className="mt-3 grid grid-cols-3 gap-2">
                               {table.iaNumbers.map((iaNumber) => (
-                                <div
-                                  key={iaNumber}
-                                  className="rounded-lg bg-slate-50 px-2 py-1.5 text-center"
-                                >
-                                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                                    {iaLabel(iaNumber)}
+                                <div key={iaNumber} className="rounded-lg bg-slate-50 px-1.5 py-2 text-center">
+                                  <p className={`mx-auto mb-1 w-fit rounded px-1.5 text-[10px] font-bold uppercase ${assessmentHead(iaNumber)}`}>
+                                    {assessmentName(iaNumber)}
                                   </p>
-
-                                  <IAScore {...subject.ias[iaNumber]} />
+                                  <MarkCell {...subject.ias[iaNumber]} />
                                 </div>
                               ))}
                             </div>
@@ -821,161 +690,132 @@ export default function StudentAcademicPage() {
                         ))}
                       </div>
 
-                      {/* LARGER SCREENS: table */}
-
-                      <div className="hidden overflow-x-auto sm:block">
-                        <table className="w-full text-left">
-
+                      {/* larger screens: table */}
+                      <div className="hidden overflow-x-auto md:block">
+                        <table className="w-full min-w-[640px]">
                           <thead>
-                            <tr className="border-b border-slate-100">
-                              <th className="px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                            <tr className="border-b border-slate-200">
+                              <th className={`${headCell} sticky left-0 z-10 bg-slate-50 text-left text-slate-500`}>
                                 Subject
                               </th>
-
                               {table.iaNumbers.map((iaNumber) => (
-                                <th
-                                  key={iaNumber}
-                                  className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-400"
-                                >
-                                  {iaLabel(iaNumber)}
+                                <th key={iaNumber} className={`${headCell} ${assessmentHead(iaNumber)}`}>
+                                  {assessmentName(iaNumber)}
                                 </th>
                               ))}
-
-                              <th className="bg-slate-50 px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
-                                Total
+                              <th className={`${headCell} bg-slate-800 text-white`}>
+                                Final CIE
                               </th>
                             </tr>
                           </thead>
 
                           <tbody className="divide-y divide-slate-100">
                             {table.subjects.map((subject) => (
-                              <tr key={subject.key} className="hover:bg-slate-50">
-                                <td className="px-4 py-3">
-                                  <p className="text-sm font-semibold text-slate-900">
-                                    {subject.name}
-                                  </p>
-
-                                  {subject.code && (
-                                    <p className="font-mono text-xs text-slate-400">
-                                      {subject.code}
-                                    </p>
-                                  )}
+                              <tr key={subject.key} className="hover:bg-slate-50/60">
+                                <td className="sticky left-0 z-10 bg-white px-4 py-3">
+                                  <SubjectName subject={subject} />
                                 </td>
-
                                 {table.iaNumbers.map((iaNumber) => (
-                                  <td
-                                    key={iaNumber}
-                                    className="px-4 py-3 text-center"
-                                  >
-                                    <IAScore {...subject.ias[iaNumber]} />
+                                  <td key={iaNumber} className="px-3 py-3 text-center">
+                                    <MarkCell {...subject.ias[iaNumber]} />
                                   </td>
                                 ))}
-
-                                <td className="bg-slate-50 px-4 py-3 text-center">
-                                  <IAScore
-                                    marks={subject.marks}
-                                    max={subject.max}
-                                    strong
-                                  />
+                                <td className="bg-slate-50 px-3 py-3 text-center">
+                                  <FinalCIE final={subject.final} />
+                                  {subject.final && (
+                                    <p className="mt-0.5 text-[10px] text-slate-400">
+                                      min {subject.final.minMarks}
+                                    </p>
+                                  )}
                                 </td>
                               </tr>
                             ))}
                           </tbody>
-
                         </table>
                       </div>
-
                     </div>
                   ))}
                 </div>
               )}
-
             </div>
           )}
-
         </section>
 
-        {/* ==================================================
-            FOOTER INFORMATION
-        ================================================== */}
-
         <div className="pb-4 text-center text-xs text-slate-400">
-          Academic information is displayed from the
-          official college records.
+          Academic information is displayed from the official college records.
         </div>
-
       </div>
     </div>
   );
 }
 
 // ==========================================================
-// EMPTY STATE
+// SMALL PIECES
 // ==========================================================
 
-function EmptyState({
-  icon,
-  title,
-  text,
-}) {
+function TableTitle({ semester, academicYear, right = null }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-bold text-violet-700">
+          {semester ? `Semester ${semester}` : "Semester —"}
+        </span>
+        {academicYear && (
+          <span className="text-xs font-medium text-slate-500">
+            Academic Year {academicYear}
+          </span>
+        )}
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function SubjectName({ subject }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-sm font-semibold leading-snug text-slate-900">
+        {subject.name}
+      </p>
+      {subject.code && (
+        <p className="font-mono text-[11px] text-slate-400">{subject.code}</p>
+      )}
+    </div>
+  );
+}
+
+function FinalCIE({ final }) {
+  if (!final || final.final === null || final.final === undefined) {
+    return <span className="text-sm text-slate-300">—</span>;
+  }
+
+  return (
+    <span className="inline-flex flex-col items-center gap-0.5">
+      <MarkCell
+        marks={final.final}
+        max={final.maxMarks}
+        minimum={final.minMarks}
+        large
+      />
+      {final.improvement && (
+        <span className="text-[10px] font-semibold text-teal-700">
+          Improved IA {final.improvement.replacesIA}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function EmptyState({ icon, title, text }) {
   return (
     <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-6 py-14 text-center">
-
       <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">
         {icon}
       </div>
 
-      <h3 className="text-base font-bold text-slate-800">
-        {title}
-      </h3>
+      <h3 className="text-base font-bold text-slate-800">{title}</h3>
 
-      <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-        {text}
-      </p>
-
+      <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">{text}</p>
     </div>
-  );
-}
-
-// ==========================================================
-// IA SCORE
-//
-// "15 / 20" in green (50% or more) or red, "AB" when the
-// student was absent for the whole IA, "—" when there are
-// no marks.
-// ==========================================================
-
-function IAScore({ marks, max, absent, strong = false }) {
-  if (absent) {
-    return (
-      <span className="text-sm font-bold text-red-600">
-        AB
-      </span>
-    );
-  }
-
-  if (marks === undefined || !max) {
-    return (
-      <span className="text-sm text-slate-300">—</span>
-    );
-  }
-
-  const good = marks / max >= 0.5;
-
-  return (
-    <span
-      className={`inline-flex items-baseline gap-0.5 whitespace-nowrap rounded-md px-2 py-0.5 ${
-        strong ? "text-base font-bold" : "text-sm font-semibold"
-      } ${
-        good
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-red-50 text-red-700"
-      }`}
-    >
-      {Number.isInteger(marks) ? marks : marks.toFixed(1)}
-      <span className="text-xs font-medium opacity-70">
-        /{max}
-      </span>
-    </span>
   );
 }

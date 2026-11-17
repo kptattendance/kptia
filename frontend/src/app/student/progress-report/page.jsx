@@ -8,13 +8,19 @@ import { Download, FileSpreadsheet } from "lucide-react";
 import { loadLetterhead } from "../../utils/letterheadAssets";
 import {
   formatDate,
-  formatMarks,
-  formatPercent,
   getDepartmentName,
   getMonthLabel,
-  monthPercentage,
 } from "./progressReportPdf";
-import { iaLabel } from "../../utils/iaLabels";
+import {
+  AttendanceCell,
+  AttendanceLegend,
+  MarkCell,
+  MarksLegend,
+  assessmentHead,
+  assessmentName,
+  attendanceTone,
+  percentOf,
+} from "../components/AcademicBadges";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -231,6 +237,7 @@ export default function StudentProgressReportPage() {
     );
   }
 
+
   const {
     student,
     months,
@@ -238,279 +245,404 @@ export default function StudentProgressReportPage() {
     rows,
     minimumAttendance,
     attendanceIsRunningTotal,
+    overallAttendance,
   } = report;
 
-  const isLow = (value) =>
-    value !== null &&
-    value !== undefined &&
-    value < minimumAttendance;
+  // ---------------- summary ----------------
+  const attendanceOf = (row) =>
+    percentOf(row.attendanceTotal?.attended, row.attendanceTotal?.eligible);
 
-  const headClass =
-    "px-3 py-2.5 text-center text-[11px] font-bold uppercase tracking-wider text-slate-500";
+  const lowAttendance = rows.filter((row) => {
+    const value = attendanceOf(row);
+    return value !== null && value < minimumAttendance;
+  }).length;
 
-  const cellClass =
-    "px-3 py-2.5 text-center text-sm text-slate-700 whitespace-nowrap";
+  const withCIE = rows.filter((row) => row.iaTotal?.maxMarks > 0);
 
-  const subjectCell = (row) => (
-    <td className="px-5 py-2.5">
-      <p className="font-mono text-xs font-bold text-slate-500">
-        {row.subject.code}
-      </p>
+  const belowMinimum = withCIE.filter(
+    (row) => row.iaTotal.marks < row.iaTotal.minMarks
+  ).length;
 
-      <p className="text-sm font-medium text-slate-900">
-        {row.subject.name}
-      </p>
-    </td>
+  const overallPercent = percentOf(
+    overallAttendance?.attended,
+    overallAttendance?.eligible
   );
 
+  const overallTone = attendanceTone(overallPercent, minimumAttendance);
+
+  const monthHead = (month) =>
+    `${attendanceIsRunningTotal ? "Up to " : ""}${getMonthLabel(month)}`;
+
+  const headCell =
+    "px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider";
+
   return (
-    <div className="min-h-screen p-3 sm:p-4 lg:p-5">
+    <div className="min-h-screen px-3 py-4 sm:px-5 sm:py-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-5">
 
-      {/* HEADER */}
+        {/* ================= HEADER ================= */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Progress Report
+            </h1>
 
-      <div className="mb-6 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <p className="mt-1.5 text-sm text-slate-600">
+              <span className="font-semibold text-slate-900">{student.name}</span>
+              {" · "}
+              <span className="font-mono">{student.registerNumber}</span>
+              {" · "}
+              {getDepartmentName(student.department)} · Semester {student.semester}, {report.academicYear}
+              {student.mentorName ? ` · Mentor: ${student.mentorName}` : ""}
+            </p>
 
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Progress Report
-          </h1>
+            <p className="mt-1 text-xs text-slate-500">
+              As on {formatDate(report.generatedAt)}. Download it, sign it, get it signed by your parent and submit it to your HOD.
+            </p>
+          </div>
 
-          <p className="mt-2 max-w-2xl text-sm text-slate-500">
-            {student.name} · {student.registerNumber} · {getDepartmentName(student.department)} · Semester {student.semester}, {report.academicYear}
-            {student.mentorName
-              ? ` · Mentor: ${student.mentorName}`
-              : ""}
-          </p>
+          <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex">
+            <button
+              type="button"
+              onClick={handleDownloadExcel}
+              disabled={downloadingExcel}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <FileSpreadsheet size={17} />
+              {downloadingExcel ? "Preparing..." : "Excel"}
+            </button>
 
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            As on {formatDate(report.generatedAt)}. Download it, sign it, get it signed by your parent and submit it to your HOD.
-          </p>
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download size={17} />
+              {downloading ? "Preparing..." : "Download PDF"}
+            </button>
+          </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={handleDownloadExcel}
-          disabled={downloadingExcel}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <FileSpreadsheet size={17} />
-          {downloadingExcel ? "Preparing..." : "Download Excel"}
-        </button>
-
-        <button
-          type="button"
-          onClick={handleDownload}
-          disabled={downloading}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Download size={17} />
-          {downloading
-            ? "Preparing..."
-            : "Download PDF"}
-        </button>
+        {/* ================= SUMMARY ================= */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <SummaryTile
+            label="Overall attendance"
+            value={overallPercent === null ? "—" : `${overallPercent}%`}
+            note={
+              overallPercent === null
+                ? "Not entered yet"
+                : `${overallAttendance.attended} of ${overallAttendance.eligible} classes`
+            }
+            tone={overallTone}
+          />
+          <SummaryTile
+            label="Subjects below 75%"
+            value={lowAttendance}
+            note={lowAttendance ? "Attendance shortage" : "All subjects fine"}
+            tone={lowAttendance ? "low" : "good"}
+          />
+          <SummaryTile
+            label="Final CIE entered"
+            value={`${withCIE.length}/${rows.length}`}
+            note="subjects"
+            tone="none"
+          />
+          <SummaryTile
+            label="Below CIE minimum"
+            value={belowMinimum}
+            note={belowMinimum ? "Needs improvement" : "All subjects fine"}
+            tone={belowMinimum ? "low" : "good"}
+          />
         </div>
 
-      </div>
+        {/* ================= ATTENDANCE ================= */}
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Attendance</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {attendanceIsRunningTotal
+                  ? "Classes attended / held from the start of the semester up to the end of each month."
+                  : "Classes attended / held in each month."}
+              </p>
+            </div>
+            <AttendanceLegend minimum={minimumAttendance} />
+          </div>
 
-      {/* ATTENDANCE */}
-
-      <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-slate-900">
-            Attendance
-          </h2>
-
-          <p className="mt-0.5 text-xs text-slate-500">
-            {attendanceIsRunningTotal
-              ? "Classes attended / classes held from the start of the semester up to the end of each month, with the percentage."
-              : "Classes attended / classes held in each month, with the percentage."}{" "}
-            Below {minimumAttendance}% is shown in red.
-          </p>
-        </div>
-
-        {months.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-slate-500">
-            Attendance has not been entered yet.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-
-            <table className="w-full min-w-[560px]">
-
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className={`${headClass} text-left`}>
-                    Subject
-                  </th>
-
-                  {months.map((month) => (
-                    <th
-                      key={month.key}
-                      className={headClass}
-                    >
-                      {attendanceIsRunningTotal
-                        ? "Up to "
-                        : ""}
-                      {getMonthLabel(month)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-
+          {months.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500">
+              Attendance has not been entered yet.
+            </p>
+          ) : (
+            <>
+              {/* phone: one card per subject */}
+              <div className="divide-y divide-slate-100 md:hidden">
                 {rows.map((row) => (
-                  <tr key={row.subject._id}>
-                    {subjectCell(row)}
+                  <div key={row.subject._id} className="px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <SubjectName row={row} />
+                      <AttendanceCell
+                        attended={row.attendanceTotal?.attended}
+                        eligible={row.attendanceTotal?.eligible}
+                        minimum={minimumAttendance}
+                        large
+                      />
+                    </div>
 
-                    {months.map((month) => {
-                      const value =
-                        row.attendance[month.key];
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {months.map((month) => {
+                        const value = row.attendance[month.key];
+                        return (
+                          <div key={month.key} className="rounded-lg bg-slate-50 px-1.5 py-2 text-center">
+                            <p className="mb-1 text-[10px] font-bold uppercase text-slate-400">
+                              {getMonthLabel(month)}
+                            </p>
+                            <AttendanceCell
+                              attended={value?.attended}
+                              eligible={value?.eligible}
+                              minimum={minimumAttendance}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                      const percent =
-                        monthPercentage(value);
+              {/* larger screens: table */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[640px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className={`${headCell} sticky left-0 z-10 bg-slate-50 text-left text-slate-500`}>
+                        Subject
+                      </th>
+                      {months.map((month) => (
+                        <th key={month.key} className={`${headCell} text-slate-500`}>
+                          {monthHead(month)}
+                        </th>
+                      ))}
+                      <th className={`${headCell} bg-slate-800 text-white`}>
+                        Semester
+                      </th>
+                    </tr>
+                  </thead>
 
-                      return (
-                        <td
-                          key={month.key}
-                          className={cellClass}
-                        >
-                          {value ? (
-                            <>
-                              <span className="block">
-                                {value.attended} / {value.eligible}
-                              </span>
+                  <tbody className="divide-y divide-slate-100">
+                    {rows.map((row) => (
+                      <tr key={row.subject._id} className="hover:bg-slate-50/60">
+                        <td className="sticky left-0 z-10 bg-white px-4 py-3">
+                          <SubjectName row={row} />
+                        </td>
+                        {months.map((month) => {
+                          const value = row.attendance[month.key];
+                          return (
+                            <td key={month.key} className="px-3 py-3 text-center">
+                              <AttendanceCell
+                                attended={value?.attended}
+                                eligible={value?.eligible}
+                                minimum={minimumAttendance}
+                              />
+                            </td>
+                          );
+                        })}
+                        <td className="bg-slate-50 px-3 py-3 text-center">
+                          <AttendanceCell
+                            attended={row.attendanceTotal?.attended}
+                            eligible={row.attendanceTotal?.eligible}
+                            minimum={minimumAttendance}
+                            large
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
 
-                              <span
-                                className={`block text-xs font-bold ${
-                                  isLow(percent)
-                                    ? "text-red-600"
-                                    : "text-slate-500"
-                                }`}
-                              >
-                                {formatPercent(percent)}
-                              </span>
-                            </>
-                          ) : (
-                            "-"
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50">
+                      <td
+                        colSpan={months.length + 1}
+                        className="sticky left-0 bg-slate-50 px-4 py-3 text-right text-xs font-bold uppercase tracking-wider text-slate-600"
+                      >
+                        Overall (all subjects)
+                      </td>
+                      <td className="bg-slate-100 px-3 py-3 text-center">
+                        <AttendanceCell
+                          attended={overallAttendance?.attended}
+                          eligible={overallAttendance?.eligible}
+                          minimum={minimumAttendance}
+                          large
+                        />
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* ================= INTERNAL ASSESSMENT ================= */}
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Internal Assessment</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Final CIE = average of the IAs and CIE 5, each scaled to the subject maximum, with the improvement test when higher. Red = below the subject minimum.
+              </p>
+            </div>
+            <MarksLegend />
+          </div>
+
+          {iaNumbers.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-slate-500">
+              IA marks have not been entered yet.
+            </p>
+          ) : (
+            <>
+              {/* phone: one card per subject */}
+              <div className="divide-y divide-slate-100 md:hidden">
+                {rows.map((row) => (
+                  <div key={row.subject._id} className="px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <SubjectName row={row} />
+                      <div className="text-center">
+                        <p className="mb-1 text-[10px] font-bold uppercase text-slate-400">Final CIE</p>
+                        <FinalCIE row={row} large />
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {iaNumbers.map((iaNumber) => {
+                        const value = row.ia[iaNumber];
+                        return (
+                          <div key={iaNumber} className="rounded-lg bg-slate-50 px-1.5 py-2 text-center">
+                            <p className={`mx-auto mb-1 w-fit rounded px-1.5 text-[10px] font-bold uppercase ${assessmentHead(iaNumber)}`}>
+                              {assessmentName(iaNumber)}
+                            </p>
+                            <MarkCell
+                              marks={value?.marks}
+                              max={value?.maxMarks}
+                              absent={value?.absent}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* larger screens: table */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[640px]">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className={`${headCell} sticky left-0 z-10 bg-slate-50 text-left text-slate-500`}>
+                        Subject
+                      </th>
+                      {iaNumbers.map((iaNumber) => (
+                        <th key={iaNumber} className={`${headCell} ${assessmentHead(iaNumber)}`}>
+                          {assessmentName(iaNumber)}
+                        </th>
+                      ))}
+                      <th className={`${headCell} bg-slate-800 text-white`}>
+                        Final CIE
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-slate-100">
+                    {rows.map((row) => (
+                      <tr key={row.subject._id} className="hover:bg-slate-50/60">
+                        <td className="sticky left-0 z-10 bg-white px-4 py-3">
+                          <SubjectName row={row} />
+                        </td>
+                        {iaNumbers.map((iaNumber) => {
+                          const value = row.ia[iaNumber];
+                          return (
+                            <td key={iaNumber} className="px-3 py-3 text-center">
+                              <MarkCell
+                                marks={value?.marks}
+                                max={value?.maxMarks}
+                                absent={value?.absent}
+                              />
+                            </td>
+                          );
+                        })}
+                        <td className="bg-slate-50 px-3 py-3 text-center">
+                          <FinalCIE row={row} large />
+                          {row.iaTotal?.maxMarks > 0 && (
+                            <p className="mt-0.5 text-[10px] text-slate-400">
+                              min {row.iaTotal.minMarks}
+                            </p>
                           )}
                         </td>
-                      );
-                    })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </section>
 
-                    <td className={`${cellClass} font-bold`}>
-                      {row.iaTotal?.maxMarks
-                        ? `${formatMarks(
-                            Math.round(row.iaTotal.marks * 10) / 10
-                          )} / ${formatMarks(row.iaTotal.maxMarks)}`
-                        : "-"}
-                    </td>
-                  </tr>
-                ))}
-
-              </tbody>
-
-            </table>
-
-          </div>
-        )}
-
+        <p className="text-xs leading-5 text-slate-500">
+          The PDF has both tables on one page with your photo and mentor, a declaration for your parent, and places for the signatures of you, your parent, your mentor, the HOD and the Principal. Each time new attendance or IA marks are entered, download it again: the new report includes everything entered so far.
+        </p>
       </div>
-
-      {/* INTERNAL ASSESSMENT */}
-
-      <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
-        <div className="border-b border-slate-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-slate-900">
-            Internal Assessment
-          </h2>
-
-          <p className="mt-0.5 text-xs text-slate-500">
-            Marks obtained / maximum marks. AB means absent.
-          </p>
-        </div>
-
-        {iaNumbers.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-slate-500">
-            IA marks have not been entered yet.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-
-            <table className="w-full min-w-[480px]">
-
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
-                  <th className={`${headClass} text-left`}>
-                    Subject
-                  </th>
-
-                  {iaNumbers.map((iaNumber) => (
-                    <th
-                      key={iaNumber}
-                      className={headClass}
-                    >
-                      {iaLabel(iaNumber)}
-                    </th>
-                  ))}
-
-                  <th className={headClass}>
-                    Final CIE
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-
-                {rows.map((row) => (
-                  <tr key={row.subject._id}>
-                    {subjectCell(row)}
-
-                    {iaNumbers.map((iaNumber) => {
-                      const value = row.ia[iaNumber];
-
-                      return (
-                        <td
-                          key={iaNumber}
-                          className={`${cellClass} ${
-                            value?.absent
-                              ? "font-bold text-red-600"
-                              : ""
-                          }`}
-                        >
-                          {!value
-                            ? "-"
-                            : value.absent
-                            ? `AB / ${formatMarks(
-                                value.maxMarks
-                              )}`
-                            : `${formatMarks(
-                                value.marks
-                              )} / ${formatMarks(
-                                value.maxMarks
-                              )}`}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-
-              </tbody>
-
-            </table>
-
-          </div>
-        )}
-
-      </div>
-
-      <p className="text-xs leading-5 text-slate-500">
-        The PDF has both tables on one page with your photo and mentor, a declaration for your parent, and places for the signatures of you, your parent, your mentor, the HOD and the Principal. Each time new attendance or IA marks are entered, download it again: the new report includes everything entered so far.
-      </p>
-
     </div>
+  );
+}
+
+const SUMMARY_TONES = {
+  good: "border-emerald-200 bg-emerald-50/60 text-emerald-700",
+  fair: "border-amber-200 bg-amber-50/60 text-amber-800",
+  low: "border-red-200 bg-red-50/60 text-red-700",
+  none: "border-slate-200 bg-white text-slate-900",
+};
+
+function SummaryTile({ label, value, note, tone }) {
+  return (
+    <div className={`rounded-2xl border px-4 py-3 shadow-sm ${SUMMARY_TONES[tone] || SUMMARY_TONES.none}`}>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+      <p className="text-xs text-slate-500">{note}</p>
+    </div>
+  );
+}
+
+function SubjectName({ row }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-sm font-semibold leading-snug text-slate-900">
+        {row.subject.name}
+      </p>
+      <p className="font-mono text-[11px] text-slate-400">{row.subject.code}</p>
+    </div>
+  );
+}
+
+function FinalCIE({ row, large = false }) {
+  return (
+    row.iaTotal?.maxMarks ? (
+      <span className="inline-flex flex-col items-center gap-0.5">
+        <MarkCell
+          marks={row.iaTotal.marks}
+          max={row.iaTotal.maxMarks}
+          minimum={row.iaTotal.minMarks}
+          large={large}
+        />
+        {row.iaTotal.improvedIA && (
+          <span className="text-[10px] font-semibold text-teal-700">
+            Improved IA {row.iaTotal.improvedIA}
+          </span>
+        )}
+      </span>
+    ) : (
+      <span className="text-sm text-slate-300">—</span>
+    )
   );
 }
