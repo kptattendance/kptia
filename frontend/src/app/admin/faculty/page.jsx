@@ -1434,15 +1434,12 @@ export default function FacultyPage() {
                   value={form.email}
                   onChange={handleChange}
                   required
-                  disabled={
-                    !!editingFaculty
-                  }
                   className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 />
 
                 {editingFaculty && (
-                  <p className="mt-1.5 text-[11px] text-slate-400">
-                    Email cannot be changed.
+                  <p className="mt-1.5 text-[11px] text-amber-700">
+                    Changing the email also changes the login: the faculty member signs in with the new email, and the old one stops working.
                   </p>
                 )}
 

@@ -2246,7 +2246,6 @@ const handleDownloadExcel = () => {
                       <input
                         type="email"
                         name="email"
-                          readOnly
                         value={
                           editForm.email
                         }
@@ -2256,6 +2255,12 @@ const handleDownloadExcel = () => {
                         required
                         className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 text-sm outline-none transition focus:border-slate-400 focus:bg-white focus:ring-4 focus:ring-slate-100"
                       />
+
+                      <p className="mt-1.5 text-[11px] text-amber-700">
+                        This is the login email. Changing it changes the
+                        student&apos;s login too: the new email works at once
+                        and the old one stops working.
+                      </p>
                     </div>
 
                     {/* PHONE */}

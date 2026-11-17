@@ -387,11 +387,12 @@ export default function UsersPage() {
         editForm.name.trim()
       );
 
-      /*
-       * Email is intentionally not sent for editing.
-       * This prevents MongoDB email and Clerk email
-       * from becoming different.
-       */
+      // The email is the login: the backend changes the
+      // Clerk login and MongoDB together (admin only).
+      formData.append(
+        "email",
+        editForm.email.trim()
+      );
 
       formData.append(
         "phone",
@@ -1443,12 +1444,17 @@ export default function UsersPage() {
                       value={
                         editForm.email
                       }
-                      disabled
-                      className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-4 py-2.5 text-sm text-slate-500"
+                      onChange={(event) =>
+                        setEditForm((previous) => ({
+                          ...previous,
+                          email: event.target.value,
+                        }))
+                      }
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100"
                     />
 
-                    <p className="mt-1 text-xs text-slate-400">
-                      Email is linked to the Clerk account and is not edited here.
+                    <p className="mt-1 text-xs text-amber-700">
+                      This is the login email. Changing it changes the Clerk login too: the new email works at once and the old one stops working.
                     </p>
                   </div>
 

@@ -1,6 +1,12 @@
 import Student from "../models/Student.js";
 import User from "../models/User.js";
 import { clerkClient } from "@clerk/express";
+import { clearUserCache } from "../middlewares/authMiddleware.js";
+import {
+  EmailChangeError,
+  normalizeEmail,
+  prepareEmailChange,
+} from "../utils/changeLoginEmail.js";
 import cloudinary from "../config/cloudinary.js";
 
 import XLSX from "xlsx";
@@ -2546,7 +2552,9 @@ export const getStudentById =
 // UPDATE STUDENT
 // PUT /api/students/:id
 //
-// registerNumber and email CANNOT be changed.
+// Register number can be changed (must stay unique).
+// Email (the login) can be changed by the admin only;
+// the Clerk login and the linked User change with it.
 // =====================================================
 
 export const updateStudent =
@@ -2984,16 +2992,68 @@ if (req.body.registerNumber !== undefined) {
       }
 
       // -------------------------------------------------
+      // EMAIL (the login) - admin only
+      // -------------------------------------------------
+
+      let emailChange = null;
+      const studentEmailBefore = student.email;
+
+      if (req.body.email !== undefined) {
+        const newEmail = normalizeEmail(req.body.email);
+
+        if (newEmail && newEmail !== normalizeEmail(student.email)) {
+          if (String(req.user?.role || "").toLowerCase() !== "admin") {
+            return res.status(403).json({
+              success: false,
+              message: "Only the admin can change a student's login email.",
+            });
+          }
+
+          try {
+            emailChange = await prepareEmailChange({
+              clerkId: student.clerkId,
+              newEmail,
+              userId: linkedUser?._id,
+              studentId: student._id,
+            });
+          } catch (error) {
+            if (error instanceof EmailChangeError) {
+              return res.status(error.status).json({
+                success: false,
+                message: error.message,
+              });
+            }
+
+            throw error;
+          }
+
+          student.email = emailChange.email;
+        }
+      }
+
+      // -------------------------------------------------
       // SAVE STUDENT
       // -------------------------------------------------
 
-      await student.save();
+      try {
+        await student.save();
+      } catch (error) {
+        if (emailChange) {
+          await emailChange.rollback();
+        }
+
+        throw error;
+      }
 
       // -------------------------------------------------
       // UPDATE MONGODB USER
       // -------------------------------------------------
 
       if (linkedUser) {
+        if (emailChange) {
+          linkedUser.email = emailChange.email;
+        }
+
         linkedUser.name =
           student.name;
 
@@ -3016,7 +3076,27 @@ if (req.body.registerNumber !== undefined) {
             student.imagePublicId;
         }
 
-        await linkedUser.save();
+        // Email changed but the User could not be saved:
+        // the student and Clerk go back to the old email
+        try {
+          await linkedUser.save();
+        } catch (error) {
+          if (emailChange) {
+            await Student.updateOne(
+              { _id: student._id },
+              { $set: { email: studentEmailBefore } }
+            );
+            await emailChange.rollback();
+          }
+
+          throw error;
+        }
+      }
+
+      // The old email can no longer be used to sign in
+      if (emailChange) {
+        await emailChange.finish();
+        clearUserCache(student.clerkId);
       }
 
       // -------------------------------------------------

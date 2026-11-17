@@ -1,7 +1,14 @@
 // src/controllers/userController.js
 import cloudinary from "../config/cloudinary.js";
 import User from "../models/User.js";
+import Student from "../models/Student.js";
 import { clerkClient } from "@clerk/express";
+import { clearUserCache } from "../middlewares/authMiddleware.js";
+import {
+  EmailChangeError,
+  normalizeEmail,
+  prepareEmailChange,
+} from "../utils/changeLoginEmail.js";
 
 
 
@@ -556,18 +563,82 @@ export const updateUser = async (req, res) => {
       updateData.imagePublicId = req.cloudinaryResult.public_id;
     }
 
-    // 🔥 Update Clerk metadata too
-    await clerkClient.users.updateUser(targetUser.clerkId, {
-      publicMetadata: {
-        role: updateData.role || targetUser.role,
-        department: updateData.department || targetUser.department,
-      },
-    });
+    // ------------------------------------------------
+    // EMAIL = the login. Only the admin changes it, and
+    // the Clerk login changes with it
+    // (utils/changeLoginEmail.js).
+    // ------------------------------------------------
+    let emailChange = null;
 
-    // Update Mongo
-    const user = await User.findByIdAndUpdate(targetUser._id, updateData, {
-      new: true,
-    });
+    if (updateData.email !== undefined) {
+      const newEmail = normalizeEmail(updateData.email);
+
+      if (!newEmail || newEmail === normalizeEmail(targetUser.email)) {
+        delete updateData.email;
+      } else {
+        if (String(clerkRole || "").toLowerCase() !== "admin") {
+          return res.status(403).json({
+            success: false,
+            message: "Only the admin can change a login email.",
+          });
+        }
+
+        try {
+          emailChange = await prepareEmailChange({
+            clerkId: targetUser.clerkId,
+            newEmail,
+            userId: targetUser._id,
+          });
+        } catch (error) {
+          if (error instanceof EmailChangeError) {
+            return res.status(error.status).json({
+              success: false,
+              message: error.message,
+            });
+          }
+
+          throw error;
+        }
+
+        updateData.email = emailChange.email;
+      }
+    }
+
+    let user;
+
+    try {
+      // 🔥 Update Clerk metadata too
+      await clerkClient.users.updateUser(targetUser.clerkId, {
+        publicMetadata: {
+          role: updateData.role || targetUser.role,
+          department: updateData.department || targetUser.department,
+        },
+      });
+
+      // Update Mongo
+      user = await User.findByIdAndUpdate(targetUser._id, updateData, {
+        new: true,
+      });
+
+      // A student's email is kept on the Student too
+      if (emailChange) {
+        await Student.updateOne(
+          { clerkId: targetUser.clerkId },
+          { $set: { email: emailChange.email } }
+        );
+      }
+    } catch (error) {
+      if (emailChange) {
+        await emailChange.rollback();
+      }
+
+      throw error;
+    }
+
+    if (emailChange) {
+      await emailChange.finish();
+      clearUserCache(targetUser.clerkId);
+    }
 
     res.json({
       success: true,
