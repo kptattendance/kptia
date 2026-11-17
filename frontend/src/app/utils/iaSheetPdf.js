@@ -10,6 +10,8 @@ import {
   batchLabel,
   computeCOAttainment,
   formatCIE,
+  columnKey,
+  columnLabel,
   formatMarks,
   getIACells,
 } from "./iaSheet.js";
@@ -173,8 +175,8 @@ export function buildIASheetPdf(data, letterhead = {}) {
       styles: { halign: "right", fontStyle: "bold" },
     },
     ...data.ias.flatMap((ia) => [
-      ...ia.cos.map(({ co }) =>
-        cellOf(attainment.columns[`${ia.iaNumber}|${co}`])
+      ...ia.cos.map((column) =>
+        cellOf(attainment.columns[`${ia.iaNumber}|${columnKey(column)}`])
       ),
       "",
     ]),
@@ -254,7 +256,8 @@ export function buildIASheetPdf(data, letterhead = {}) {
       ],
       data.ias.flatMap((ia) => [
         ...ia.cos.map(
-          ({ co, max }) => `${co}\n(${formatMarks(max)})`
+          (column) =>
+            `${columnLabel(column)}\n(${formatMarks(column.max)})`
         ),
         `Total\n(${formatMarks(ia.totalMax)})`,
       ]),

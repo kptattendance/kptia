@@ -9,6 +9,8 @@ import { departments } from "../admin/components/EntryStatusGrid";
 import {
   computeCOAttainment,
   formatCIE,
+  columnKey,
+  columnLabel,
   formatMarks,
   getIACells,
 } from "../utils/iaSheet";
@@ -437,14 +439,19 @@ export default function IAAllView() {
                   {/* CO1 | CO2 | Total ... */}
                   <tr>
                     {sheet.ias.map((ia, index) => [
-                      ...ia.cos.map(({ co, max }) => (
+                      ...ia.cos.map((column) => (
                         <th
-                          key={`${ia.iaNumber}-${co}`}
+                          key={`${ia.iaNumber}-${columnKey(column)}`}
                           className={`border-b border-slate-200 px-3 py-1.5 text-center text-[11px] font-semibold text-slate-700 ${getColour(index).cell}`}
                         >
-                          {co}
+                          {column.activity && (
+                            <span className="block text-[10px] font-bold uppercase text-slate-500">
+                              Activity {column.activity}
+                            </span>
+                          )}
+                          {column.activity ? column.co : columnLabel(column)}
                           <span className="block font-normal text-slate-400">
-                            /{max}
+                            /{column.max}
                           </span>
                         </th>
                       )),
@@ -532,11 +539,11 @@ export default function IAAllView() {
                       <p className="text-[10px] text-slate-400">{`≥ ${attainment.targetPercent}% of the CO`}</p>
                     </td>
                     {sheet.ias.map((ia) => [
-                      ...ia.cos.map(({ co }) => {
-                        const cell = attainment.columns[`${ia.iaNumber}|${co}`];
+                      ...ia.cos.map((column) => {
+                        const cell = attainment.columns[`${ia.iaNumber}|${columnKey(column)}`];
                         return (
                           <td
-                            key={`${ia.iaNumber}-${co}`}
+                            key={`${ia.iaNumber}-${columnKey(column)}`}
                             className="bg-slate-50 px-3 py-2 text-center font-semibold text-slate-600"
                           >
                             {formatMarks(cell.threshold)}
@@ -556,11 +563,11 @@ export default function IAAllView() {
                       <p className="text-[10px] text-slate-400">students / wrote</p>
                     </td>
                     {sheet.ias.map((ia) => [
-                      ...ia.cos.map(({ co }) => {
-                        const cell = attainment.columns[`${ia.iaNumber}|${co}`];
+                      ...ia.cos.map((column) => {
+                        const cell = attainment.columns[`${ia.iaNumber}|${columnKey(column)}`];
                         return (
                           <td
-                            key={`${ia.iaNumber}-${co}`}
+                            key={`${ia.iaNumber}-${columnKey(column)}`}
                             className="bg-slate-50 px-3 py-2 text-center text-slate-700"
                           >
                             {cell.attained}/{cell.counted}
@@ -580,11 +587,11 @@ export default function IAAllView() {
                       <p className="text-[10px] text-slate-400">% of students</p>
                     </td>
                     {sheet.ias.map((ia) => [
-                      ...ia.cos.map(({ co }) => {
-                        const cell = attainment.columns[`${ia.iaNumber}|${co}`];
+                      ...ia.cos.map((column) => {
+                        const cell = attainment.columns[`${ia.iaNumber}|${columnKey(column)}`];
                         return (
                           <td
-                            key={`${ia.iaNumber}-${co}`}
+                            key={`${ia.iaNumber}-${columnKey(column)}`}
                             className="bg-slate-50 px-2 py-2 text-center"
                           >
                             <span className="inline-block rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-bold text-white">

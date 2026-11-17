@@ -359,31 +359,39 @@ export const getMyIASheet = async (req, res) => {
 
     const iaMap = new Map();
 
-    // CIE 5 is the average of its activities, so its CO
-    // columns are averages too (they then add up to its
-    // total).
-    const coDivisor = (record) =>
-      Number(record.iaNumber) === CIE5_IA
-        ? Math.max((record.tests || []).length, 1)
-        : 1;
-
     const round2 = (value) => Math.round(value * 100) / 100;
+
+    // CIE 5 is shown activity by activity, exactly as the
+    // faculty entered it: one column per CO of every
+    // activity (key "2|CO3" = activity 2, CO3). Its Total
+    // is the CIE 5 mark (average of the activities).
+    const cie5Key = (activity, co) => `${activity}|${co}`;
 
     records.forEach((record) => {
       const iaNumber = Number(record.iaNumber);
 
       const coMax = {};
 
-      (record.tests || []).forEach((test) => {
+      (record.tests || []).forEach((test, index) => {
         CO_NAMES.forEach((co) => {
+          if (iaNumber === CIE5_IA) {
+            const value = Number(test.coMarks?.[co] || 0);
+
+            if (value > 0) {
+              coMax[cie5Key(index + 1, co)] = value;
+            }
+
+            return;
+          }
+
           coMax[co] =
             (coMax[co] || 0) +
             Number(test.coMarks?.[co] || 0);
         });
       });
 
-      CO_NAMES.forEach((co) => {
-        coMax[co] = round2((coMax[co] || 0) / coDivisor(record));
+      Object.keys(coMax).forEach((key) => {
+        coMax[key] = round2(coMax[key] || 0);
       });
 
       const ia = iaMap.get(iaNumber) || {
@@ -393,10 +401,10 @@ export const getMyIASheet = async (req, res) => {
         batches: [],
       };
 
-      CO_NAMES.forEach((co) => {
-        ia.coMax[co] = Math.max(
-          ia.coMax[co] || 0,
-          coMax[co] || 0
+      Object.keys(coMax).forEach((key) => {
+        ia.coMax[key] = Math.max(
+          ia.coMax[key] || 0,
+          coMax[key] || 0
         );
       });
 
@@ -419,9 +427,29 @@ export const getMyIASheet = async (req, res) => {
         iaNumber: ia.iaNumber,
         totalMax: ia.totalMax,
         batches: ia.batches,
-        cos: CO_NAMES.filter((co) => ia.coMax[co] > 0).map(
-          (co) => ({ co, max: ia.coMax[co] })
-        ),
+        cos:
+          ia.iaNumber === CIE5_IA
+            ? Object.keys(ia.coMax)
+                .filter((key) => ia.coMax[key] > 0)
+                .map((key) => {
+                  const [activity, co] = key.split("|");
+
+                  return {
+                    co,
+                    key,
+                    activity: Number(activity),
+                    label: `A${activity} ${co}`,
+                    max: ia.coMax[key],
+                  };
+                })
+                .sort(
+                  (a, b) =>
+                    a.activity - b.activity ||
+                    CO_NAMES.indexOf(a.co) - CO_NAMES.indexOf(b.co)
+                )
+            : CO_NAMES.filter((co) => ia.coMax[co] > 0).map(
+                (co) => ({ co, max: ia.coMax[co] })
+              ),
       }));
 
     // ------------------------------------------------------
@@ -459,19 +487,34 @@ export const getMyIASheet = async (req, res) => {
 
         const coMarks = {};
 
-        // CIE 5: the CO averages are over the activities
-        // entered for this student (absent counts as 0)
         const isCIE5 = Number(record.iaNumber) === CIE5_IA;
 
-        const enteredCount = isCIE5
-          ? Math.max(
-              (entry.tests || []).filter((test) => !isNotEntered(test))
-                .length,
-              1
-            )
-          : 1;
+        // CIE 5 only: "AB" (absent) or "-" (activity not
+        // given to the student), by activity number
+        const activityStatus = {};
 
-        (entry.tests || []).forEach((test) => {
+        (entry.tests || []).forEach((test, index) => {
+          if (isCIE5) {
+            if (test.status === "ABSENT") {
+              activityStatus[index + 1] = "AB";
+              return;
+            }
+
+            if (isNotEntered(test)) {
+              activityStatus[index + 1] = "-";
+              return;
+            }
+
+            // The marks the faculty entered, unchanged
+            CO_NAMES.forEach((co) => {
+              coMarks[cie5Key(index + 1, co)] = round2(
+                Number(test.coMarks?.[co] || 0)
+              );
+            });
+
+            return;
+          }
+
           if (test.status === "ABSENT") {
             return;
           }
@@ -483,17 +526,17 @@ export const getMyIASheet = async (req, res) => {
           });
         });
 
-        Object.keys(coMarks).forEach((co) => {
-          // CIE 5 averages are rounded up too: no fractions
-          coMarks[co] = isCIE5
-            ? roundUpMark(coMarks[co] / enteredCount)
-            : round2(coMarks[co]);
-        });
+        if (!isCIE5) {
+          Object.keys(coMarks).forEach((co) => {
+            coMarks[co] = round2(coMarks[co]);
+          });
+        }
 
         const tests = entry.tests || [];
 
         studentMap.get(key).ia[record.iaNumber] = {
           coMarks,
+          ...(isCIE5 ? { activityStatus } : {}),
           total: roundUpMark(entry.totalMarks),
           absent:
             tests.length > 0 &&

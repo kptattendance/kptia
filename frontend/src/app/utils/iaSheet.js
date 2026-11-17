@@ -6,7 +6,17 @@ import { roundUpMark } from "./iaLabels.js";
 // The data comes from /api/my-entries/ia-sheet:
 // ias:      [{ iaNumber, totalMax, cos: [{ co, max }] }]
 // students: [{ ia: { "1": { coMarks, total, absent } } }]
+//
+// CIE 5 columns are one per CO of every activity, as
+// entered: { co, key: "2|CO3", activity: 2, label, max }.
+// Its marks are coMarks[key]; activityStatus[2] is "AB"
+// (absent) or "-" (activity not given to the student).
 // =====================================================
+
+// The column's key in coMarks / attainment, and its name
+export const columnKey = (column) => column.key || column.co;
+
+export const columnLabel = (column) => column.label || column.co;
 
 // 12.5 -> "12.5", 12 -> "12"
 export const formatMarks = (value) =>
@@ -34,8 +44,10 @@ export const getIACells = (student, ia) => {
   }
 
   return [
-    ...ia.cos.map(({ co }) =>
-      formatMarks(Number(entry.coMarks?.[co] || 0))
+    ...ia.cos.map((column) =>
+      column.activity && entry.activityStatus?.[column.activity]
+        ? entry.activityStatus[column.activity]
+        : formatMarks(Number(entry.coMarks?.[columnKey(column)] || 0))
     ),
     String(roundUpMark(entry.total)),
   ];
@@ -82,7 +94,9 @@ export const computeCOAttainment = (sheet) => {
   const byCO = {};
 
   sheet.ias.forEach((ia) => {
-    ia.cos.forEach(({ co, max }) => {
+    ia.cos.forEach((column) => {
+      const { co, max } = column;
+      const key = columnKey(column);
       const threshold = (Number(max) * targetPercent) / 100;
 
       let attained = 0;
@@ -91,13 +105,17 @@ export const computeCOAttainment = (sheet) => {
       sheet.students.forEach((student) => {
         const entry = student.ia?.[ia.iaNumber];
 
-        if (!entry || entry.absent) {
+        if (
+          !entry ||
+          entry.absent ||
+          (column.activity && entry.activityStatus?.[column.activity])
+        ) {
           return;
         }
 
         counted += 1;
 
-        if (Number(entry.coMarks?.[co] || 0) >= threshold - 1e-9) {
+        if (Number(entry.coMarks?.[key] || 0) >= threshold - 1e-9) {
           attained += 1;
         }
       });
@@ -105,7 +123,7 @@ export const computeCOAttainment = (sheet) => {
       const percent =
         counted > 0 ? round1((attained / counted) * 100) : null;
 
-      columns[`${ia.iaNumber}|${co}`] = {
+      columns[`${ia.iaNumber}|${key}`] = {
         threshold: round1(threshold),
         attained,
         counted,
