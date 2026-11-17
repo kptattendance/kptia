@@ -26,6 +26,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { photoUrl } from "../utils/photoUrl";
+import { departmentFullName } from "../utils/departments";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL;
@@ -34,9 +35,9 @@ const departmentNames = {
   at: "Automobile Engineering",
   ch: "Chemical Engineering",
   ce: "Civil Engineering",
-  cs: "Computer Science Engineering",
-  ec: "Electronics & Communication",
-  ee: "Electrical & Electronics",
+  cs: "Computer Science and Engineering",
+  ec: "Electronics and Communication Engineering",
+  ee: "Electrical and Electronics Engineering",
   me: "Mechanical Engineering",
   ps: "Polymer Engineering",
   sc: "Science & English",
@@ -1115,7 +1116,7 @@ export default function HODDashboardPage() {
 
                   <p className="mt-0.5 text-[11px] text-slate-400">
                     {department
-                      ? department.toUpperCase()
+                      ? departmentFullName(department)
                       : "Department not assigned"}
                     {" · "}
                     HOD access

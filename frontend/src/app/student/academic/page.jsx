@@ -6,6 +6,7 @@ import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
 import { roundUpMark } from "../../utils/iaLabels";
 import { photoUrl } from "../../utils/photoUrl";
+import { departmentFullName } from "../../utils/departments";
 import {
   ATTENDANCE_MINIMUM,
   AttendanceCell,
@@ -441,7 +442,7 @@ function StudentAcademicPage() {
                 <p className="mt-1 text-sm text-slate-300">
                   {student?.registerNumber || "—"}
                   {student?.department
-                    ? ` • ${student.department.toUpperCase()}`
+                    ? ` • ${departmentFullName(student.department)}`
                     : ""}
                 </p>
               </div>

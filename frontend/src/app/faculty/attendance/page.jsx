@@ -89,15 +89,15 @@ const departments = [
   },
   {
     value: "cs",
-    label: "Computer Science Engineering",
+    label: "Computer Science and Engineering",
   },
   {
     value: "ec",
-    label: "Electronics & Communication",
+    label: "Electronics and Communication Engineering",
   },
   {
     value: "ee",
-    label: "Electrical & Electronics",
+    label: "Electrical and Electronics Engineering",
   },
   {
     value: "me",

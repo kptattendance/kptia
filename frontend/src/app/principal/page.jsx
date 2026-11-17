@@ -11,9 +11,9 @@ const departments = [
   { code: "at", name: "Automobile Engineering" },
   { code: "ch", name: "Chemical Engineering" },
   { code: "ce", name: "Civil Engineering" },
-  { code: "cs", name: "Computer Science Engineering" },
-  { code: "ec", name: "Electronics & Communication" },
-  { code: "ee", name: "Electrical & Electronics" },
+  { code: "cs", name: "Computer Science and Engineering" },
+  { code: "ec", name: "Electronics and Communication Engineering" },
+  { code: "ee", name: "Electrical and Electronics Engineering" },
   { code: "me", name: "Mechanical Engineering" },
   { code: "ps", name: "Polymer Engineering" },
 ];

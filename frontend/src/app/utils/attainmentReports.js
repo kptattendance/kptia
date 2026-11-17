@@ -40,9 +40,9 @@ const DEPARTMENT_NAMES = {
   at: "Automobile Engineering",
   ch: "Chemical Engineering",
   ce: "Civil Engineering",
-  cs: "Computer Science Engineering",
-  ec: "Electronics & Communication",
-  ee: "Electrical & Electronics",
+  cs: "Computer Science and Engineering",
+  ec: "Electronics and Communication Engineering",
+  ee: "Electrical and Electronics Engineering",
   me: "Mechanical Engineering",
   ps: "Polymer Engineering",
 };

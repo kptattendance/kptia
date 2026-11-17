@@ -16,6 +16,7 @@ import {
   getIACells,
 } from "./iaSheet.js";
 import { iaLabel } from "./iaLabels.js";
+import { departmentFullName } from "./departments.js";
 
 // =====================================================
 // CONSOLIDATED IA SHEET (PDF)
@@ -103,7 +104,7 @@ export function buildIASheetPdf(data, letterhead = {}) {
   y += 4.6;
   doc.setTextColor(...GREY);
   doc.text(
-    `${String(data.subject.department).toUpperCase()}  |  Semester ${
+    `${departmentFullName(data.subject.department)}  |  Semester ${
       data.subject.semester
     }  |  Academic Year ${data.academicYear}  |  ${batchLabel(
       data.batchNumbers

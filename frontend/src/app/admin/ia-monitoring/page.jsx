@@ -18,9 +18,9 @@ const DEPARTMENTS = [
   { value: "at", label: "Automobile Engineering" },
   { value: "ce", label: "Civil Engineering" },
   { value: "ch", label: "Chemical Engineering" },
-  { value: "cs", label: "Computer Science & Engineering" },
-  { value: "ec", label: "Electronics & Communication Engineering" },
-  { value: "ee", label: "Electrical & Electronics Engineering" },
+  { value: "cs", label: "Computer Science and Engineering" },
+  { value: "ec", label: "Electronics and Communication Engineering" },
+  { value: "ee", label: "Electrical and Electronics Engineering" },
   { value: "me", label: "Mechanical Engineering" },
   { value: "ps", label: "Polymer Technology" },
 ];

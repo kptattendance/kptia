@@ -51,9 +51,9 @@ const DEPARTMENT_NAMES = {
   at: "Automobile Engineering",
   ch: "Chemical Engineering",
   ce: "Civil Engineering",
-  cs: "Computer Science Engineering",
-  ec: "Electronics & Communication",
-  ee: "Electrical & Electronics",
+  cs: "Computer Science and Engineering",
+  ec: "Electronics and Communication Engineering",
+  ee: "Electrical and Electronics Engineering",
   me: "Mechanical Engineering",
   ps: "Polymer Engineering",
 };
@@ -232,9 +232,24 @@ export function buildProgressReportPdf(
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
 
-      doc.text(String(value || "-"), x + 26, rowY, {
-        maxWidth: columnWidth - 28,
+      // Long values (a full department name) are made a
+      // little smaller to stay on one line, so they do not
+      // run into the next row.
+      const text = String(value || "-");
+      const room = columnWidth - 28;
+
+      let size = 8.5;
+
+      while (size > 6.5 && doc.getTextWidth(text) > room) {
+        size -= 0.25;
+        doc.setFontSize(size);
+      }
+
+      doc.text(text, x + 26, rowY, {
+        maxWidth: room,
       });
+
+      doc.setFontSize(8.5);
 
       rowY += 5.4;
     });

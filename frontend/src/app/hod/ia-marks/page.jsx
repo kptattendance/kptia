@@ -14,6 +14,7 @@ import {
 import { useAuth, useUser } from "@clerk/nextjs";
 import { ENTRY_IA_NUMBERS, iaLabel } from "../../utils/iaLabels";
 import { photoUrl } from "../../utils/photoUrl";
+import { departmentFullName } from "../../utils/departments";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
@@ -123,7 +124,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
       const XLSX = XLSXModule.utils ? XLSXModule : XLSXModule.default;
 
       reports.exportSemesterFinalCIEExcel(XLSX, {
-        departmentLabel: String(department).toUpperCase(),
+        departmentLabel: departmentFullName(department),
         semester,
         academicYear,
         data,
@@ -604,7 +605,7 @@ const [selectedStudentPhoto, setSelectedStudentPhoto] = useState(null);
         ["INTERNAL ASSESSMENT MARKS REPORT"],
         [],
         ["Academic Year", academicYear],
-        ["Department", departmentName],
+        ["Department", departmentFullName(departmentName)],
         ["Semester", `Semester ${semester}`],
         ["Internal Assessment", iaLabel(selectedIA)],
         ["Subjects", subjectNames],

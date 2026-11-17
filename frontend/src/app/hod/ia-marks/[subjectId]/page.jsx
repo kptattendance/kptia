@@ -18,6 +18,7 @@ import AttainmentDownloads from "../../../components/AttainmentDownloads";
 import ImprovementPermits from "../../../components/ImprovementPermits";
 import { ENTRY_IA_NUMBERS, iaLabel, roundUpMark } from "../../../utils/iaLabels";
 import { photoUrl } from "../../../utils/photoUrl";
+import { departmentFullName } from "../../../utils/departments";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -261,7 +262,7 @@ const downloadExcelReport = async () => {
 
     const department =
       data.subject?.department
-        ? String(data.subject.department).toUpperCase()
+        ? departmentFullName(data.subject.department)
         : "";
 
     const subjectName =

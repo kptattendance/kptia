@@ -5,6 +5,7 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import axios from "axios";
 import Swal from "sweetalert2";
 import { Plus, Save, Trash2 } from "lucide-react";
+import { departmentFullName } from "../../utils/departments";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -187,7 +188,7 @@ export default function HODProgramOutcomesPage() {
       <div className="mb-8">
         <p className="text-sm font-semibold text-slate-500">
           {department
-            ? `${department.toUpperCase()} Department`
+            ? `Department of ${departmentFullName(department)}`
             : "HOD Portal"}
         </p>
 
