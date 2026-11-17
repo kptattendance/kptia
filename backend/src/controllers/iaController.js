@@ -9,8 +9,11 @@ import {
   CIE5_MAX_ACTIVITIES,
   ENTRY_IA_NUMBERS,
   iaLabel,
+  isImprovementIA,
   isNotEntered,
   roundUpMark,
+  TEST_IA_NUMBERS,
+  improvementIANumber,
 } from "../utils/ciTotal.js";
 
 const round2 = (value) => Math.round(value * 100) / 100;
@@ -1179,6 +1182,41 @@ export const unlockIAMarks = async (
         success: false,
         message:
           "IA record not found.",
+      });
+    }
+
+    // The improvement test is entered as one test, but
+    // saved as one record per IA it replaces (IA 1, IA 3
+    // ...). Unlock all of them for the subject and batch,
+    // or the faculty page stays read-only.
+    if (isImprovementIA(iaMarks.iaNumber)) {
+      const full = await IAMarks.findById(iaMarks._id)
+        .select("academicYear subjectId batchNumber")
+        .lean();
+
+      await IAMarks.updateMany(
+        {
+          academicYear: full.academicYear,
+          subjectId: full.subjectId,
+          batchNumber: full.batchNumber,
+          iaNumber: {
+            $in: TEST_IA_NUMBERS.map(improvementIANumber),
+          },
+          isLocked: { $ne: false },
+        },
+        {
+          $set: {
+            isLocked: false,
+            unlockedAt: new Date(),
+            unlockedBy: req.user.id,
+          },
+        }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: `Improvement test Batch ${iaMarks.batchNumber} unlocked (every IA it replaces). The faculty can now correct and save it again.`,
+        data: iaMarks,
       });
     }
 

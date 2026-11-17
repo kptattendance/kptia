@@ -251,12 +251,18 @@ export default function ImprovementTest({
       tests: emptyTests(batchData.patterns[replacesIA]),
     });
 
+  // Typing a mark for a student marked absent makes
+  // them present again (absent covers the whole test)
   const setCOMark = (studentId, testIndex, co, value) =>
     updateEntry(studentId, {
       tests: entries[studentId].tests.map((test, index) =>
         index === testIndex
-          ? { ...test, coMarks: { ...test.coMarks, [co]: value } }
-          : test
+          ? {
+              ...test,
+              status: "PRESENT",
+              coMarks: { ...test.coMarks, [co]: value },
+            }
+          : { ...test, status: "PRESENT" }
       ),
     });
 
@@ -692,8 +698,13 @@ export default function ImprovementTest({
                                           max={test.coMarks[co]}
                                           step="0.5"
                                           value={value}
-                                          disabled={readOnly || absent}
-                                          placeholder={`/${test.coMarks[co]}`}
+                                          disabled={readOnly}
+                                          placeholder={absent ? "AB" : `/${test.coMarks[co]}`}
+                                          title={
+                                            absent
+                                              ? "Marked absent. Type a mark to make the student present."
+                                              : undefined
+                                          }
                                           onChange={(e) =>
                                             setCOMark(
                                               student.studentId,
@@ -703,7 +714,9 @@ export default function ImprovementTest({
                                             )
                                           }
                                           className={`h-8 w-14 rounded-md px-1 text-center text-sm font-semibold text-slate-800 outline-none transition placeholder:font-normal placeholder:text-slate-300 focus:border-[#606c38] focus:ring-2 focus:ring-[#606c38]/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300 ${
-                                            value === ""
+                                            absent
+                                              ? "border border-dashed border-red-200 bg-red-50/40 placeholder:text-red-300"
+                                              : value === ""
                                               ? "border border-dashed border-slate-400 bg-white"
                                               : "border border-[#a3b18a] bg-[#f3f6ea]"
                                           }`}
@@ -723,7 +736,7 @@ export default function ImprovementTest({
                                       : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:text-slate-600"
                                   }`}
                                 >
-                                  {absent ? "Absent ✓" : "Absent"}
+                                  {absent ? "Absent ✓ · Undo" : "Absent"}
                                 </button>
                               </div>
                             ) : (
