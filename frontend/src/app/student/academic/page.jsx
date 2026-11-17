@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { useAuth } from "@clerk/nextjs";
 import { roundUpMark } from "../../utils/iaLabels";
@@ -27,8 +28,18 @@ const monthLabel = (month) =>
 
 const byCode = (a, b) => String(a.code).localeCompare(String(b.code));
 
-export default function StudentAcademicPage() {
+// useSearchParams needs a Suspense boundary
+export default function StudentAcademicRoute() {
+  return (
+    <Suspense fallback={null}>
+      <StudentAcademicPage />
+    </Suspense>
+  );
+}
+
+function StudentAcademicPage() {
   const { getToken } = useAuth();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -40,7 +51,11 @@ export default function StudentAcademicPage() {
   const [iaMarks, setIaMarks] = useState([]);
   const [finalCIE, setFinalCIE] = useState([]);
 
-  const [activeTab, setActiveTab] = useState("attendance");
+  // /student/academic?tab=ia opens the IA tab (links
+  // from the dashboard)
+  const [activeTab, setActiveTab] = useState(
+    searchParams.get("tab") === "ia" ? "ia" : "attendance"
+  );
 
   const [selectedSemester, setSelectedSemester] =
     useState("all");
